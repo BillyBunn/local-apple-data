@@ -1,7 +1,7 @@
 {
   "name": "local-apple-data",
-  "version": "0.1.0+codex.20260604150000",
-  "description": "Local-first Apple Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients, with approved Reminders, iCloud Drive, Calendar, Contacts, Notes, and Mail draft apply.",
+  "version": "0.1.0+codex.20260604160000",
+  "description": "Local-first Apple Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients, with approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, and Photos import apply.",
   "author": {
     "name": "Billy Bunn"
   },
@@ -26,7 +26,7 @@
   "interface": {
     "displayName": "Local Apple Data",
     "shortDescription": "Search local Apple data",
-    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a bounded MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply, each with a matching plan approval token and explicit confirmation. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
+    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a bounded MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply, each with a matching plan approval token and explicit confirmation. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
     "developerName": "Billy Bunn",
     "category": "Productivity",
     "capabilities": [
@@ -61,6 +61,8 @@
       "Apply the approved Contacts contact create with the matching approval token.",
       "Search local Photos filenames for this phrase.",
       "Export the selected local Photos asset to this output directory.",
+      "Plan a future Photos image or video import without applying it.",
+      "Apply the approved Photos import with the matching approval token.",
       "Search local Reminders for this title.",
       "Retrieve exact Reminder notes from the selected opaque handle.",
       "Plan a future Reminder change without applying it.",

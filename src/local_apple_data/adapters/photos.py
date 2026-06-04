@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -12,9 +13,16 @@ from .sqlite_store import has_minimum_query_quality
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PHOTOS_HELPER = PROJECT_ROOT / "scripts/photos_helper.swift"
 PHOTOS_TIMEOUT_SECONDS = 15.0
+PHOTOS_APPLY_TIMEOUT_SECONDS = 90.0
 DEFAULT_LIMIT = 20
 DEFAULT_MAX_SCAN_ASSETS = 5000
 PHOTO_HANDLE_PREFIX = "photos:asset"
+MAX_PREVIEW_FILENAME_CHARS = 255
+MAX_IMPORT_BYTES = 2 * 1024 * 1024 * 1024
+PLAN_OPERATIONS = {"import"}
+APPROVAL_TOKEN_PREFIX = "photos-apply:v1:"
+IMAGE_SUFFIXES = {".gif", ".heic", ".heif", ".jpeg", ".jpg", ".png", ".tif", ".tiff"}
+VIDEO_SUFFIXES = {".m4v", ".mov", ".mp4"}
 PhotosRunner = Callable[[dict[str, Any], float], dict[str, Any]]
 
 
@@ -43,6 +51,24 @@ def _export_privacy() -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "export",
+    }
+
+
+def _preview_privacy() -> dict[str, bool | str]:
+    return {
+        "content_inspected": False,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "preview",
+    }
+
+
+def _mutation_privacy(*, content_inspected: bool = False) -> dict[str, bool | str]:
+    return {
+        "content_inspected": content_inspected,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "mutation",
     }
 
 
@@ -270,6 +296,167 @@ def export_photo_asset(
     }
 
 
+def plan_photo_change(
+    operation: str,
+    *,
+    source_file: str | Path = "",
+    media_type: str = "auto",
+) -> dict[str, Any]:
+    normalized_operation = operation.strip().replace("-", "_")
+    warnings: list[dict[str, str]] = []
+    if normalized_operation not in PLAN_OPERATIONS:
+        warnings.append(_warning("invalid_operation", "Expected operation import."))
+        return _preview_error(warnings)
+
+    source = _source_file_metadata(source_file, media_type=media_type)
+    warnings.extend(source.pop("warnings"))
+    if warnings:
+        return _preview_error(warnings)
+
+    proposed = {
+        "source_filename": source["filename"],
+        "source_extension": source["extension"],
+        "media_type": source["media_type"],
+        "file_size_bytes": source["file_size_bytes"],
+        "file_sha256": source["file_sha256"],
+        "asset_content_returned": False,
+        "source_path_returned": False,
+        "album_targeting": "blocked",
+        "network_import": "blocked",
+    }
+    fingerprint_payload = {
+        "operation": normalized_operation,
+        "target": {"library": "system_photo_library"},
+        "proposed": proposed,
+    }
+    idempotency_key = _plan_idempotency_key(fingerprint_payload)
+    approval_fingerprint = _approval_fingerprint(
+        {
+            **fingerprint_payload,
+            "idempotency_key": idempotency_key,
+        }
+    )
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "photos",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": True,
+        "preview": {
+            "operation": normalized_operation,
+            "target": {"library": "system_photo_library"},
+            "proposed": proposed,
+            "idempotency_key": idempotency_key,
+            "approval": {
+                "required_for_apply": True,
+                "apply_tool_available": True,
+                "approval_fingerprint": approval_fingerprint,
+                "approval_token_format": f"{APPROVAL_TOKEN_PREFIX}<approval_fingerprint>",
+            },
+            "read_back_required_after_apply": True,
+        },
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
+def apply_photo_change(
+    operation: str,
+    *,
+    source_file: str | Path = "",
+    media_type: str = "auto",
+    approval_token: str = "",
+    confirm_apply: bool = False,
+    photos_runner: PhotosRunner | None = None,
+) -> dict[str, Any]:
+    plan = plan_photo_change(
+        operation,
+        source_file=source_file,
+        media_type=media_type,
+    )
+    if plan.get("status") != "ok":
+        return _apply_error(_safe_warnings(plan), plan=plan)
+
+    preview = plan.get("preview")
+    if not isinstance(preview, dict):
+        return _apply_error(
+            [_warning("invalid_plan", "Photos apply requires a valid plan preview.")],
+            plan=plan,
+        )
+    approval = preview.get("approval")
+    fingerprint = approval.get("approval_fingerprint") if isinstance(approval, dict) else None
+    expected_token = _approval_token(str(fingerprint or ""))
+    if not confirm_apply:
+        return _apply_error(
+            [_warning("missing_apply_confirmation", "Photos apply requires confirm_apply=true.")],
+            plan=plan,
+        )
+    if not approval_token.strip() or approval_token.strip() != expected_token:
+        return _apply_error(
+            [_warning("invalid_approval_token", "Photos apply approval token did not match the plan.")],
+            plan=plan,
+        )
+
+    runner = photos_runner or _run_photos_helper
+    try:
+        applied = runner(
+            _apply_helper_payload(preview, source_file=source_file),
+            PHOTOS_APPLY_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return _apply_error(
+            [_warning("photos_import_timeout", "Photos import timed out through the local PhotoKit helper.")],
+            plan=plan,
+            status="apply_unknown",
+        )
+    except (OSError, ValueError):
+        return _apply_error(
+            [_warning("photos_unavailable", "Photos import is unavailable through the local PhotoKit helper.")],
+            plan=plan,
+        )
+
+    if applied.get("status") != "ok":
+        return _apply_error(
+            _safe_warnings(applied)
+            or [_warning("photos_import_failed", "Photos asset could not be imported safely.")],
+            plan=plan,
+            status=str(applied.get("status") or "error"),
+            authorization_status=applied.get("authorization_status"),
+        )
+
+    asset = applied.get("asset")
+    if not isinstance(asset, dict):
+        return _apply_error(
+            [_warning("read_back_unavailable", "Photos import succeeded but read-back was unavailable.")],
+            plan=plan,
+            status="apply_unknown",
+            mutation_applied=True,
+            authorization_status=applied.get("authorization_status"),
+        )
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "photos",
+        "privacy": _mutation_privacy(content_inspected=False),
+        "authorization_status": applied.get("authorization_status"),
+        "mode": "apply",
+        "operation": str(preview["operation"]),
+        "mutation_applied": True,
+        "apply_available": True,
+        "idempotency_key": preview["idempotency_key"],
+        "approval": {
+            "approval_fingerprint": fingerprint,
+            "approval_token_verified": True,
+        },
+        "read_back": _asset_detail(asset),
+        "result_count": 1,
+        "warnings": _safe_warnings(applied),
+    }
+
+
 def _photos_response(
     *,
     query: str,
@@ -398,6 +585,48 @@ def _invalid_export_handle_result() -> dict[str, Any]:
     return result
 
 
+def _preview_error(warnings: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "photos",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": True,
+        "preview": None,
+        "result_count": 0,
+        "warnings": warnings,
+    }
+
+
+def _apply_error(
+    warnings: list[dict[str, str]],
+    *,
+    plan: dict[str, Any] | None,
+    status: str = "error",
+    mutation_applied: bool = False,
+    authorization_status: Any = None,
+) -> dict[str, Any]:
+    preview = plan.get("preview") if isinstance(plan, dict) else None
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "status": status,
+        "source": "photos",
+        "privacy": _mutation_privacy(content_inspected=False),
+        "mode": "apply",
+        "mutation_applied": mutation_applied,
+        "apply_available": True,
+        "preview": preview if isinstance(preview, dict) else None,
+        "read_back": None,
+        "result_count": 0,
+        "warnings": warnings,
+    }
+    if authorization_status is not None:
+        payload["authorization_status"] = authorization_status
+    return payload
+
+
 def _photos_degraded_result(response: dict[str, Any], *, detail: bool) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -518,3 +747,112 @@ def _bounded_payload(value: Any) -> Any:
     if isinstance(value, bool | int | float) or value is None:
         return value
     return _bounded_string(value, 1000)
+
+
+def _source_file_metadata(source_file: str | Path, *, media_type: str) -> dict[str, Any]:
+    path = Path(source_file).expanduser() if source_file else Path()
+    warnings: list[dict[str, str]] = []
+    if not source_file:
+        return {"warnings": [_warning("missing_source_file", "Photos import requires source_file.")]}
+    try:
+        if path.is_symlink():
+            warnings.append(_warning("symlink_source_blocked", "Photos import source_file cannot be a symlink."))
+        if not path.exists():
+            warnings.append(_warning("source_file_unavailable", "Photos import source_file is unavailable."))
+        elif not path.is_file():
+            warnings.append(_warning("source_file_unavailable", "Photos import source_file must be a regular file."))
+        stat = path.stat() if path.exists() else None
+    except OSError:
+        stat = None
+        warnings.append(_warning("source_file_unavailable", "Photos import source_file is unavailable."))
+
+    normalized_media_type, media_warning = _normalize_import_media_type(path, media_type)
+    if media_warning is not None:
+        warnings.append(media_warning)
+
+    if stat is not None:
+        if stat.st_size <= 0:
+            warnings.append(_warning("empty_source_file", "Photos import source_file cannot be empty."))
+        if stat.st_size > MAX_IMPORT_BYTES:
+            warnings.append(_warning("source_file_too_large", "Photos import source_file exceeds the maximum size."))
+
+    filename = path.name[:MAX_PREVIEW_FILENAME_CHARS] if path.name else ""
+    if not filename:
+        warnings.append(_warning("missing_source_filename", "Photos import source_file must have a filename."))
+
+    if warnings:
+        return {"warnings": warnings}
+
+    try:
+        file_sha256 = _file_sha256(path)
+    except OSError:
+        return {"warnings": [_warning("source_file_unavailable", "Photos import source_file is unreadable.")]}
+
+    return {
+        "warnings": [],
+        "filename": filename,
+        "extension": path.suffix.lower(),
+        "media_type": normalized_media_type,
+        "file_size_bytes": int(stat.st_size) if stat is not None else 0,
+        "file_sha256": file_sha256,
+    }
+
+
+def _normalize_import_media_type(path: Path, requested: str) -> tuple[str, dict[str, str] | None]:
+    normalized = requested.strip().lower() if requested else "auto"
+    if normalized not in {"auto", "image", "video"}:
+        return "", _warning("invalid_media_type", "Photos import media_type must be auto, image, or video.")
+
+    inferred = _infer_media_type(path)
+    if inferred is None:
+        return "", _warning("unsupported_media_type", "Photos import supports common image and video files only.")
+    if normalized != "auto" and normalized != inferred:
+        return "", _warning("media_type_mismatch", "Photos import media_type does not match source_file extension.")
+    return inferred, None
+
+
+def _infer_media_type(path: Path) -> str | None:
+    suffix = path.suffix.lower()
+    if suffix in IMAGE_SUFFIXES:
+        return "image"
+    if suffix in VIDEO_SUFFIXES:
+        return "video"
+    return None
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _apply_helper_payload(preview: dict[str, Any], *, source_file: str | Path) -> dict[str, Any]:
+    proposed = preview["proposed"]
+    return {
+        "command": "photos_apply_change",
+        "operation": preview["operation"],
+        "source_file": str(Path(source_file).expanduser()),
+        "media_type": proposed["media_type"],
+        "expected_filename": proposed["source_filename"],
+        "expected_file_size_bytes": proposed["file_size_bytes"],
+        "expected_file_sha256": proposed["file_sha256"],
+    }
+
+
+def _plan_idempotency_key(payload: dict[str, Any]) -> str:
+    digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+    return f"photos-plan:v1:{digest}"
+
+
+def _approval_fingerprint(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+
+
+def _approval_token(fingerprint: str) -> str:
+    return f"{APPROVAL_TOKEN_PREFIX}{fingerprint}"
+
+
+def _canonical_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))

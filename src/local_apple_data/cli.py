@@ -41,7 +41,13 @@ from .adapters.notes import (
     plan_notes_change,
     search_notes_metadata,
 )
-from .adapters.photos import export_photo_asset, get_photo_asset, search_photos
+from .adapters.photos import (
+    apply_photo_change,
+    export_photo_asset,
+    get_photo_asset,
+    plan_photo_change,
+    search_photos,
+)
 from .adapters.reminders import (
     apply_reminder_change,
     due_reminders_metadata,
@@ -559,6 +565,30 @@ def _photos_export_command(args: argparse.Namespace) -> int:
         max_scan_assets=args.max_scan_assets,
     )
     log_result("photos.export", payload)
+    _print_json(payload)
+    return 0
+
+
+def _photos_plan_command(args: argparse.Namespace) -> int:
+    payload = plan_photo_change(
+        args.operation,
+        source_file=args.source_file,
+        media_type=args.media_type,
+    )
+    log_result("photos.plan", payload)
+    _print_json(payload)
+    return 0
+
+
+def _photos_apply_command(args: argparse.Namespace) -> int:
+    payload = apply_photo_change(
+        args.operation,
+        source_file=args.source_file,
+        media_type=args.media_type,
+        approval_token=args.approval_token or "",
+        confirm_apply=args.confirm_apply,
+    )
+    log_result("photos.apply", payload)
     _print_json(payload)
     return 0
 
@@ -1535,6 +1565,64 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum assets to scan while resolving the handle, capped at 10000.",
     )
     photos_export.set_defaults(func=_photos_export_command)
+
+    photos_plan = photos_subparsers.add_parser(
+        "plan",
+        help="Preview an approved Photos import without applying it.",
+    )
+    photos_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
+    photos_plan.add_argument(
+        "--operation",
+        required=True,
+        choices=["import"],
+        help="Approved Photos plan operation.",
+    )
+    photos_plan.add_argument(
+        "--source-file",
+        required=True,
+        help="Local image or video file to import. The output does not echo the path.",
+    )
+    photos_plan.add_argument(
+        "--media-type",
+        choices=["auto", "image", "video"],
+        default="auto",
+        help="Optional media type assertion for the source file.",
+    )
+    photos_plan.set_defaults(func=_photos_plan_command)
+
+    photos_apply = photos_subparsers.add_parser(
+        "apply",
+        help="Apply an approved Photos import after plan-token confirmation.",
+    )
+    photos_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
+    photos_apply.add_argument(
+        "--operation",
+        required=True,
+        choices=["import"],
+        help="Approved Photos apply operation.",
+    )
+    photos_apply.add_argument(
+        "--source-file",
+        required=True,
+        help="Local image or video file to import. The output does not echo the path.",
+    )
+    photos_apply.add_argument(
+        "--media-type",
+        choices=["auto", "image", "video"],
+        default="auto",
+        help="Optional media type assertion for the source file.",
+    )
+    photos_apply.add_argument(
+        "--approval-token",
+        required=True,
+        help="Approval token copied from the matching Photos plan output.",
+    )
+    photos_apply.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required explicit confirmation flag for the approved apply operation.",
+    )
+    photos_apply.set_defaults(func=_photos_apply_command)
 
     reminders = subparsers.add_parser("reminders", help="Apple Reminders metadata commands.")
     reminders_subparsers = reminders.add_subparsers(

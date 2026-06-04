@@ -49,7 +49,13 @@ from local_apple_data.adapters.notes import (
     plan_notes_change,
     search_notes_metadata,
 )
-from local_apple_data.adapters.photos import export_photo_asset, get_photo_asset, search_photos
+from local_apple_data.adapters.photos import (
+    apply_photo_change,
+    export_photo_asset,
+    get_photo_asset,
+    plan_photo_change,
+    search_photos,
+)
 from local_apple_data.adapters.reminders import (
     apply_reminder_change,
     get_reminder_content,
@@ -1036,6 +1042,37 @@ def _photos_runner(payload: dict[str, Any], _timeout: float) -> dict[str, Any]:
             },
             "warnings": [],
         }
+    if payload["command"] == "photos_apply_change":
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "photos",
+            "authorization_status": "authorized",
+            "asset": {
+                "asset_id": "runtime-created-photo-1",
+                "media_type": "image",
+                "media_subtypes": 0,
+                "pixel_width": 1600,
+                "pixel_height": 1200,
+                "duration": 0.0,
+                "favorite": False,
+                "hidden": False,
+                "source_type": 1,
+                "creation_date": "2026-06-04T19:00:00.000Z",
+                "modification_date": "2026-06-04T19:00:00.000Z",
+                "primary_filename": payload["expected_filename"],
+                "resource_count": 1,
+                "asset_content_returned": False,
+                "resources": [
+                    {
+                        "filename": payload["expected_filename"],
+                        "type": 1,
+                        "uniform_type_identifier": "public.jpeg",
+                    }
+                ],
+            },
+            "warnings": [],
+        }
     raise RuntimeError("unexpected photos helper command")
 
 
@@ -1060,6 +1097,40 @@ def _photos_content_smoke(tmp_path: Path) -> dict[str, Any]:
         "photos_exported_bytes": export["result"]["exported_bytes"],
         "photos_legacy_detail_status": legacy_detail["status"],
         "photos_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
+    }
+
+
+def _photos_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
+    source = tmp_path / "IMG_RUNTIME_IMPORT.JPG"
+    source.write_bytes(b"synthetic runtime photo bytes")
+    plan = plan_photo_change("import", source_file=source)
+    token = "photos-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    result = apply_photo_change(
+        "import",
+        source_file=source,
+        approval_token=token,
+        confirm_apply=True,
+        photos_runner=_photos_runner,
+    )
+    missing_confirmation = apply_photo_change(
+        "import",
+        source_file=source,
+        approval_token=token,
+        photos_runner=_photos_runner,
+    )
+    return {
+        "photos_plan_status": plan["status"],
+        "photos_plan_mode": plan["mode"],
+        "photos_plan_mutation_applied": plan["mutation_applied"],
+        "photos_plan_apply_available": plan["apply_available"],
+        "photos_plan_idempotency_key": plan["preview"]["idempotency_key"].startswith(
+            "photos-plan:v1:"
+        ),
+        "photos_apply_status": result["status"],
+        "photos_apply_mode": result["mode"],
+        "photos_apply_mutation_applied": result["mutation_applied"],
+        "photos_apply_read_back_filename": result["read_back"]["primary_filename"],
+        "photos_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
     }
 
 
@@ -1201,7 +1272,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 41,
+        "tool_count": 43,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1330,6 +1401,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "photos_exported_bytes": 4321,
         "photos_legacy_detail_status": "error",
         "photos_legacy_detail_warning": "invalid_handle",
+        "photos_plan_status": "ok",
+        "photos_plan_mode": "plan",
+        "photos_plan_mutation_applied": False,
+        "photos_plan_apply_available": True,
+        "photos_plan_idempotency_key": True,
+        "photos_apply_status": "ok",
+        "photos_apply_mode": "apply",
+        "photos_apply_mutation_applied": True,
+        "photos_apply_read_back_filename": "IMG_RUNTIME_IMPORT.JPG",
+        "photos_apply_missing_confirmation": "missing_apply_confirmation",
         "reminders_eventkit_opaque_handle": True,
         "reminders_content_status": "ok",
         "reminders_notes_chars": 25,
@@ -1378,6 +1459,7 @@ def main() -> None:
         summary.update(_contacts_content_smoke())
         summary.update(_contacts_plan_apply_smoke())
         summary.update(_photos_content_smoke(tmp_path))
+        summary.update(_photos_plan_apply_smoke(tmp_path))
         summary.update(_reminders_content_smoke())
         summary.update(_reminders_plan_smoke())
         summary.update(_reminders_apply_smoke())

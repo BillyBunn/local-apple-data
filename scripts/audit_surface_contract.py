@@ -142,8 +142,14 @@ SURFACE_CONTRACTS = (
         label="Photos",
         cli_group="photos",
         cli_subparser="photos_subparsers",
-        cli_commands=("search", "get", "export"),
-        mcp_tools=("photos_search", "photos_get_asset", "photos_export_asset"),
+        cli_commands=("search", "get", "export", "plan", "apply"),
+        mcp_tools=(
+            "photos_search",
+            "photos_get_asset",
+            "photos_export_asset",
+            "photos_plan_change",
+            "photos_apply_change",
+        ),
     ),
 )
 

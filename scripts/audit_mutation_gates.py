@@ -39,6 +39,7 @@ APPROVED_WRITE_MCP_TOOLS = {
     "icloud_drive_apply_change",
     "mail_apply_change",
     "notes_apply_change",
+    "photos_apply_change",
     "reminders_apply_change",
 }
 APPROVED_WRITE_CLI_HANDLERS = {
@@ -47,6 +48,7 @@ APPROVED_WRITE_CLI_HANDLERS = {
     "icloud_drive_apply",
     "mail_apply",
     "notes_apply",
+    "photos_apply",
     "reminders_apply",
 }
 MANIFEST_WRITE_CAPABILITIES = {
@@ -60,10 +62,10 @@ MANIFEST_WRITE_CAPABILITIES = {
     "Write",
 }
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, and `mail_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply are the only approved write surfaces",
-    "src/local_apple_data/mcp_server.py": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, `mail_apply_change`, `photos apply`, and `photos_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply are the only approved write surfaces",
+    "src/local_apple_data/mcp_server.py": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply",
 }
 
 

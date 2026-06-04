@@ -150,3 +150,103 @@ def test_cli_photos_export(monkeypatch, tmp_path: Path, capsys) -> None:
     parsed = json.loads(capsys.readouterr().out)
     assert parsed["status"] == "ok"
     assert parsed["result"]["asset_content_exported"] is True
+
+
+def test_cli_photos_plan(monkeypatch, tmp_path: Path, capsys) -> None:
+    source = tmp_path / "IMG_IMPORT.JPG"
+
+    def fake_plan(operation: str, *, source_file: str, media_type: str) -> dict:
+        assert operation == "import"
+        assert source_file == str(source)
+        assert media_type == "image"
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "photos",
+            "privacy": {"content_inspected": False, "output_tier": "preview"},
+            "mode": "plan",
+            "mutation_applied": False,
+            "apply_available": True,
+            "preview": {
+                "approval": {"approval_fingerprint": "synthetic-fingerprint"},
+                "proposed": {"source_filename": "IMG_IMPORT.JPG"},
+            },
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("local_apple_data.cli.plan_photo_change", fake_plan)
+
+    exit_code = main(
+        [
+            "photos",
+            "plan",
+            "--json",
+            "--operation",
+            "import",
+            "--source-file",
+            str(source),
+            "--media-type",
+            "image",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "plan"
+    assert parsed["mutation_applied"] is False
+
+
+def test_cli_photos_apply(monkeypatch, tmp_path: Path, capsys) -> None:
+    source = tmp_path / "IMG_IMPORT.JPG"
+
+    def fake_apply(
+        operation: str,
+        *,
+        source_file: str,
+        media_type: str,
+        approval_token: str,
+        confirm_apply: bool,
+    ) -> dict:
+        assert operation == "import"
+        assert source_file == str(source)
+        assert media_type == "image"
+        assert approval_token == "photos-apply:v1:synthetic-fingerprint"
+        assert confirm_apply is True
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "photos",
+            "privacy": {"content_inspected": False, "output_tier": "mutation"},
+            "mode": "apply",
+            "mutation_applied": True,
+            "read_back": {"primary_filename": "IMG_IMPORT.JPG"},
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("local_apple_data.cli.apply_photo_change", fake_apply)
+
+    exit_code = main(
+        [
+            "photos",
+            "apply",
+            "--json",
+            "--operation",
+            "import",
+            "--source-file",
+            str(source),
+            "--media-type",
+            "image",
+            "--approval-token",
+            "photos-apply:v1:synthetic-fingerprint",
+            "--confirm-apply",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "apply"
+    assert parsed["mutation_applied"] is True

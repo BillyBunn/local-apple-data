@@ -30,6 +30,8 @@ APPROVED_WRITE_TOOLS: tuple[str, ...] = (
     "mail_apply_change",
     "notes_apply",
     "notes_apply_change",
+    "photos_apply",
+    "photos_apply_change",
     "reminders_apply",
     "reminders_apply_change",
 )
@@ -44,12 +46,14 @@ APPROVED_PREVIEW_TOOLS: tuple[str, ...] = (
     "mail_plan_change",
     "notes_plan",
     "notes_plan_change",
+    "photos_plan",
+    "photos_plan_change",
     "reminders_plan_change",
 )
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, and `mail_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply are the only approved write surfaces",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, `mail_apply_change`, `photos apply`, and `photos_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply are the only approved write surfaces",
 }
 REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
@@ -172,6 +176,26 @@ REQUIRED_DESIGN_DOCS = {
             "redaction",
             "Synthetic Tests Required",
             "The current release allows only this Mail create-draft apply surface.",
+        ),
+    },
+    "photos_import_write_v1": {
+        "path": "docs/V1_17_PHOTOS_IMPORT_WRITE_DESIGN.md",
+        "phrases": (
+            "Status: Apply-capable implementation.",
+            "Approved write tools: `local-apple-data photos apply` and `photos_apply_change`.",
+            "`local-apple-data photos plan` and `photos_plan_change`",
+            "No other mutating CLI or MCP tools are approved or exposed by this document.",
+            "preview",
+            "apply",
+            "read_back",
+            "mutation_applied:false",
+            "approval token",
+            "PhotoKit",
+            "import one image or video asset",
+            "idempotency",
+            "redaction",
+            "Synthetic Tests Required",
+            "The current release allows only this Photos import apply surface.",
         ),
     },
 }

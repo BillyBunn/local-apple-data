@@ -6,7 +6,7 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 
 ## Test Layers
 
-- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Mail create-draft plan/apply, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Calendar create-event plan/apply, synthetic Contacts helper responses and create-contact plan/apply, synthetic Photos helper responses, synthetic iCloud Drive file retrieval and create-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
+- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Mail create-draft plan/apply, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Calendar create-event plan/apply, synthetic Contacts helper responses and create-contact plan/apply, synthetic Photos helper responses and import plan/apply, synthetic iCloud Drive file retrieval and create-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
 - CLI tests: synthetic Mail/Messages/Hide My Email/Voice Memos/Notes/Calendar/Contacts/Photos/iCloud Drive/Reminders stores or mocked helpers with redacted logs.
 - MCP tests: tool listing plus read-only and approved write annotations.
 - Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows and synthetic apply flows for the approved write tools.
@@ -95,6 +95,8 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Notes planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, and requires a bounded title.
 - Notes apply requires a matching approval token, explicit confirmation, Notes.app automation, and exact-content read-back verification.
 - Photos get/export accepts only `photos:asset:v1:` handles, returns exact asset/resource or destination metadata, rejects raw Photos identifiers and fabricated handles, and never returns inline asset bytes.
+- Photos planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, source filename/media type/size/hash, and does not echo the raw source path.
+- Photos apply requires a matching approval token, explicit confirmation, source-file hash binding, PhotoKit helper apply, and created-asset read-back verification.
 - Reminders content accepts only `reminders:reminder:eventkit:v1:` handles, returns bounded exact reminder notes, and rejects raw EventKit identifiers, legacy SQLite reminder handles, and fabricated handles.
 - Reminder notes truncation returns `content_truncated`.
 - Reminders planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, and requires exact EventKit reminder handles for existing-reminder operations.
@@ -102,7 +104,7 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Health and doctor do not expose full local executable paths.
 - Health and doctor report broad local Apple data readiness without content reads, raw rows, credentials, prompt-triggering framework access, or raw absolute store paths.
 - Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, and other framework-backed surfaces.
-- Write-design gates require the first Reminders, iCloud Drive, Calendar, Contacts, Notes, and Mail draft write design contracts and allow only `reminders apply` / `reminders_apply_change`, `icloud-drive apply` / `icloud_drive_apply_change`, `calendar apply` / `calendar_apply_change`, `contacts apply` / `contacts_apply_change`, `notes apply` / `notes_apply_change`, and `mail apply` / `mail_apply_change` as approved write tools.
+- Write-design gates require the first Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, and Photos import write design contracts and allow only `reminders apply` / `reminders_apply_change`, `icloud-drive apply` / `icloud_drive_apply_change`, `calendar apply` / `calendar_apply_change`, `contacts apply` / `contacts_apply_change`, `notes apply` / `notes_apply_change`, `mail apply` / `mail_apply_change`, and `photos apply` / `photos_apply_change` as approved write tools.
 - No repo docs or tests persist real personal search terms or result metadata.
 
 ## v1.1 Acceptance Criteria
@@ -187,9 +189,11 @@ The v1.7 PhotoKit phase keeps the same synthetic-first test posture:
 - Search output returns Photos metadata without Photos identifiers or resource arrays.
 - Exact asset detail returns resource filenames, resource types, and uniform type identifiers only.
 - Exact asset export writes one selected asset resource to a caller-selected output directory and returns export metadata without inline image/video bytes.
-- No thumbnails, raw Photos identifiers, broad dumps, network iCloud fetches, or mutation are returned.
+- Photos import planning returns preview-only approval metadata and refuses missing, unsupported, symlink, directory, empty, oversized, and mismatched source files without calling PhotoKit.
+- Photos import apply requires the matching approval token, explicit confirmation, source-file hash binding, and created-asset read-back through the mocked PhotoKit helper.
+- No thumbnails, raw Photos identifiers, broad dumps, network iCloud fetches, edit, delete, album targeting, metadata mutation, or bulk Photos operations are returned.
 - PhotoKit helper access is non-prompting; unavailable permission returns `photos_access_unavailable`.
-- Runtime verification covers synthetic asset detail/export success and invalid-handle rejection without touching real Photos content.
+- Runtime verification covers synthetic asset detail/export, synthetic import plan/apply success, missing confirmation, and invalid-handle rejection without touching real Photos content.
 
 ## v1.8 Acceptance Criteria
 

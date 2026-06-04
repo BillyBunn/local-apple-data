@@ -73,5 +73,5 @@ This plugin should be broader than single-surface MCP servers and stricter than 
 
 - Whether to add a small privileged helper architecture for users who do not want their AI client process to hold Full Disk Access.
 - Whether future generated transcription belongs in this plugin or a separate transcription tool connected by handles.
-- Whether future write support after the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, and Mail draft tranches should prioritize Notes append/update, Mail send, Messages send, Photos import/edit, or richer framework-backed edits.
+- Whether future write support after the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, and Photos import tranches should prioritize Notes append/update, Mail send, Messages send, Photos edit/delete/album support, or richer framework-backed edits.
 - Whether public registry packaging should target npm, PyPI, a Codex personal marketplace, Smithery-style registries, or only GitHub source installation first.

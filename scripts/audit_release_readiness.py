@@ -54,6 +54,7 @@ REQUIRED_FILES = (
     "docs/V1_14_CONTACTS_WRITE_DESIGN.md",
     "docs/V1_15_NOTES_WRITE_DESIGN.md",
     "docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md",
+    "docs/V1_17_PHOTOS_IMPORT_WRITE_DESIGN.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "docs/PUBLISHING.md",
     "docs/PRIVACY_MODEL.md",

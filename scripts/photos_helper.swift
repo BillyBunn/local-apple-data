@@ -82,6 +82,23 @@ func ensureAccess() {
     }
 }
 
+func applyAccessUnavailablePayload() -> [String: Any] {
+    let status = authorizationStatus()
+    return [
+        "schema_version": 1,
+        "status": "degraded",
+        "source": "photos",
+        "authorization_status": authorizationName(status),
+        "asset": NSNull(),
+        "warnings": [
+            warning(
+                "photos_access_unavailable",
+                "Photos access is not authorized for this process."
+            )
+        ],
+    ]
+}
+
 func mediaTypeName(_ asset: PHAsset) -> String {
     switch asset.mediaType {
     case .image:
@@ -389,6 +406,114 @@ if command == "export_photo_by_id" {
         "status": "ok",
         "source": "photos",
         "asset": payload,
+        "warnings": [],
+    ])
+}
+
+if command == "photos_apply_change" {
+    let status = authorizationStatus()
+    if !readAuthorized(status) {
+        emit(applyAccessUnavailablePayload())
+    }
+
+    let operation = stringValue(request, "operation")
+    let mediaType = stringValue(request, "media_type")
+    let sourcePath = (stringValue(request, "source_file") as NSString).expandingTildeInPath
+    if operation != "import" || sourcePath.isEmpty || !(mediaType == "image" || mediaType == "video") {
+        emit([
+            "schema_version": 1,
+            "status": "error",
+            "source": "photos",
+            "asset": NSNull(),
+            "warnings": [warning("invalid_import_request", "Expected Photos import operation, media type, and source file.")],
+        ])
+    }
+
+    var isDirectory = ObjCBool(false)
+    guard FileManager.default.fileExists(atPath: sourcePath, isDirectory: &isDirectory), !isDirectory.boolValue else {
+        emit([
+            "schema_version": 1,
+            "status": "error",
+            "source": "photos",
+            "asset": NSNull(),
+            "warnings": [warning("source_file_unavailable", "Photos import source file is unavailable.")],
+        ])
+    }
+
+    let sourceURL = URL(fileURLWithPath: sourcePath, isDirectory: false)
+    let semaphore = DispatchSemaphore(value: 0)
+    var createdAssetIdentifier = ""
+    var applyWarning: [String: String]? = nil
+
+    PHPhotoLibrary.shared().performChanges({
+        if mediaType == "image" {
+            guard let changeRequest = PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: sourceURL) else {
+                applyWarning = warning("photos_import_failed", "Photos image import request could not be created.")
+                return
+            }
+            createdAssetIdentifier = changeRequest.placeholderForCreatedAsset?.localIdentifier ?? ""
+        } else {
+            guard let changeRequest = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: sourceURL) else {
+                applyWarning = warning("photos_import_failed", "Photos video import request could not be created.")
+                return
+            }
+            createdAssetIdentifier = changeRequest.placeholderForCreatedAsset?.localIdentifier ?? ""
+        }
+    }, completionHandler: { success, error in
+        if !success && applyWarning == nil {
+            applyWarning = warning("photos_import_failed", "Photos asset could not be imported from the selected local file.")
+        }
+        semaphore.signal()
+    })
+
+    if semaphore.wait(timeout: .now() + 60) == .timedOut {
+        emit([
+            "schema_version": 1,
+            "status": "apply_unknown",
+            "source": "photos",
+            "authorization_status": authorizationName(status),
+            "asset": NSNull(),
+            "warnings": [warning("photos_import_timeout", "Photos import timed out.")],
+        ])
+    }
+    if let applyWarning = applyWarning {
+        emit([
+            "schema_version": 1,
+            "status": "error",
+            "source": "photos",
+            "authorization_status": authorizationName(status),
+            "asset": NSNull(),
+            "warnings": [applyWarning],
+        ])
+    }
+    if createdAssetIdentifier.isEmpty {
+        emit([
+            "schema_version": 1,
+            "status": "apply_unknown",
+            "source": "photos",
+            "authorization_status": authorizationName(status),
+            "asset": NSNull(),
+            "warnings": [warning("read_back_unavailable", "Photos import completed without a readable asset placeholder.")],
+        ])
+    }
+
+    let fetched = PHAsset.fetchAssets(withLocalIdentifiers: [createdAssetIdentifier], options: nil)
+    guard let asset = fetched.firstObject else {
+        emit([
+            "schema_version": 1,
+            "status": "apply_unknown",
+            "source": "photos",
+            "authorization_status": authorizationName(status),
+            "asset": NSNull(),
+            "warnings": [warning("read_back_unavailable", "Photos import completed but the created asset could not be read back.")],
+        ])
+    }
+    emit([
+        "schema_version": 1,
+        "status": "ok",
+        "source": "photos",
+        "authorization_status": authorizationName(status),
+        "asset": assetPayload(asset, includeResources: true),
         "warnings": [],
     ])
 }

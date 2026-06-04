@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604160000 - 2026-06-04
+
+### Added
+
+- Approved Photos image/video import apply through `local-apple-data photos apply` and MCP `photos_apply_change`.
+- Non-mutating Photos import planning through `local-apple-data photos plan` and MCP `photos_plan_change`.
+- Approval-token, explicit-confirmation, source-file hash binding, PhotoKit change-block import, and created-asset read-back verification checks for Photos import apply.
+- Synthetic adapter, CLI, MCP annotation, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the approved Photos import apply surface.
+
+### Security
+
+- `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, `contacts_apply_change`, `notes_apply_change`, `mail_apply_change`, and `photos_apply_change` are the only non-read-only MCP tools and are annotated non-destructive, idempotent, and closed-world.
+- Photos edit, delete, album targeting, hidden/favorite mutation, metadata mutation, network iCloud fetch, thumbnails, inline asset bytes, and bulk operations remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604150000 - 2026-06-04
 
 ### Added

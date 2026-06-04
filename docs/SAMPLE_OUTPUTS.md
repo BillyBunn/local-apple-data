@@ -161,7 +161,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 41,
+  "tool_count": 43,
   "mail_content_status": "ok",
   "mail_plan_status": "ok",
   "mail_plan_mutation_applied": false,
@@ -194,6 +194,11 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "contacts_apply_mutation_applied": true,
   "photos_detail_status": "ok",
   "photos_export_status": "ok",
+  "photos_plan_status": "ok",
+  "photos_plan_mutation_applied": false,
+  "photos_plan_apply_available": true,
+  "photos_apply_status": "ok",
+  "photos_apply_mutation_applied": true,
   "messages_transcript_status": "ok",
   "voice_memos_transcript_status": "ok",
   "voice_memos_export_status": "ok",

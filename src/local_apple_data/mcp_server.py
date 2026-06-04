@@ -41,7 +41,13 @@ from .adapters.notes import (
     plan_notes_change,
     search_notes_metadata,
 )
-from .adapters.photos import export_photo_asset, get_photo_asset, search_photos
+from .adapters.photos import (
+    apply_photo_change,
+    export_photo_asset,
+    get_photo_asset,
+    plan_photo_change,
+    search_photos,
+)
 from .adapters.reminders import (
     apply_reminder_change,
     due_reminders_metadata,
@@ -64,7 +70,7 @@ INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
-    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply, and each requires a matching plan approval token plus explicit confirmation."
+    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
@@ -626,6 +632,46 @@ def photos_export_asset(
             output_dir=Path(output_dir).expanduser(),
             filename=filename or None,
             max_scan_assets=max_scan_assets,
+        ),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def photos_plan_change(
+    operation: str,
+    source_file: str,
+    media_type: str = "auto",
+) -> dict[str, Any]:
+    """Plan a future Photos image/video import without applying it."""
+
+    return _record(
+        "photos_plan_change",
+        plan_photo_change(
+            operation,
+            source_file=source_file,
+            media_type=media_type,
+        ),
+    )
+
+
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
+def photos_apply_change(
+    operation: str,
+    source_file: str,
+    media_type: str = "auto",
+    approval_token: str = "",
+    confirm_apply: bool = False,
+) -> dict[str, Any]:
+    """Apply an approved Photos image/video import and read back metadata."""
+
+    return _record(
+        "photos_apply_change",
+        apply_photo_change(
+            operation,
+            source_file=source_file,
+            media_type=media_type,
+            approval_token=approval_token,
+            confirm_apply=confirm_apply,
         ),
     )
 

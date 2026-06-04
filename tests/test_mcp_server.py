@@ -33,7 +33,9 @@ from local_apple_data.mcp_server import (
     notes_get_metadata,
     notes_plan_change,
     photos_export_asset,
+    photos_apply_change,
     photos_get_asset,
+    photos_plan_change,
     reminders_apply_change,
     reminders_get_content,
     reminders_plan_change,
@@ -140,6 +142,13 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     )
     photo_result = photos_get_asset("bad-handle")
     photo_export_result = photos_export_asset("bad-handle", str(tmp_path / "exports"))
+    photos_plan_result = photos_plan_change("import", source_file="")
+    photos_apply_result = photos_apply_change(
+        "import",
+        source_file="",
+        approval_token="photos-apply:v1:bad",
+        confirm_apply=True,
+    )
     reminder_result = reminders_get_content("bad-handle")
     reminder_plan_result = reminders_plan_change(
         "complete",
@@ -200,6 +209,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert photo_result["warnings"][0]["code"] == "invalid_handle"
     assert photo_export_result["status"] == "error"
     assert photo_export_result["warnings"][0]["code"] == "invalid_handle"
+    assert photos_plan_result["status"] == "error"
+    assert photos_plan_result["warnings"][0]["code"] == "missing_source_file"
+    assert photos_apply_result["status"] == "error"
+    assert photos_apply_result["warnings"][0]["code"] == "missing_source_file"
     assert reminder_result["status"] == "error"
     assert reminder_result["warnings"][0]["code"] == "invalid_handle"
     assert reminder_plan_result["status"] == "error"
@@ -260,6 +273,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "photos_search",
                     "photos_get_asset",
                     "photos_export_asset",
+                    "photos_plan_change",
+                    "photos_apply_change",
                     "reminders_search",
                     "reminders_due",
                     "reminders_eventkit_search",
@@ -277,6 +292,7 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                             "contacts_apply_change",
                             "notes_apply_change",
                             "mail_apply_change",
+                            "photos_apply_change",
                         }:
                             assert tool.annotations.readOnlyHint is False
                         else:

@@ -391,3 +391,96 @@ def test_log_result_excludes_notes_apply_content(
     assert "do-not-log-note-handle" not in text
     assert "do-not-log-fingerprint" not in text
     assert "do not log warning" not in text
+
+
+def test_log_result_excludes_photos_plan_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "photos",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "plan",
+        "privacy": {
+            "output_tier": "preview",
+            "content_inspected": False,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "preview": {
+            "target": {"library": "system_photo_library"},
+            "proposed": {
+                "source_filename": "do-not-log-photo.jpg",
+                "file_sha256": "do-not-log-file-hash",
+                "source_path": "/do/not/log/photo.jpg",
+            },
+            "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
+        },
+        "warnings": [{"code": "synthetic_warning", "message": "do not log warning"}],
+    }
+
+    log_result("photos.plan", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "photos.plan"
+    assert event["privacy"]["output_tier"] == "preview"
+    assert event["warning_codes"] == ["synthetic_warning"]
+    assert "do-not-log-photo.jpg" not in text
+    assert "do-not-log-file-hash" not in text
+    assert "/do/not/log/photo.jpg" not in text
+    assert "do-not-log-fingerprint" not in text
+    assert "do not log warning" not in text
+
+
+def test_log_result_excludes_photos_apply_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "photos",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "apply",
+        "privacy": {
+            "output_tier": "mutation",
+            "content_inspected": False,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "preview": {
+            "proposed": {
+                "source_filename": "do-not-log-photo.jpg",
+                "file_sha256": "do-not-log-file-hash",
+            },
+            "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
+        },
+        "approval": {
+            "approval_fingerprint": "do-not-log-fingerprint",
+            "approval_token_verified": True,
+        },
+        "read_back": {
+            "handle": "photos:asset:v1:abcdef0123456789abcdef0123456789",
+            "primary_filename": "do-not-log-photo.jpg",
+            "resources": [{"filename": "do-not-log-photo.jpg"}],
+        },
+        "warnings": [{"code": "already_applied", "message": "do not log warning"}],
+    }
+
+    log_result("photos.apply", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "photos.apply"
+    assert event["privacy"]["output_tier"] == "mutation"
+    assert event["warning_codes"] == ["already_applied"]
+    assert "do-not-log-photo.jpg" not in text
+    assert "do-not-log-file-hash" not in text
+    assert "photos:asset:v1:" not in text
+    assert "do-not-log-fingerprint" not in text
+    assert "do not log warning" not in text

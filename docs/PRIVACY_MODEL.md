@@ -1,6 +1,6 @@
 # Privacy Model
 
-This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply through plan/apply/read-back gates.
+This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply through plan/apply/read-back gates.
 
 ## Data Tiers
 
@@ -8,8 +8,8 @@ This project handles local personal-data surfaces. The default is metadata-first
 2. Metadata: bounded subjects/titles/snippets and Mail content-availability hints only when the user asks for the workflow.
 3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
 4. Attachments: metadata only until a later approved phase.
-5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, non-mutating Notes create-note planning for bounded title/body input, and non-mutating Mail create-draft planning for bounded recipient/subject/body input.
-6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply; all other mutation requires a separate design and approval phase.
+5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, non-mutating Notes create-note planning for bounded title/body input, non-mutating Mail create-draft planning for bounded recipient/subject/body input, and non-mutating Photos import planning for caller-selected image/video source files.
+6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply; all other mutation requires a separate design and approval phase.
 
 ## Never Persist
 
@@ -29,6 +29,7 @@ Do not persist any of the following in logs, docs, prompts, fixtures, tests, com
 - Contact planned names, organization names, email addresses, phone numbers, URLs, handles, or approval fingerprints outside transient preview/apply responses
 - Contact notes and image data
 - Photo asset bytes in chat, thumbnails, raw Photos identifiers, and asset/resource metadata outside exact selected responses
+- Photos import source paths, source filenames, source-file hashes, handles, or approval fingerprints outside transient preview/apply responses
 - Reminder titles or notes
 - Reminder planning titles or notes outside transient preview responses
 - iCloud Drive file contents or raw local paths
@@ -85,7 +86,7 @@ Ask the local operator before:
 - Editing Codex config
 - Editing launchd jobs
 - Editing OpenClaw runtime state
-- Mutating Mail, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, and Mail draft apply gates
+- Mutating Mail, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, and Photos import apply gates
 - Adding direct network mail access
 - Adding authoritative Hide My Email inventory or Hide My Email creation/deactivation/deletion
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
@@ -325,6 +326,33 @@ The v1.16 apply implementation:
 - Applies through save-only Mail.app automation after those checks and does not call `send`.
 - Returns read-back through the existing exact-handle Mail content shape when the local Drafts store indexes the saved draft.
 - Returns `partial` if Mail.app accepts the draft save but read-back is not available yet.
+- Keeps automated tests synthetic-only.
+
+## v1.17 Photos Import Apply
+
+The implemented v1.17 phase adds non-mutating Photos import planning and the approved apply-capable mutation surface for importing one caller-selected local image or video file through PhotoKit. It is not permission to edit, delete, target albums, mutate hidden/favorite/metadata state, return thumbnails, return inline asset bytes, fetch missing iCloud media over the network, or run bulk Photos operations.
+
+The v1.17 planning implementation:
+
+- Exposes `local-apple-data photos plan` and MCP `photos_plan_change`.
+- Returns `mode: "plan"`, `mutation_applied:false`, and `apply_available:true`.
+- Validates requested import operations without calling PhotoKit or writing Photos.
+- Requires a caller-selected regular local image or video source file.
+- Refuses symlinks, directories, empty files, unsupported media types, media-type mismatches, and oversized files.
+- Returns deterministic idempotency keys and approval fingerprints for the apply gate.
+- Returns source filename, media type, file size, and source-file hash in the transient preview response.
+- Does not echo the raw source path.
+- Keeps automated tests synthetic-only.
+- Keeps redacted event logs free of source paths, source filenames, source hashes, PhotoKit identifiers, handles, and approval fingerprints.
+
+The v1.17 apply implementation:
+
+- Exposes `local-apple-data photos apply` and MCP `photos_apply_change`.
+- Requires the matching `photos-apply:v1:<approval_fingerprint>` token.
+- Requires explicit confirmation.
+- Recomputes the plan before applying so changed source bytes invalidate stale approval tokens.
+- Applies through a Swift PhotoKit helper and `PHPhotoLibrary.performChanges`.
+- Returns read-back metadata for the created asset through the existing opaque-handle Photos detail shape.
 - Keeps automated tests synthetic-only.
 
 ## v1.7 Photos Asset Detail Retrieval
