@@ -1,6 +1,6 @@
 # Threat Model
 
-This plugin is for local, metadata-first access to locally synced Apple data, with exact-handle content/detail retrieval for selected Mail messages, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files. The only approved mutation surfaces are Reminders create/complete/due-date apply and iCloud Drive create-text apply through plan/apply/read-back gates.
+This plugin is for local, metadata-first access to locally synced Apple data, with exact-handle content/detail retrieval for selected Mail messages, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create-text apply, and Calendar create-event apply through plan/apply/read-back gates.
 
 ## Assets
 
@@ -25,6 +25,7 @@ This plugin is for local, metadata-first access to locally synced Apple data, wi
 - Non-mutating Reminder plan previews returned transiently for requested future create/complete/update-due-date workflows.
 - Exact iCloud Drive text content returned transiently for one selected `icloud:file:v1:` handle.
 - Non-mutating iCloud Drive create-text plan previews returned transiently for requested future file creates.
+- Non-mutating Calendar create-event plan previews returned transiently for requested future timed-event creates.
 - Local handle secret under `~/.local/state/local-apple-data/handle-secret.key`.
 - Redacted event log under `~/.local/state/local-apple-data/events.jsonl`.
 
@@ -32,9 +33,10 @@ This plugin is for local, metadata-first access to locally synced Apple data, wi
 
 - No attachments, broad content search, durable content caches, raw database rows, raw framework identifiers, raw local file paths, unsupported/binary iCloud Drive content extraction, Contact notes/image data, inline Photos image/video bytes, inline Voice Memos audio bytes, generated transcription, broad Messages text search, broad Voice Memos transcript search, broad Reminder note retrieval, authoritative Hide My Email inventory, or Hide My Email creation/deactivation/deletion.
 - No Gmail connector, Gmail API, IMAP, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or network mail access.
-- No mutation of Mail, Notes, Hide My Email, Gmail, iCloud, TCC, launchd, Codex config, or OpenClaw state outside the approved Reminders and iCloud Drive apply gates.
+- No mutation of Mail, Notes, Hide My Email, Gmail, iCloud, TCC, launchd, Codex config, or OpenClaw state outside the approved Reminders, iCloud Drive, and Calendar apply gates.
 - Reminders mutation is limited to create, complete, and due-date update through the approved plan/apply/read-back gate. No Reminders delete, bulk, list/account, attachment, URL, rich-content, or uncomplete mutation is approved.
 - iCloud Drive mutation is limited to creating one supported text-like file through the approved plan/apply/read-back gate. No append, overwrite, rename, move, copy, delete, binary/document write, broad folder write, hidden-file write, symlink/package traversal, or raw path write is approved.
+- Calendar mutation is limited to creating one timed event in an explicit target calendar title through the approved plan/apply/read-back gate. No update, delete, move, recurrence, attendees, invitations, URLs, alarms, attachments, travel time, availability change, all-day event, default-calendar guessing, or bulk Calendar mutation is approved.
 - No background indexing or durable personal-metadata cache.
 
 ## Main Risks And Mitigations
@@ -51,10 +53,11 @@ This plugin is for local, metadata-first access to locally synced Apple data, wi
 - Voice Memos audio/path leakage: Voice Memos exact retrieval parses only an existing local transcript atom unless export is explicitly requested. Voice Memos exact export copies one selected `.m4a` to a caller-selected output directory and does not return inline audio bytes, raw source recording paths, or recording identifiers.
 - iCloud Drive traversal overreach: searches are filename-only, capped, skip hidden files and symlinks, and do not return raw local paths.
 - Unauthorized iCloud Drive apply: `icloud-drive apply` and `icloud_drive_apply_change` recompute the plan, require the matching approval token, require explicit confirmation, resolve only exact opaque parent folder handles, keep targets under the configured root, use exclusive create, and return read-back metadata.
+- Unauthorized Calendar apply: `calendar apply` and `calendar_apply_change` recompute the plan, require the matching approval token, require explicit confirmation, resolve only an explicit target calendar title through EventKit, refuse ambiguous calendars, create only one timed event, and return read-back metadata.
 - Local path leakage: store and SQLite warnings use safe generic messages; health store paths are `~/...` labels; tool paths are redacted.
 - Log leakage: event logs include command/status/source/result count/warning codes/privacy flags only, not queries, results, warning messages, or content.
 - Schema and readiness drift: health and doctor use store-readability checks, schema-only checks for Mail, Messages, Voice Memos, Notes, and Reminders, iCloud Drive root checks, non-prompting framework access requirements, and safe warning codes; doctor gives non-mutating remediation guidance.
-- Planning confused with mutation: Reminders and iCloud Drive planning use `plan` naming, read-only MCP annotations, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, and no write calls. Reminders and iCloud Drive apply use separate non-read-only MCP annotations.
+- Planning confused with mutation: Reminders, iCloud Drive, and Calendar planning use `plan` naming, read-only MCP annotations, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, and no write calls. Reminders, iCloud Drive, and Calendar apply use separate non-read-only MCP annotations.
 - Unauthorized Reminder apply: `reminders apply` and `reminders_apply_change` recompute the plan, require the matching approval token, require explicit confirmation, check expected state, apply through EventKit only after those checks, and return read-back metadata.
 - Mail version drift: Mail store discovery chooses the highest existing local Envelope Index path without exposing the raw path in normal output.
 - Runtime cache drift: local install verification can compare project source, personal/plugin source, and installed cache key files.
@@ -73,9 +76,10 @@ Before installing a new version:
 7. Reinstall through the configured local marketplace.
 8. Run `uv run python scripts/verify_runtime.py` and `uv run python scripts/audit_mutation_gates.py` from the installed cache.
 
-Any attachment retrieval, mutation beyond the approved Reminders create/complete/due-date apply surface and iCloud Drive create-text apply surface, background indexing, arbitrary document extraction, Contact note/image retrieval, generated transcription, broad Messages text search, broad Voice Memos transcript search, broad Reminder content search, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, or connector fallback requires a separate explicit design and approval gate.
+Any attachment retrieval, mutation beyond the approved Reminders create/complete/due-date apply surface, iCloud Drive create-text apply surface, and Calendar create-event apply surface, background indexing, arbitrary document extraction, Contact note/image retrieval, generated transcription, broad Messages text search, broad Voice Memos transcript search, broad Reminder content search, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, or connector fallback requires a separate explicit design and approval gate.
 
 The implemented v1.1 gate is `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`. It added exact-handle Mail content retrieval only.
 The implemented v1.2/v1.3/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9/v1.10 gate is `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`. It adds exact-handle Notes content retrieval, exact-handle supported iCloud Drive text-file retrieval, exact-handle Calendar event detail retrieval, exact-handle Reminder note retrieval, exact-handle Contact detail retrieval, exact-handle Photos asset/resource metadata and export, exact-handle Messages chat transcript retrieval, exact-handle Voice Memos existing transcript and audio export, and exact-handle inferred Hide My Email alias detail while keeping attachments, broad content search, background indexing, connector fallback, private iCloud web/API access, and mutation out of scope.
 The implemented v1.11 gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`. It adds non-mutating Reminders planning and the approved Reminders apply surface while keeping every other Reminders mutation surface out of scope.
 The implemented v1.12 gate is `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`. It adds non-mutating iCloud Drive create-text planning and the approved iCloud Drive create-text apply surface while keeping every other iCloud Drive mutation surface out of scope.
+The implemented v1.13 gate is `docs/V1_13_CALENDAR_WRITE_DESIGN.md`. It adds non-mutating Calendar create-event planning and the approved Calendar create-event apply surface while keeping every other Calendar mutation surface out of scope.

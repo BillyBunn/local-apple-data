@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604120000 - 2026-06-04
+
+### Added
+
+- Approved Calendar create-event apply through `local-apple-data calendar apply` and MCP `calendar_apply_change`.
+- Non-mutating Calendar create-event planning through `local-apple-data calendar plan` and MCP `calendar_plan_change`.
+- Approval-token, explicit-confirmation, explicit-calendar-title, timed-event, idempotency, and read-back verification checks for Calendar create-event apply.
+- Synthetic adapter, CLI, MCP annotation, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the approved apply surface.
+
+### Security
+
+- `reminders_apply_change`, `icloud_drive_apply_change`, and `calendar_apply_change` are the only non-read-only MCP tools and are annotated non-destructive, idempotent, and closed-world.
+- Calendar update, delete, recurrence, attendees, invitations, alarms, all-day events, default-calendar guessing, and bulk operations remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604110000 - 2026-06-04
 
 ### Added

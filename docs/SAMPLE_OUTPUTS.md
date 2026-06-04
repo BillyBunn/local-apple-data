@@ -102,7 +102,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 33,
+  "tool_count": 35,
   "mail_content_status": "ok",
   "notes_content_status": "ok",
   "icloud_drive_content_status": "ok",
@@ -112,6 +112,11 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "icloud_apply_status": "ok",
   "icloud_apply_mutation_applied": true,
   "calendar_detail_status": "ok",
+  "calendar_plan_status": "ok",
+  "calendar_plan_mutation_applied": false,
+  "calendar_plan_apply_available": true,
+  "calendar_apply_status": "ok",
+  "calendar_apply_mutation_applied": true,
   "contacts_detail_status": "ok",
   "photos_detail_status": "ok",
   "photos_export_status": "ok",
@@ -125,6 +130,68 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "reminders_plan_apply_available": true,
   "reminders_apply_status": "ok",
   "reminders_apply_mutation_applied": true
+}
+```
+
+## Calendar Plan
+
+```json
+{
+  "status": "ok",
+  "source": "calendar",
+  "mode": "plan",
+  "mutation_applied": false,
+  "apply_available": true,
+  "preview": {
+    "operation": "create",
+    "target": {
+      "calendar_title": "Synthetic Calendar"
+    },
+    "proposed": {
+      "title": "Synthetic planned event",
+      "start_date": "2026-06-04T19:00:00Z",
+      "end_date": "2026-06-04T20:00:00Z",
+      "all_day": false,
+      "location_present": true,
+      "notes_present": true,
+      "attendees_count": 0
+    },
+    "idempotency_key": "calendar-plan:v1:<hash>",
+    "approval": {
+      "required_for_apply": true,
+      "apply_tool_available": true,
+      "approval_fingerprint": "<hash>",
+      "approval_token_format": "calendar-apply:v1:<approval_fingerprint>"
+    }
+  },
+  "warnings": []
+}
+```
+
+## Calendar Apply
+
+```json
+{
+  "status": "ok",
+  "source": "calendar",
+  "mode": "apply",
+  "operation": "create",
+  "mutation_applied": true,
+  "apply_available": true,
+  "idempotency_key": "calendar-plan:v1:<hash>",
+  "approval": {
+    "approval_fingerprint": "<hash>",
+    "approval_token_verified": true
+  },
+  "read_back": {
+    "handle": "<opaque calendar:event:v1 handle>",
+    "title": "Synthetic planned event",
+    "calendar_title": "Synthetic Calendar",
+    "start_date": "2026-06-04T19:00:00Z",
+    "end_date": "2026-06-04T20:00:00Z",
+    "all_day": false
+  },
+  "warnings": []
 }
 ```
 

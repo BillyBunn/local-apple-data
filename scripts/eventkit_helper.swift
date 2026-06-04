@@ -233,6 +233,40 @@ func dueDateMatches(_ components: DateComponents?, _ value: String) -> Bool {
     return abs(left.timeIntervalSince(right)) < 1
 }
 
+func eventDate(from value: String) -> Date? {
+    if value.isEmpty {
+        return nil
+    }
+    let parser = ISO8601DateFormatter()
+    parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    var parsed = parser.date(from: value)
+    if parsed == nil {
+        parser.formatOptions = [.withInternetDateTime]
+        parsed = parser.date(from: value)
+    }
+    return parsed
+}
+
+func eventDatesMatch(_ left: Date, _ right: Date) -> Bool {
+    return abs(left.timeIntervalSince(right)) < 1
+}
+
+func emitCalendarApplyError(
+    _ status: String,
+    _ code: String,
+    _ message: String,
+    authorizationStatus: EKAuthorizationStatus = EKEventStore.authorizationStatus(for: .event)
+) -> Never {
+    emit([
+        "schema_version": 1,
+        "status": status,
+        "source": "calendar",
+        "authorization_status": authorizationName(authorizationStatus),
+        "event": NSNull(),
+        "warnings": [warning(code, message)],
+    ])
+}
+
 func emitReminderApplyError(
     _ status: String,
     _ code: String,
@@ -339,6 +373,93 @@ if command == "calendar_event_by_id" {
         "schema_version": 1,
         "status": "ok",
         "source": "calendar",
+        "event": payload,
+        "warnings": [],
+    ])
+}
+
+if command == "calendar_apply_change" {
+    let store = ensureAccess(
+        .event,
+        source: "calendar",
+        warningCode: "calendar_access_unavailable"
+    )!
+    let operation = stringValue(request, "operation")
+    if operation != "create" {
+        emitCalendarApplyError("error", "invalid_operation", "Unsupported Calendar apply operation.")
+    }
+
+    let title = stringValue(request, "title")
+    let calendarTitle = stringValue(request, "calendar_title")
+    let startDateValue = stringValue(request, "start_date")
+    let endDateValue = stringValue(request, "end_date")
+    let location = stringValue(request, "location")
+    let notes = stringValue(request, "notes")
+    if title.isEmpty || calendarTitle.isEmpty || startDateValue.isEmpty || endDateValue.isEmpty {
+        emitCalendarApplyError("error", "missing_required_field", "Calendar create requires title, calendar_title, start_date, and end_date.")
+    }
+    guard let startDate = eventDate(from: startDateValue),
+          let endDate = eventDate(from: endDateValue),
+          endDate > startDate
+    else {
+        emitCalendarApplyError("error", "invalid_time_range", "Calendar event start_date and end_date could not be parsed.")
+    }
+
+    let matchingCalendars = store.calendars(for: .event).filter { $0.title == calendarTitle }
+    if matchingCalendars.isEmpty {
+        emitCalendarApplyError("not_found", "target_calendar_not_found", "Calendar was not found.")
+    }
+    if matchingCalendars.count > 1 {
+        emitCalendarApplyError("error", "ambiguous_target_calendar", "Calendar title matched more than one calendar.")
+    }
+    let calendar = matchingCalendars[0]
+
+    let searchStart = Calendar.current.date(byAdding: .minute, value: -1, to: startDate) ?? startDate
+    let searchEnd = Calendar.current.date(byAdding: .minute, value: 1, to: endDate) ?? endDate
+    let predicate = store.predicateForEvents(withStart: searchStart, end: searchEnd, calendars: [calendar])
+    let existing = store.events(matching: predicate).first {
+        ($0.title ?? "") == title
+            && eventDatesMatch($0.startDate, startDate)
+            && eventDatesMatch($0.endDate, endDate)
+            && ($0.location ?? "") == location
+            && ($0.notes ?? "") == notes
+    }
+    if let existing = existing, let payload = eventPayload(existing, includeContent: false) {
+        emit([
+            "schema_version": 1,
+            "status": "ok",
+            "source": "calendar",
+            "authorization_status": authorizationName(EKEventStore.authorizationStatus(for: .event)),
+            "event": payload,
+            "warnings": [warning("already_applied", "Calendar create already matches an existing event.")],
+        ])
+    }
+
+    let event = EKEvent(eventStore: store)
+    event.title = title
+    event.calendar = calendar
+    event.startDate = startDate
+    event.endDate = endDate
+    event.isAllDay = false
+    if !location.isEmpty {
+        event.location = location
+    }
+    if !notes.isEmpty {
+        event.notes = notes
+    }
+    do {
+        try store.save(event, span: .thisEvent, commit: true)
+    } catch {
+        emitCalendarApplyError("error", "eventkit_apply_failed", "Calendar event could not be created.")
+    }
+    guard let payload = eventPayload(event, includeContent: false) else {
+        emitCalendarApplyError("apply_unknown", "read_back_unavailable", "Calendar event was created but read-back was unavailable.")
+    }
+    emit([
+        "schema_version": 1,
+        "status": "ok",
+        "source": "calendar",
+        "authorization_status": authorizationName(EKEventStore.authorizationStatus(for: .event)),
         "event": payload,
         "warnings": [],
     ])

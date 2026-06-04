@@ -89,8 +89,13 @@ SURFACE_CONTRACTS = (
         label="Calendar",
         cli_group="calendar",
         cli_subparser="calendar_subparsers",
-        cli_commands=("search", "get"),
-        mcp_tools=("calendar_search", "calendar_get_event"),
+        cli_commands=("search", "get", "plan", "apply"),
+        mcp_tools=(
+            "calendar_search",
+            "calendar_get_event",
+            "calendar_plan_change",
+            "calendar_apply_change",
+        ),
     ),
     SurfaceContract(
         name="reminders",

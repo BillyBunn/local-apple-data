@@ -20,20 +20,24 @@ from audit_mutation_gates import audit_mutation_gates
 
 
 APPROVED_WRITE_TOOLS: tuple[str, ...] = (
+    "calendar_apply",
+    "calendar_apply_change",
     "icloud_drive_apply",
     "icloud_drive_apply_change",
     "reminders_apply",
     "reminders_apply_change",
 )
 APPROVED_PREVIEW_TOOLS: tuple[str, ...] = (
+    "calendar_plan",
+    "calendar_plan_change",
     "icloud_drive_plan",
     "icloud_drive_plan_change",
     "reminders_plan_change",
 )
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, and `icloud_drive_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply and iCloud Drive create-text apply are the only approved write surfaces",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, and `calendar_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply are the only approved write surfaces",
 }
 REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
@@ -74,6 +78,27 @@ REQUIRED_DESIGN_DOCS = {
             "redaction",
             "Synthetic Tests Required",
             "The current release allows only this iCloud Drive create-text apply surface.",
+        ),
+    },
+    "calendar_write_v1": {
+        "path": "docs/V1_13_CALENDAR_WRITE_DESIGN.md",
+        "phrases": (
+            "Status: Apply-capable implementation.",
+            "Approved write tools: `local-apple-data calendar apply` and `calendar_apply_change`.",
+            "`local-apple-data calendar plan` and `calendar_plan_change`",
+            "No other mutating CLI or MCP tools are approved or exposed by this document.",
+            "preview",
+            "apply",
+            "read_back",
+            "mutation_applied:false",
+            "approval token",
+            "explicit target calendar title",
+            "timed event",
+            "EventKit",
+            "idempotency",
+            "redaction",
+            "Synthetic Tests Required",
+            "The current release allows only this Calendar create-event apply surface.",
         ),
     },
 }

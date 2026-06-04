@@ -176,3 +176,57 @@ def test_log_result_excludes_icloud_drive_apply_content(
     assert "do not log file content" not in text
     assert "do-not-log-fingerprint" not in text
     assert "do not log warning" not in text
+
+
+def test_log_result_excludes_calendar_apply_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "calendar",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "apply",
+        "privacy": {
+            "output_tier": "mutation",
+            "content_inspected": False,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "preview": {
+            "target": {"calendar_title": "do not log calendar"},
+            "proposed": {
+                "title": "do not log event title",
+                "location": "do not log location",
+                "notes_text": "do not log event notes",
+            },
+            "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
+        },
+        "approval": {
+            "approval_fingerprint": "do-not-log-fingerprint",
+            "approval_token_verified": True,
+        },
+        "read_back": {
+            "handle": "do-not-log-calendar-handle",
+            "title": "do not log event title",
+            "calendar_title": "do not log calendar",
+        },
+        "warnings": [{"code": "already_applied", "message": "do not log warning"}],
+    }
+
+    log_result("calendar.apply", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "calendar.apply"
+    assert event["privacy"]["output_tier"] == "mutation"
+    assert event["warning_codes"] == ["already_applied"]
+    assert "do not log event title" not in text
+    assert "do not log calendar" not in text
+    assert "do not log location" not in text
+    assert "do not log event notes" not in text
+    assert "do-not-log-calendar-handle" not in text
+    assert "do-not-log-fingerprint" not in text
+    assert "do not log warning" not in text

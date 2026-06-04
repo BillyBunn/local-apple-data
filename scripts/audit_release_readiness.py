@@ -50,6 +50,7 @@ REQUIRED_FILES = (
     "docs/MUTATION_GATES.md",
     "docs/V1_11_REMINDERS_WRITE_DESIGN.md",
     "docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md",
+    "docs/V1_13_CALENDAR_WRITE_DESIGN.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "docs/PUBLISHING.md",
     "docs/PRIVACY_MODEL.md",

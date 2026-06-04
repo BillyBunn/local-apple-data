@@ -12,7 +12,9 @@ from local_apple_data.mcp_server import (
     INSTRUCTIONS,
     READ_ONLY_ANNOTATIONS,
     WRITE_ANNOTATIONS,
+    calendar_apply_change,
     calendar_get_event,
+    calendar_plan_change,
     contacts_get,
     icloud_drive_apply_change,
     hide_my_email_get_alias,
@@ -81,6 +83,22 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
         confirm_apply=True,
     )
     calendar_result = calendar_get_event("bad-handle")
+    calendar_plan_result = calendar_plan_change(
+        "create",
+        title="Synthetic event",
+        calendar_title="Synthetic Calendar",
+        start_date="bad-date",
+        end_date="2026-06-04T18:00:00Z",
+    )
+    calendar_apply_result = calendar_apply_change(
+        "create",
+        title="Synthetic event",
+        calendar_title="Synthetic Calendar",
+        start_date="bad-date",
+        end_date="2026-06-04T18:00:00Z",
+        approval_token="calendar-apply:v1:bad",
+        confirm_apply=True,
+    )
     contact_result = contacts_get("bad-handle")
     photo_result = photos_get_asset("bad-handle")
     photo_export_result = photos_export_asset("bad-handle", str(tmp_path / "exports"))
@@ -122,6 +140,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert icloud_apply_result["warnings"][0]["code"] == "invalid_parent_handle"
     assert calendar_result["status"] == "error"
     assert calendar_result["warnings"][0]["code"] == "invalid_handle"
+    assert calendar_plan_result["status"] == "error"
+    assert calendar_plan_result["warnings"][0]["code"] == "invalid_datetime"
+    assert calendar_apply_result["status"] == "error"
+    assert calendar_apply_result["warnings"][0]["code"] == "invalid_datetime"
     assert contact_result["status"] == "error"
     assert contact_result["warnings"][0]["code"] == "invalid_handle"
     assert photo_result["status"] == "error"
@@ -175,6 +197,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "icloud_drive_apply_change",
                     "calendar_search",
                     "calendar_get_event",
+                    "calendar_plan_change",
+                    "calendar_apply_change",
                     "contacts_search",
                     "contacts_get",
                     "photos_search",
@@ -193,6 +217,7 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                         if tool.name in {
                             "reminders_apply_change",
                             "icloud_drive_apply_change",
+                            "calendar_apply_change",
                         }:
                             assert tool.annotations.readOnlyHint is False
                         else:

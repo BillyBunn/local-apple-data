@@ -6,7 +6,12 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from .adapters.calendar import get_calendar_event, search_calendar_events
+from .adapters.calendar import (
+    apply_calendar_change,
+    get_calendar_event,
+    plan_calendar_change,
+    search_calendar_events,
+)
 from .adapters.contacts import get_contact, search_contacts
 from .adapters.icloud_drive import (
     apply_icloud_drive_change,
@@ -42,7 +47,7 @@ INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
-    "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply, and each requires a matching plan approval token plus explicit confirmation."
+    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
@@ -306,6 +311,62 @@ def calendar_get_event(
             max_chars=max_chars,
             days_back=days_back,
             days_forward=days_forward,
+        ),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def calendar_plan_change(
+    operation: str,
+    title: str,
+    calendar_title: str,
+    start_date: str,
+    end_date: str,
+    location: str = "",
+    notes: str = "",
+) -> dict[str, Any]:
+    """Plan a future Calendar event creation without applying it."""
+
+    return _record(
+        "calendar_plan_change",
+        plan_calendar_change(
+            operation,
+            title=title,
+            calendar_title=calendar_title,
+            start_date=start_date,
+            end_date=end_date,
+            location=location,
+            notes=notes,
+        ),
+    )
+
+
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
+def calendar_apply_change(
+    operation: str,
+    title: str,
+    calendar_title: str,
+    start_date: str,
+    end_date: str,
+    approval_token: str,
+    location: str = "",
+    notes: str = "",
+    confirm_apply: bool = False,
+) -> dict[str, Any]:
+    """Apply an approved Calendar event creation and read back metadata."""
+
+    return _record(
+        "calendar_apply_change",
+        apply_calendar_change(
+            operation,
+            title=title,
+            calendar_title=calendar_title,
+            start_date=start_date,
+            end_date=end_date,
+            location=location,
+            notes=notes,
+            approval_token=approval_token,
+            confirm_apply=confirm_apply,
         ),
     )
 

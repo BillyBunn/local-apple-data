@@ -13,7 +13,12 @@ from typing import Any
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from local_apple_data.adapters.calendar import get_calendar_event, search_calendar_events
+from local_apple_data.adapters.calendar import (
+    apply_calendar_change,
+    get_calendar_event,
+    plan_calendar_change,
+    search_calendar_events,
+)
 from local_apple_data.adapters.contacts import get_contact, search_contacts
 from local_apple_data.adapters.icloud_drive import (
     apply_icloud_drive_change,
@@ -518,6 +523,28 @@ def _calendar_runner(payload: dict[str, Any], _timeout: float) -> dict[str, Any]
             },
             "warnings": [],
         }
+    if payload["command"] == "calendar_apply_change":
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "calendar",
+            "authorization_status": "authorized",
+            "event": {
+                "event_id": "runtime-created-calendar-event-1",
+                "title": payload["title"],
+                "calendar_title": payload["calendar_title"],
+                "start_date": payload["start_date"],
+                "end_date": payload["end_date"],
+                "all_day": False,
+                "availability": 0,
+                "location_present": bool(payload.get("location")),
+                "notes_present": bool(payload.get("notes")),
+                "url_present": False,
+                "alarms_count": 0,
+                "attendees_count": 0,
+            },
+            "warnings": [],
+        }
     raise RuntimeError("unexpected calendar helper command")
 
 
@@ -532,6 +559,56 @@ def _calendar_content_smoke() -> dict[str, Any]:
         "calendar_notes_chars": content["result"]["notes_chars"],
         "calendar_legacy_content_status": legacy_content["status"],
         "calendar_legacy_content_warning": legacy_content["warnings"][0]["code"],
+    }
+
+
+def _calendar_plan_apply_smoke() -> dict[str, Any]:
+    plan = plan_calendar_change(
+        "create",
+        title="Synthetic runtime planned calendar event",
+        calendar_title="Synthetic Calendar",
+        start_date="2026-06-04T19:00:00Z",
+        end_date="2026-06-04T20:00:00Z",
+        location="Synthetic Room",
+        notes="Synthetic calendar apply notes.",
+    )
+    token = "calendar-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    result = apply_calendar_change(
+        "create",
+        title="Synthetic runtime planned calendar event",
+        calendar_title="Synthetic Calendar",
+        start_date="2026-06-04T19:00:00Z",
+        end_date="2026-06-04T20:00:00Z",
+        location="Synthetic Room",
+        notes="Synthetic calendar apply notes.",
+        approval_token=token,
+        confirm_apply=True,
+        eventkit_runner=_calendar_runner,
+    )
+    missing_confirmation = apply_calendar_change(
+        "create",
+        title="Synthetic runtime planned calendar event",
+        calendar_title="Synthetic Calendar",
+        start_date="2026-06-04T19:00:00Z",
+        end_date="2026-06-04T20:00:00Z",
+        location="Synthetic Room",
+        notes="Synthetic calendar apply notes.",
+        approval_token=token,
+        eventkit_runner=_calendar_runner,
+    )
+    return {
+        "calendar_plan_status": plan["status"],
+        "calendar_plan_mode": plan["mode"],
+        "calendar_plan_mutation_applied": plan["mutation_applied"],
+        "calendar_plan_apply_available": plan["apply_available"],
+        "calendar_plan_idempotency_key": plan["preview"]["idempotency_key"].startswith(
+            "calendar-plan:v1:"
+        ),
+        "calendar_apply_status": result["status"],
+        "calendar_apply_mode": result["mode"],
+        "calendar_apply_mutation_applied": result["mutation_applied"],
+        "calendar_apply_read_back_title": result["read_back"]["title"],
+        "calendar_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
     }
 
 
@@ -884,7 +961,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 33,
+        "tool_count": 35,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -958,6 +1035,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "calendar_notes_chars": 25,
         "calendar_legacy_content_status": "error",
         "calendar_legacy_content_warning": "invalid_handle",
+        "calendar_plan_status": "ok",
+        "calendar_plan_mode": "plan",
+        "calendar_plan_mutation_applied": False,
+        "calendar_plan_apply_available": True,
+        "calendar_plan_idempotency_key": True,
+        "calendar_apply_status": "ok",
+        "calendar_apply_mode": "apply",
+        "calendar_apply_mutation_applied": True,
+        "calendar_apply_read_back_title": "Synthetic runtime planned calendar event",
+        "calendar_apply_missing_confirmation": "missing_apply_confirmation",
         "contacts_opaque_handle": True,
         "contacts_content_status": "ok",
         "contacts_email_count": 1,
@@ -1015,6 +1102,7 @@ def main() -> None:
         summary.update(_icloud_drive_content_smoke(tmp_path))
         summary.update(_icloud_drive_plan_apply_smoke(tmp_path))
         summary.update(_calendar_content_smoke())
+        summary.update(_calendar_plan_apply_smoke())
         summary.update(_contacts_content_smoke())
         summary.update(_photos_content_smoke(tmp_path))
         summary.update(_reminders_content_smoke())

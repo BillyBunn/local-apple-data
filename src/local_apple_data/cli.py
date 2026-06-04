@@ -6,7 +6,12 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .adapters.calendar import get_calendar_event, search_calendar_events
+from .adapters.calendar import (
+    apply_calendar_change,
+    get_calendar_event,
+    plan_calendar_change,
+    search_calendar_events,
+)
 from .adapters.contacts import get_contact, search_contacts
 from .adapters.icloud_drive import (
     apply_icloud_drive_change,
@@ -338,6 +343,38 @@ def _calendar_get_command(args: argparse.Namespace) -> int:
         days_forward=args.days_forward,
     )
     log_result("calendar.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _calendar_plan_command(args: argparse.Namespace) -> int:
+    payload = plan_calendar_change(
+        args.operation,
+        title=args.title or "",
+        calendar_title=args.calendar_title or "",
+        start_date=args.start_date or "",
+        end_date=args.end_date or "",
+        location=args.location or "",
+        notes=args.notes or "",
+    )
+    log_result("calendar.plan", payload)
+    _print_json(payload)
+    return 0
+
+
+def _calendar_apply_command(args: argparse.Namespace) -> int:
+    payload = apply_calendar_change(
+        args.operation,
+        title=args.title or "",
+        calendar_title=args.calendar_title or "",
+        start_date=args.start_date or "",
+        end_date=args.end_date or "",
+        location=args.location or "",
+        notes=args.notes or "",
+        approval_token=args.approval_token or "",
+        confirm_apply=args.confirm_apply,
+    )
+    log_result("calendar.apply", payload)
     _print_json(payload)
     return 0
 
@@ -942,6 +979,78 @@ def build_parser() -> argparse.ArgumentParser:
         help="Future handle-resolution window in days, capped at 3650.",
     )
     calendar_get.set_defaults(func=_calendar_get_command)
+
+    calendar_plan = calendar_subparsers.add_parser(
+        "plan",
+        help="Plan a future Calendar event create without applying it.",
+    )
+    calendar_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
+    calendar_plan.add_argument(
+        "--operation",
+        required=True,
+        choices=["create"],
+        help="Future Calendar operation to plan. No mutation is applied.",
+    )
+    calendar_plan.add_argument("--title", required=True, help="New event title.")
+    calendar_plan.add_argument(
+        "--calendar-title",
+        required=True,
+        help="Exact target calendar title.",
+    )
+    calendar_plan.add_argument(
+        "--start-date",
+        required=True,
+        help="Event start as ISO 8601 timestamp with timezone.",
+    )
+    calendar_plan.add_argument(
+        "--end-date",
+        required=True,
+        help="Event end as ISO 8601 timestamp with timezone.",
+    )
+    calendar_plan.add_argument("--location", default="", help="Optional event location.")
+    calendar_plan.add_argument("--notes", default="", help="Optional event notes.")
+    calendar_plan.set_defaults(func=_calendar_plan_command)
+
+    calendar_apply = calendar_subparsers.add_parser(
+        "apply",
+        help="Apply an approved Calendar event create.",
+    )
+    calendar_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
+    calendar_apply.add_argument(
+        "--operation",
+        required=True,
+        choices=["create"],
+        help="Approved Calendar operation to apply.",
+    )
+    calendar_apply.add_argument("--title", required=True, help="New event title.")
+    calendar_apply.add_argument(
+        "--calendar-title",
+        required=True,
+        help="Exact target calendar title.",
+    )
+    calendar_apply.add_argument(
+        "--start-date",
+        required=True,
+        help="Event start as ISO 8601 timestamp with timezone.",
+    )
+    calendar_apply.add_argument(
+        "--end-date",
+        required=True,
+        help="Event end as ISO 8601 timestamp with timezone.",
+    )
+    calendar_apply.add_argument("--location", default="", help="Optional event location.")
+    calendar_apply.add_argument("--notes", default="", help="Optional event notes.")
+    calendar_apply.add_argument(
+        "--approval-token",
+        required=True,
+        help="calendar-apply:v1 token from the matching plan response.",
+    )
+    calendar_apply.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required explicit confirmation flag for the approved apply operation.",
+    )
+    calendar_apply.set_defaults(func=_calendar_apply_command)
 
     contacts = subparsers.add_parser("contacts", help="Apple Contacts commands.")
     contacts_subparsers = contacts.add_subparsers(dest="contacts_command", required=True)

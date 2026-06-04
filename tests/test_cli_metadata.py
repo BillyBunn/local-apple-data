@@ -412,3 +412,88 @@ def test_cli_calendar_search_and_get_use_exact_handle(
     assert parsed["source"] == "calendar"
     assert parsed["status"] == "ok"
     assert parsed["result"]["notes_text"] == "Synthetic event notes."
+
+
+def test_cli_calendar_plan_and_apply_create(monkeypatch, capsys) -> None:
+    plan_exit_code = main(
+        [
+            "calendar",
+            "plan",
+            "--json",
+            "--operation",
+            "create",
+            "--title",
+            "Synthetic planned event",
+            "--calendar-title",
+            "Synthetic Calendar",
+            "--start-date",
+            "2026-06-04T17:00:00Z",
+            "--end-date",
+            "2026-06-04T18:00:00Z",
+            "--location",
+            "Synthetic Room",
+            "--notes",
+            "Synthetic event notes.",
+        ]
+    )
+    assert plan_exit_code == 0
+    plan = json.loads(capsys.readouterr().out)
+    token = "calendar-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def fake_apply_calendar_change(operation: str, **kwargs):
+        assert operation == "create"
+        assert kwargs["title"] == "Synthetic planned event"
+        assert kwargs["calendar_title"] == "Synthetic Calendar"
+        assert kwargs["start_date"] == "2026-06-04T17:00:00Z"
+        assert kwargs["end_date"] == "2026-06-04T18:00:00Z"
+        assert kwargs["approval_token"] == token
+        assert kwargs["confirm_apply"] is True
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "calendar",
+            "privacy": {"content_inspected": False, "output_tier": "mutation"},
+            "mode": "apply",
+            "operation": "create",
+            "mutation_applied": True,
+            "apply_available": True,
+            "read_back": {"title": "Synthetic planned event"},
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        "local_apple_data.cli.apply_calendar_change",
+        fake_apply_calendar_change,
+    )
+
+    apply_exit_code = main(
+        [
+            "calendar",
+            "apply",
+            "--json",
+            "--operation",
+            "create",
+            "--title",
+            "Synthetic planned event",
+            "--calendar-title",
+            "Synthetic Calendar",
+            "--start-date",
+            "2026-06-04T17:00:00Z",
+            "--end-date",
+            "2026-06-04T18:00:00Z",
+            "--location",
+            "Synthetic Room",
+            "--notes",
+            "Synthetic event notes.",
+            "--approval-token",
+            token,
+            "--confirm-apply",
+        ]
+    )
+
+    assert apply_exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "apply"
+    assert parsed["mutation_applied"] is True
