@@ -78,6 +78,48 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## Notes Attachments
+
+```json
+{
+  "status": "ok",
+  "source": "notes",
+  "results": [
+    {
+      "handle": "<opaque notes:attachment:v1 handle>",
+      "note_handle": "<opaque notes:note:v2 handle>",
+      "filename": "scan-packet.pdf",
+      "file_size": 123456,
+      "type_uti": "com.adobe.pdf",
+      "attachment_type": "document",
+      "media_status": "available",
+      "blob_status": "unavailable",
+      "attachment_content_returned": false,
+      "attachment_content_exported": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Notes Attachment Export
+
+```json
+{
+  "status": "ok",
+  "source": "notes",
+  "result": {
+    "handle": "<opaque notes:attachment:v1 handle>",
+    "filename": "scan-packet.pdf",
+    "attachment_content_returned": false,
+    "attachment_content_exported": true,
+    "exported_filename": "scan-packet.pdf",
+    "exported_bytes": 123456
+  },
+  "warnings": []
+}
+```
+
 ## Notes Plan
 
 ```json
@@ -223,7 +265,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 43,
+  "tool_count": 45,
   "mail_content_status": "ok",
   "mail_plan_status": "ok",
   "mail_plan_mutation_applied": false,
@@ -241,6 +283,9 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "notes_append_apply_status": "ok",
   "notes_append_apply_mutation_applied": true,
   "notes_append_stale_warning": "current_content_changed",
+  "notes_attachment_list_status": "ok",
+  "notes_attachment_export_status": "ok",
+  "notes_attachment_content_exported": true,
   "icloud_drive_content_status": "ok",
   "icloud_content_sha256_present": true,
   "icloud_plan_status": "ok",

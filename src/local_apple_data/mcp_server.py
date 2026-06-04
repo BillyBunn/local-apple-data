@@ -36,8 +36,10 @@ from .adapters.mail import (
 from .adapters.messages import get_message_chat, search_message_chats
 from .adapters.notes import (
     apply_notes_change,
+    export_notes_attachment,
     get_notes_content,
     get_notes_metadata,
+    list_notes_attachments,
     plan_notes_change,
     search_notes_metadata,
 )
@@ -276,6 +278,34 @@ def notes_get_content(handle: str, max_chars: int = 4000, offset: int = 0) -> di
     return _record(
         "notes_get_content",
         get_notes_content(handle, max_chars=max_chars, offset=offset),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def notes_list_attachments(handle: str, limit: int = 20) -> dict[str, Any]:
+    """List exact local Notes attachment metadata by selected note handle."""
+
+    return _record(
+        "notes_list_attachments",
+        list_notes_attachments(handle, limit=limit),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def notes_export_attachment(
+    handle: str,
+    output_dir: str,
+    filename: str = "",
+) -> dict[str, Any]:
+    """Export exact local Notes attachment bytes by attachment handle to a caller-selected directory."""
+
+    return _record(
+        "notes_export_attachment",
+        export_notes_attachment(
+            handle,
+            output_dir=Path(output_dir).expanduser(),
+            filename=filename or None,
+        ),
     )
 
 

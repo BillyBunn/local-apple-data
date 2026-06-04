@@ -494,3 +494,45 @@ def test_log_result_excludes_photos_apply_content(
     assert "photos:asset:v1:" not in text
     assert "do-not-log-fingerprint" not in text
     assert "do not log warning" not in text
+
+
+def test_log_result_excludes_notes_attachment_export_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "notes",
+        "status": "ok",
+        "result_count": 1,
+        "privacy": {
+            "output_tier": "export",
+            "content_inspected": False,
+            "content_exported": True,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "result": {
+            "handle": "notes:attachment:v1:abcdef0123456789abcdef0123456789",
+            "note_handle": "notes:note:v2:abcdef0123456789abcdef0123456789",
+            "filename": "do-not-log-packet.pdf",
+            "exported_path": "/do/not/log/exported/do-not-log-packet.pdf",
+            "attachment_content_returned": False,
+            "attachment_content_exported": True,
+        },
+        "warnings": [{"code": "synthetic_warning", "message": "do not log warning"}],
+    }
+
+    log_result("notes.export_attachment", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "notes.export_attachment"
+    assert event["privacy"]["output_tier"] == "export"
+    assert event["warning_codes"] == ["synthetic_warning"]
+    assert "notes:attachment:v1:" not in text
+    assert "notes:note:v2:" not in text
+    assert "do-not-log-packet.pdf" not in text
+    assert "/do/not/log/exported" not in text
+    assert "do not log warning" not in text

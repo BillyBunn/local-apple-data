@@ -46,7 +46,9 @@ from local_apple_data.adapters.mail import (
 from local_apple_data.adapters.messages import get_message_chat, search_message_chats
 from local_apple_data.adapters.notes import (
     apply_notes_change,
+    export_notes_attachment,
     get_notes_content,
+    list_notes_attachments,
     plan_notes_change,
     search_notes_metadata,
 )
@@ -144,12 +146,33 @@ def _make_notes_db(path: Path) -> None:
                 ZMODIFICATIONDATE1 TIMESTAMP,
                 ZISPASSWORDPROTECTED INTEGER,
                 ZMARKEDFORDELETION INTEGER,
-                ZNOTEDATA INTEGER
+                ZNOTEDATA INTEGER,
+                ZNOTE INTEGER,
+                ZFILENAME VARCHAR,
+                ZFILESIZE INTEGER,
+                ZTYPEUTI VARCHAR,
+                ZCREATIONDATE TIMESTAMP,
+                ZMODIFICATIONDATE TIMESTAMP,
+                ZIDENTIFIER VARCHAR,
+                ZREMOTEFILEURLSTRING VARCHAR,
+                ZMERGEABLEDATA BLOB,
+                ZMERGEABLEDATA1 BLOB,
+                ZMERGEABLEDATA2 BLOB
             );
             CREATE TABLE Z_METADATA (Z_UUID VARCHAR);
             INSERT INTO Z_METADATA VALUES ('11111111-2222-3333-4444-555555555555');
-            INSERT INTO ZICCLOUDSYNCINGOBJECT VALUES
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+              (Z_PK, ZTITLE1, ZTITLE, ZSNIPPET, ZCREATIONDATE1, ZMODIFICATIONDATE1,
+               ZISPASSWORDPROTECTED, ZMARKEDFORDELETION, ZNOTEDATA)
+              VALUES
               (84, 'Synthetic runtime verification note', 'Fallback', 'Synthetic only', 10, 20, 0, 0, 1);
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+              (Z_PK, ZTITLE1, ZTITLE, ZMARKEDFORDELETION, ZNOTE, ZFILENAME,
+               ZFILESIZE, ZTYPEUTI, ZCREATIONDATE, ZMODIFICATIONDATE, ZIDENTIFIER,
+               ZMERGEABLEDATA1)
+              VALUES
+              (184, NULL, NULL, 0, 84, 'runtime-packet.pdf', 12, 'com.adobe.pdf',
+               11, 21, 'RUNTIME-ATTACHMENT-UUID', X'52554E54494D452D424C4F42');
             """
         )
 
@@ -452,6 +475,56 @@ def _notes_content_smoke(tmp_path: Path) -> dict[str, Any]:
         "notes_paged_next_offset": paged["result"]["next_offset"],
         "notes_legacy_content_status": legacy_content["status"],
         "notes_legacy_content_warning": legacy_content["warnings"][0]["code"],
+    }
+
+
+def _notes_attachment_smoke(tmp_path: Path) -> dict[str, Any]:
+    db_path = tmp_path / "notes-attachments.sqlite"
+    notes_container = tmp_path / "notes-container"
+    output_dir = tmp_path / "notes-attachment-exports"
+    _make_notes_db(db_path)
+    media_path = (
+        notes_container
+        / "Accounts"
+        / "LocalAccount"
+        / "Media"
+        / "RUNTIME-ATTACHMENT-UUID"
+        / "Files"
+        / "runtime-packet.pdf"
+    )
+    media_path.parent.mkdir(parents=True, exist_ok=True)
+    media_path.write_bytes(b"RUNTIME-MEDIA")
+    search = search_notes_metadata("runtime verification", db_path=db_path)
+    handle = search["results"][0]["handle"]
+    listing = list_notes_attachments(
+        handle,
+        db_path=db_path,
+        notes_container=notes_container,
+    )
+    attachment = listing["results"][0]
+    exported = export_notes_attachment(
+        attachment["handle"],
+        db_path=db_path,
+        notes_container=notes_container,
+        output_dir=output_dir,
+    )
+    legacy_export = export_notes_attachment(
+        "notes:attachment:184",
+        db_path=db_path,
+        output_dir=output_dir,
+    )
+    exported_path = Path(exported["result"]["exported_path"])
+    return {
+        "notes_attachment_list_status": listing["status"],
+        "notes_attachment_count": listing["result_count"],
+        "notes_attachment_opaque_handle": attachment["handle"].startswith("notes:attachment:v1:"),
+        "notes_attachment_media_status": attachment["media_status"],
+        "notes_attachment_export_status": exported["status"],
+        "notes_attachment_content_returned": exported["result"]["attachment_content_returned"],
+        "notes_attachment_content_exported": exported["result"]["attachment_content_exported"],
+        "notes_attachment_exported_bytes": exported_path.stat().st_size,
+        "notes_attachment_legacy_export_status": legacy_export["status"],
+        "notes_attachment_legacy_export_warning": legacy_export["warnings"][0]["code"],
     }
 
 
@@ -1363,7 +1436,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 43,
+        "tool_count": 45,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1428,6 +1501,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "notes_paged_next_offset": 10,
         "notes_legacy_content_status": "error",
         "notes_legacy_content_warning": "invalid_handle",
+        "notes_attachment_list_status": "ok",
+        "notes_attachment_count": 1,
+        "notes_attachment_opaque_handle": True,
+        "notes_attachment_media_status": "available",
+        "notes_attachment_export_status": "ok",
+        "notes_attachment_content_returned": False,
+        "notes_attachment_content_exported": True,
+        "notes_attachment_exported_bytes": 13,
+        "notes_attachment_legacy_export_status": "error",
+        "notes_attachment_legacy_export_warning": "invalid_handle",
         "notes_plan_status": "ok",
         "notes_plan_mode": "plan",
         "notes_plan_mutation_applied": False,
@@ -1549,6 +1632,7 @@ def main() -> None:
         summary.update(_hide_my_email_smoke(tmp_path))
         summary.update(_voice_memos_content_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))
+        summary.update(_notes_attachment_smoke(tmp_path))
         summary.update(_notes_plan_apply_smoke(tmp_path))
         summary.update(_icloud_drive_content_smoke(tmp_path))
         summary.update(_icloud_drive_plan_apply_smoke(tmp_path))

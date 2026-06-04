@@ -2,6 +2,19 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604190000 - 2026-06-04
+
+### Added
+
+- Exact-handle Notes attachment metadata listing through `local-apple-data notes attachments` and MCP `notes_list_attachments`.
+- Exact-handle local Notes attachment export through `local-apple-data notes export-attachment` and MCP `notes_export_attachment`.
+- Synthetic media-file export, BLOB fallback, remote-only unavailable, CLI, MCP, runtime, surface-contract, and redacted-log coverage for Notes attachment export.
+
+### Security
+
+- Notes attachment bytes are never returned inline, source media paths are never returned, and remote attachment URLs are not fetched.
+- Notes attachment creation, replacement, deletion, rename, move, OCR, transcription, broad export, and attachment mutation remain blocked.
+
 ## 0.1.0+codex.20260604180000 - 2026-06-04
 
 ### Added

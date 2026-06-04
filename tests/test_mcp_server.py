@@ -29,8 +29,10 @@ from local_apple_data.mcp_server import (
     mail_plan_change,
     messages_get_chat,
     notes_apply_change,
+    notes_export_attachment,
     notes_get_content,
     notes_get_metadata,
+    notes_list_attachments,
     notes_plan_change,
     photos_export_asset,
     photos_apply_change,
@@ -88,6 +90,8 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     voice_memos_export_result = voice_memos_export_audio("bad-handle", str(tmp_path / "exports"))
     notes_result = notes_get_metadata("bad-handle")
     notes_content_result = notes_get_content("bad-handle")
+    notes_attachments_result = notes_list_attachments("bad-handle")
+    notes_export_result = notes_export_attachment("bad-handle", str(tmp_path / "exports"))
     notes_plan_result = notes_plan_change("create", title="", body_text="Synthetic body.")
     notes_apply_result = notes_apply_change(
         "create",
@@ -181,6 +185,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert notes_result["status"] == "error"
     assert notes_content_result["status"] == "error"
     assert notes_content_result["warnings"][0]["code"] == "invalid_handle"
+    assert notes_attachments_result["status"] == "error"
+    assert notes_attachments_result["warnings"][0]["code"] == "invalid_handle"
+    assert notes_export_result["status"] == "error"
+    assert notes_export_result["warnings"][0]["code"] == "invalid_handle"
     assert notes_plan_result["status"] == "error"
     assert notes_plan_result["warnings"][0]["code"] == "missing_title"
     assert notes_apply_result["status"] == "error"
@@ -255,6 +263,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "notes_search",
                     "notes_get_metadata",
                     "notes_get_content",
+                    "notes_list_attachments",
+                    "notes_export_attachment",
                     "notes_plan_change",
                     "notes_apply_change",
                     "icloud_drive_search",

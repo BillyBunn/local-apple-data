@@ -4,13 +4,21 @@ import hashlib
 import html as html_lib
 import json
 import re
+import shutil
 import sqlite3
 import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Callable
 
-from ..handles import int_handle_matches, is_int_handle, make_int_handle
+from ..handles import (
+    int_handle_matches,
+    is_int_handle,
+    is_opaque_handle,
+    make_int_handle,
+    make_opaque_handle,
+    opaque_handle_matches,
+)
 from .sqlite_store import (
     StoreUnavailableError,
     connect_readonly,
@@ -25,12 +33,15 @@ DEFAULT_NOTES_DB = (
     Path.home()
     / "Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"
 )
+DEFAULT_NOTES_CONTAINER = Path.home() / "Library/Group Containers/group.com.apple.notes"
 DEFAULT_CONTENT_CHARS = 4000
 MAX_CONTENT_CHARS = 12000
 NOTES_APPLESCRIPT_TIMEOUT_SECONDS = 10.0
 MAX_PREVIEW_TITLE_CHARS = 256
 MAX_CREATE_BODY_CHARS = 12000
 MAX_BODY_PREVIEW_CHARS = 240
+DEFAULT_ATTACHMENTS_LIMIT = 20
+ATTACHMENT_HANDLE_PREFIX = "notes:attachment"
 PLAN_OPERATIONS = {"create", "append_text"}
 APPROVAL_TOKEN_PREFIX = "notes-apply:v1:"
 AUTOMATION_ERROR_PREFIX = "__LOCAL_APPLE_DATA_ERROR__:"
@@ -54,6 +65,16 @@ def _content_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "content",
+    }
+
+
+def _export_privacy() -> dict[str, bool | str]:
+    return {
+        "content_inspected": False,
+        "content_exported": True,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "export",
     }
 
 
@@ -96,6 +117,30 @@ def _check_schema(connection) -> str:
         },
     )
     return schema_fingerprint(connection, NOTES_TABLES)
+
+
+def _check_attachment_schema(connection) -> str:
+    fingerprint = _check_schema(connection)
+    require_columns(
+        connection,
+        "ZICCLOUDSYNCINGOBJECT",
+        {
+            "Z_PK",
+            "ZNOTE",
+            "ZFILENAME",
+            "ZTITLE",
+            "ZFILESIZE",
+            "ZTYPEUTI",
+            "ZCREATIONDATE",
+            "ZMODIFICATIONDATE",
+            "ZIDENTIFIER",
+            "ZREMOTEFILEURLSTRING",
+            "ZMERGEABLEDATA",
+            "ZMERGEABLEDATA1",
+            "ZMERGEABLEDATA2",
+        },
+    )
+    return fingerprint
 
 
 def check_notes_schema(*, db_path: Path = DEFAULT_NOTES_DB) -> dict[str, Any]:
@@ -458,6 +503,168 @@ def get_notes_content(
     }
 
 
+def list_notes_attachments(
+    handle: str,
+    *,
+    db_path: Path = DEFAULT_NOTES_DB,
+    notes_container: Path = DEFAULT_NOTES_CONTAINER,
+    limit: int = DEFAULT_ATTACHMENTS_LIMIT,
+) -> dict[str, Any]:
+    if not is_int_handle(handle, "notes:note"):
+        return _invalid_attachment_note_handle_result()
+
+    bounded_limit = max(1, min(limit, 50))
+    try:
+        with connect_readonly(db_path) as connection:
+            fingerprint = _check_attachment_schema(connection)
+            note_id = _resolve_notes_handle_note_id(connection, handle)
+            if note_id is None:
+                return {
+                    "schema_version": 1,
+                    "status": "not_found",
+                    "source": "notes",
+                    "schema_fingerprint": fingerprint,
+                    "privacy": _privacy(),
+                    "results": [],
+                    "result_count": 0,
+                    "warnings": [],
+                }
+            rows = _select_note_attachment_rows(connection, note_id, limit=bounded_limit)
+    except StoreUnavailableError as exc:
+        return {
+            "schema_version": 1,
+            "status": "degraded",
+            "source": "notes",
+            "privacy": _privacy(),
+            "results": [],
+            "result_count": 0,
+            "warnings": [_warning("notes_store_unavailable", str(exc))],
+        }
+
+    results = [
+        _attachment_metadata(row, fingerprint, notes_container=notes_container)
+        for row in rows
+    ]
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "notes",
+        "schema_fingerprint": fingerprint,
+        "privacy": _privacy(),
+        "query": {"scope": "note_attachments", "limit": bounded_limit},
+        "results": results,
+        "result_count": len(results),
+        "warnings": [],
+    }
+
+
+def export_notes_attachment(
+    handle: str,
+    *,
+    output_dir: Path,
+    filename: str | None = None,
+    db_path: Path = DEFAULT_NOTES_DB,
+    notes_container: Path = DEFAULT_NOTES_CONTAINER,
+) -> dict[str, Any]:
+    if not is_opaque_handle(handle, ATTACHMENT_HANDLE_PREFIX):
+        return _invalid_attachment_export_handle_result()
+
+    try:
+        with connect_readonly(db_path) as connection:
+            fingerprint = _check_attachment_schema(connection)
+            target = _resolve_attachment_target(connection, fingerprint, handle)
+            if target is None:
+                return {
+                    "schema_version": 1,
+                    "status": "not_found",
+                    "source": "notes",
+                    "schema_fingerprint": fingerprint,
+                    "privacy": _export_privacy(),
+                    "result": None,
+                    "warnings": [],
+                }
+            row = _select_attachment_row(connection, target[0], target[1])
+    except StoreUnavailableError as exc:
+        return {
+            "schema_version": 1,
+            "status": "degraded",
+            "source": "notes",
+            "privacy": _export_privacy(),
+            "result": None,
+            "warnings": [_warning("notes_store_unavailable", str(exc))],
+        }
+
+    if row is None:
+        return {
+            "schema_version": 1,
+            "status": "not_found",
+            "source": "notes",
+            "schema_fingerprint": fingerprint,
+            "privacy": _export_privacy(),
+            "result": None,
+            "warnings": [],
+        }
+
+    result = _attachment_metadata(row, fingerprint, notes_container=notes_container)
+    result.update(
+        {
+            "attachment_content_returned": False,
+            "attachment_content_exported": False,
+            "exported_path": "",
+            "exported_filename": "",
+            "exported_bytes": 0,
+        }
+    )
+
+    target_dir = output_dir.expanduser()
+    if target_dir.exists() and not target_dir.is_dir():
+        return _attachment_export_unavailable_result(
+            result,
+            fingerprint,
+            "invalid_output_dir",
+        )
+
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = _unique_output_path(
+            target_dir,
+            _attachment_export_filename(filename, row),
+        )
+        exported_bytes = _copy_attachment_payload(row, target, notes_container=notes_container)
+    except OSError:
+        return _attachment_export_unavailable_result(
+            result,
+            fingerprint,
+            "notes_attachment_export_failed",
+        )
+
+    if exported_bytes is None:
+        return _attachment_export_unavailable_result(
+            result,
+            fingerprint,
+            "notes_attachment_unavailable",
+        )
+
+    result.update(
+        {
+            "attachment_content_exported": True,
+            "exported_path": str(target),
+            "exported_filename": target.name,
+            "exported_bytes": exported_bytes,
+        }
+    )
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "notes",
+        "schema_fingerprint": fingerprint,
+        "privacy": _export_privacy(),
+        "result": result,
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
 def plan_notes_change(
     operation: str,
     *,
@@ -707,6 +914,363 @@ def _resolve_notes_handle_note_id(connection, handle: str) -> int | None:
         if int_handle_matches(handle, "notes:note", note_id):
             return note_id
     return None
+
+
+def _select_note_attachment_rows(connection, note_id: int, *, limit: int):
+    return connection.execute(
+        """
+        SELECT
+            Z_PK AS attachment_id,
+            COALESCE(ZFILENAME, ZTITLE) AS filename,
+            ZFILESIZE AS file_size,
+            ZTYPEUTI AS type_uti,
+            ZNOTE AS note_id,
+            ZCREATIONDATE AS creation_date,
+            ZMODIFICATIONDATE AS modification_date,
+            ZIDENTIFIER AS uuid,
+            ZREMOTEFILEURLSTRING AS remote_url,
+            ZMERGEABLEDATA1 AS mergeable_data1,
+            ZMERGEABLEDATA AS mergeable_data,
+            ZMERGEABLEDATA2 AS mergeable_data2
+        FROM ZICCLOUDSYNCINGOBJECT
+        WHERE ZNOTE = ?
+          AND COALESCE(ZMARKEDFORDELETION, 0) = 0
+          AND (
+            ZFILENAME IS NOT NULL
+            OR ZTITLE IS NOT NULL
+            OR COALESCE(ZFILESIZE, 0) > 0
+            OR COALESCE(ZTYPEUTI, '') != ''
+          )
+          AND ZTITLE1 IS NULL
+          AND COALESCE(ZTYPEUTI, '') != ''
+        ORDER BY COALESCE(ZMODIFICATIONDATE, ZCREATIONDATE, 0) DESC, Z_PK DESC
+        LIMIT ?
+        """,
+        (note_id, limit),
+    ).fetchall()
+
+
+def _select_attachment_row(connection, note_id: int, attachment_id: int):
+    return connection.execute(
+        """
+        SELECT
+            Z_PK AS attachment_id,
+            COALESCE(ZFILENAME, ZTITLE) AS filename,
+            ZFILESIZE AS file_size,
+            ZTYPEUTI AS type_uti,
+            ZNOTE AS note_id,
+            ZCREATIONDATE AS creation_date,
+            ZMODIFICATIONDATE AS modification_date,
+            ZIDENTIFIER AS uuid,
+            ZREMOTEFILEURLSTRING AS remote_url,
+            ZMERGEABLEDATA1 AS mergeable_data1,
+            ZMERGEABLEDATA AS mergeable_data,
+            ZMERGEABLEDATA2 AS mergeable_data2
+        FROM ZICCLOUDSYNCINGOBJECT
+        WHERE Z_PK = ?
+          AND ZNOTE = ?
+          AND COALESCE(ZMARKEDFORDELETION, 0) = 0
+          AND (
+            ZFILENAME IS NOT NULL
+            OR ZTITLE IS NOT NULL
+            OR COALESCE(ZFILESIZE, 0) > 0
+            OR COALESCE(ZTYPEUTI, '') != ''
+          )
+          AND ZTITLE1 IS NULL
+          AND COALESCE(ZTYPEUTI, '') != ''
+        LIMIT 1
+        """,
+        (attachment_id, note_id),
+    ).fetchone()
+
+
+def _resolve_attachment_target(connection, fingerprint: str, handle: str) -> tuple[int, int] | None:
+    rows = connection.execute(
+        """
+        SELECT Z_PK AS attachment_id, ZNOTE AS note_id
+        FROM ZICCLOUDSYNCINGOBJECT
+        WHERE ZNOTE IS NOT NULL
+          AND COALESCE(ZMARKEDFORDELETION, 0) = 0
+          AND (
+            ZFILENAME IS NOT NULL
+            OR ZTITLE IS NOT NULL
+            OR COALESCE(ZFILESIZE, 0) > 0
+            OR COALESCE(ZTYPEUTI, '') != ''
+          )
+          AND ZTITLE1 IS NULL
+          AND COALESCE(ZTYPEUTI, '') != ''
+        """
+    ).fetchall()
+    for row in rows:
+        note_id = int(row["note_id"])
+        attachment_id = int(row["attachment_id"])
+        if opaque_handle_matches(
+            handle,
+            ATTACHMENT_HANDLE_PREFIX,
+            fingerprint,
+            note_id,
+            attachment_id,
+        ):
+            if _select_notes_row(connection, note_id) is not None:
+                return note_id, attachment_id
+    return None
+
+
+def _attachment_metadata(row, fingerprint: str, *, notes_container: Path) -> dict[str, Any]:
+    attachment_id = int(row["attachment_id"])
+    note_id = int(row["note_id"])
+    media_path = _attachment_media_path(row, notes_container=notes_container)
+    blob_available = _attachment_blob_bytes(row) is not None
+    return {
+        "handle": make_opaque_handle(
+            ATTACHMENT_HANDLE_PREFIX,
+            fingerprint,
+            note_id,
+            attachment_id,
+        ),
+        "note_handle": make_int_handle("notes:note", note_id),
+        "filename": _bounded_string(row["filename"], 500),
+        "file_size": _positive_int(row["file_size"]),
+        "type_uti": _bounded_string(row["type_uti"], 300),
+        "attachment_type": _attachment_type(row["type_uti"], row["filename"]),
+        "creation_date": row["creation_date"],
+        "modification_date": row["modification_date"],
+        "media_status": "available"
+        if media_path is not None and media_path.is_file()
+        else "unavailable",
+        "blob_status": "available" if blob_available else "unavailable",
+        "remote_status": "remote_reference" if row["remote_url"] else "local_or_unknown",
+        "attachment_content_returned": False,
+        "attachment_content_exported": False,
+    }
+
+
+def _attachment_media_path(row, *, notes_container: Path) -> Path | None:
+    accounts_path = notes_container.expanduser() / "Accounts"
+    try:
+        resolved_accounts = accounts_path.resolve(strict=False)
+    except OSError:
+        return None
+    if not accounts_path.exists():
+        return None
+
+    account_folders = [item for item in accounts_path.iterdir() if item.is_dir()]
+    uuid = _bounded_string(row["uuid"], 500).strip()
+    if uuid:
+        for account_folder in account_folders:
+            media_dir = account_folder / "Media" / uuid
+            candidate = _first_safe_media_file(media_dir, resolved_accounts)
+            if candidate is not None:
+                return candidate
+
+    filename = Path(_bounded_string(row["filename"], 500)).name
+    if filename:
+        for account_folder in account_folders:
+            media_base = account_folder / "Media"
+            if not media_base.exists():
+                continue
+            for item in media_base.rglob(filename):
+                if _is_safe_media_file(item, resolved_accounts):
+                    return item
+    return None
+
+
+def _first_safe_media_file(media_dir: Path, resolved_accounts: Path) -> Path | None:
+    if not media_dir.exists():
+        return None
+    for item in media_dir.rglob("*"):
+        if item.name.startswith("."):
+            continue
+        if _is_safe_media_file(item, resolved_accounts):
+            return item
+    return None
+
+
+def _is_safe_media_file(path: Path, resolved_accounts: Path) -> bool:
+    try:
+        if not path.is_file() or path.is_symlink():
+            return False
+        resolved_path = path.resolve(strict=True)
+        resolved_path.relative_to(resolved_accounts)
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _attachment_blob_bytes(row) -> bytes | None:
+    for column in ("mergeable_data1", "mergeable_data", "mergeable_data2"):
+        value = row[column]
+        if isinstance(value, bytes) and value:
+            if len(value) >= 2 and value[:2] == b"\x1f\x8b":
+                try:
+                    import gzip
+
+                    return gzip.decompress(value)
+                except OSError:
+                    return value
+            return value
+    return None
+
+
+def _copy_attachment_payload(row, target: Path, *, notes_container: Path) -> int | None:
+    source = _attachment_media_path(row, notes_container=notes_container)
+    if source is not None and source.is_file():
+        shutil.copy2(source, target)
+        return target.stat().st_size
+
+    data = _attachment_blob_bytes(row)
+    if not data:
+        return None
+    target.write_bytes(data)
+    return len(data)
+
+
+def _attachment_export_unavailable_result(
+    result: dict[str, Any],
+    fingerprint: str,
+    warning_code: str,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "content_unavailable",
+        "source": "notes",
+        "schema_fingerprint": fingerprint,
+        "privacy": _export_privacy(),
+        "result": result,
+        "warnings": [
+            _warning(
+                warning_code,
+                "Notes attachment bytes are not locally available for export.",
+            )
+        ],
+    }
+
+
+def _invalid_attachment_note_handle_result() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "notes",
+        "privacy": _privacy(),
+        "results": [],
+        "result_count": 0,
+        "warnings": [
+            _warning(
+                "invalid_handle",
+                "Expected notes:note:v2 opaque handle from search output.",
+            )
+        ],
+    }
+
+
+def _invalid_attachment_export_handle_result() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "notes",
+        "privacy": _export_privacy(),
+        "result": None,
+        "warnings": [
+            _warning(
+                "invalid_handle",
+                "Expected notes:attachment:v1 opaque handle from notes attachment list output.",
+            )
+        ],
+    }
+
+
+def _attachment_type(type_uti: Any, filename: Any) -> str:
+    uti = _bounded_string(type_uti, 300).lower()
+    suffix = Path(_bounded_string(filename, 300)).suffix.lower()
+    if any(value in uti for value in ("jpeg", "png", "tiff", "heic", "gif")) or suffix in {
+        ".gif",
+        ".heic",
+        ".jpeg",
+        ".jpg",
+        ".png",
+        ".tif",
+        ".tiff",
+    }:
+        return "image"
+    if any(value in uti for value in ("mp4", "mov", "quicktime", "video")) or suffix in {
+        ".m4v",
+        ".mov",
+        ".mp4",
+    }:
+        return "video"
+    if any(value in uti for value in ("mp3", "m4a", "wav", "aiff", "audio")) or suffix in {
+        ".aif",
+        ".aiff",
+        ".m4a",
+        ".mp3",
+        ".wav",
+    }:
+        return "audio"
+    if any(value in uti for value in ("pdf", "doc", "rtf", "txt", "pages")) or suffix in {
+        ".doc",
+        ".docx",
+        ".pdf",
+        ".rtf",
+        ".txt",
+    }:
+        return "document"
+    return "other"
+
+
+def _attachment_export_filename(value: str | None, row) -> str:
+    fallback = _bounded_string(row["filename"], 200).strip()
+    if not fallback:
+        fallback = f"attachment-{int(row['attachment_id'])}{_attachment_extension(row)}"
+    candidate = _bounded_string(value, 200).strip() if value else fallback
+    name = Path(candidate).name
+    suffix = Path(name).suffix or Path(fallback).suffix or _attachment_extension(row)
+    stem = Path(name).stem if Path(name).suffix else name
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip(".-_")
+    if not safe_stem:
+        safe_stem = f"attachment-{int(row['attachment_id'])}"
+    return f"{safe_stem[:120]}{suffix.lower()}"
+
+
+def _attachment_extension(row) -> str:
+    filename_suffix = Path(_bounded_string(row["filename"], 200)).suffix
+    if filename_suffix:
+        return filename_suffix.lower()
+    uti = _bounded_string(row["type_uti"], 300)
+    return {
+        "com.adobe.pdf": ".pdf",
+        "public.jpeg": ".jpg",
+        "public.png": ".png",
+        "public.tiff": ".tiff",
+        "public.heic": ".heic",
+        "public.mp4": ".mp4",
+        "public.mov": ".mov",
+        "public.m4a": ".m4a",
+        "public.plain-text": ".txt",
+        "public.rtf": ".rtf",
+        "com.apple.notes.table": ".table",
+        "com.apple.drawing.2": ".drawing",
+    }.get(uti, "")
+
+
+def _unique_output_path(directory: Path, filename: str) -> Path:
+    target = directory / filename
+    if not target.exists():
+        return target
+    stem = target.stem
+    suffix = target.suffix
+    for index in range(1, 1000):
+        candidate = directory / f"{stem}-{index}{suffix}"
+        if not candidate.exists():
+            return candidate
+    raise OSError("could not allocate unique export path")
+
+
+def _positive_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
 
 
 def _row_to_content_metadata(row) -> dict[str, Any]:
@@ -1250,6 +1814,13 @@ def _bounded_text(
     content = normalized[bounded_offset:end]
     next_offset = end if end < total_chars else None
     return content, next_offset is not None, total_chars, next_offset
+
+
+def _bounded_string(value: Any, max_chars: int) -> str:
+    if value is None:
+        return ""
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    return text[: max(1, min(max_chars, MAX_CONTENT_CHARS))]
 
 
 def _normalize_text(text: str) -> str:

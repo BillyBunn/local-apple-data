@@ -36,8 +36,10 @@ from .adapters.mail import (
 from .adapters.messages import get_message_chat, search_message_chats
 from .adapters.notes import (
     apply_notes_change,
+    export_notes_attachment,
     get_notes_content,
     get_notes_metadata,
+    list_notes_attachments,
     plan_notes_change,
     search_notes_metadata,
 )
@@ -295,6 +297,32 @@ def _notes_content_command(args: argparse.Namespace) -> int:
         else get_notes_content(args.handle, max_chars=args.max_chars, offset=args.offset)
     )
     log_result("notes.content", payload)
+    _print_json(payload)
+    return 0
+
+
+def _notes_attachments_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {"limit": args.limit}
+    if args.db:
+        kwargs["db_path"] = Path(args.db).expanduser()
+    if args.notes_container:
+        kwargs["notes_container"] = Path(args.notes_container).expanduser()
+    payload = list_notes_attachments(args.handle, **kwargs)
+    log_result("notes.attachments", payload)
+    _print_json(payload)
+    return 0
+
+
+def _notes_export_attachment_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {"output_dir": Path(args.output_dir).expanduser()}
+    if args.filename:
+        kwargs["filename"] = args.filename
+    if args.db:
+        kwargs["db_path"] = Path(args.db).expanduser()
+    if args.notes_container:
+        kwargs["notes_container"] = Path(args.notes_container).expanduser()
+    payload = export_notes_attachment(args.handle, **kwargs)
+    log_result("notes.export_attachment", payload)
     _print_json(payload)
     return 0
 
@@ -1046,6 +1074,45 @@ def build_parser() -> argparse.ArgumentParser:
     )
     notes_content.add_argument("--db", help=argparse.SUPPRESS)
     notes_content.set_defaults(func=_notes_content_command)
+
+    notes_attachments = notes_subparsers.add_parser(
+        "attachments",
+        help="List exact local Notes attachment metadata by note handle.",
+    )
+    notes_attachments.add_argument("--json", action="store_true", help="Emit JSON output.")
+    notes_attachments.add_argument("--handle", required=True, help="Notes handle from search output.")
+    notes_attachments.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum attachments to return, capped at 50.",
+    )
+    notes_attachments.add_argument("--db", help=argparse.SUPPRESS)
+    notes_attachments.add_argument("--notes-container", help=argparse.SUPPRESS)
+    notes_attachments.set_defaults(func=_notes_attachments_command)
+
+    notes_export_attachment = notes_subparsers.add_parser(
+        "export-attachment",
+        help="Export exact local Notes attachment bytes to an output directory by handle.",
+    )
+    notes_export_attachment.add_argument("--json", action="store_true", help="Emit JSON output.")
+    notes_export_attachment.add_argument(
+        "--handle",
+        required=True,
+        help="Notes attachment handle from attachment list output.",
+    )
+    notes_export_attachment.add_argument(
+        "--output-dir",
+        required=True,
+        help="Directory where the selected Notes attachment should be copied.",
+    )
+    notes_export_attachment.add_argument(
+        "--filename",
+        help="Optional export filename. The adapter sanitizes the final filename.",
+    )
+    notes_export_attachment.add_argument("--db", help=argparse.SUPPRESS)
+    notes_export_attachment.add_argument("--notes-container", help=argparse.SUPPRESS)
+    notes_export_attachment.set_defaults(func=_notes_export_attachment_command)
 
     notes_plan = notes_subparsers.add_parser(
         "plan",

@@ -16,7 +16,7 @@ The durable design problem is not whether local content can be read. It is how t
 - `harperreed/notes-mcp` is another Apple Notes MCP implementation, using a standalone Go server shape. Source: https://github.com/harperreed/notes-mcp
 - Apple Developer Forums confirm there is no public Apple Notes CRUD API; AppleScript works on macOS but is a limited automation interface rather than a cross-platform public framework. Source: https://developer.apple.com/forums/thread/813810
 
-Architecture implication: Notes content retrieval is appropriate for a local Mac plugin, but it should remain exact-handle and bounded. Notes create-note and append-text apply are appropriate only behind preview/apply/read-back gates because other Notes MCP servers expose broader writes, and that is exactly where privacy and accidental mutation risk rises.
+Architecture implication: Notes content retrieval and selected attachment export are appropriate for a local Mac plugin, but they should remain exact-handle and bounded. Notes create-note and append-text apply are appropriate only behind preview/apply/read-back gates because other Notes MCP servers expose broader writes, and that is exactly where privacy and accidental mutation risk rises.
 
 ### Messages
 
@@ -73,5 +73,5 @@ This plugin should be broader than single-surface MCP servers and stricter than 
 
 - Whether to add a small privileged helper architecture for users who do not want their AI client process to hold Full Disk Access.
 - Whether future generated transcription belongs in this plugin or a separate transcription tool connected by handles.
-- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, and Photos import tranches should prioritize Mail send, Messages send, Photos edit/delete/album support, arbitrary Notes update/delete/move, or richer framework-backed edits.
+- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, and Notes attachment export tranches should prioritize Mail send, Messages send, Photos edit/delete/album support, arbitrary Notes update/delete/move, or richer framework-backed edits.
 - Whether public registry packaging should target npm, PyPI, a Codex personal marketplace, Smithery-style registries, or only GitHub source installation first.

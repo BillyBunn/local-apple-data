@@ -31,8 +31,8 @@ def test_current_project_mutation_gate_audit_passes() -> None:
         "photos_apply_change",
         "reminders_apply_change",
     ]
-    assert payload["mcp_tools_checked"] >= 43
-    assert payload["cli_handlers_checked"] >= 43
+    assert payload["mcp_tools_checked"] >= 45
+    assert payload["cli_handlers_checked"] >= 45
     assert payload["findings"] == []
 
 

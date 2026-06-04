@@ -55,12 +55,33 @@ def _notes_db(path: Path) -> None:
                 ZMODIFICATIONDATE1 TIMESTAMP,
                 ZISPASSWORDPROTECTED INTEGER,
                 ZMARKEDFORDELETION INTEGER,
-                ZNOTEDATA INTEGER
+                ZNOTEDATA INTEGER,
+                ZNOTE INTEGER,
+                ZFILENAME VARCHAR,
+                ZFILESIZE INTEGER,
+                ZTYPEUTI VARCHAR,
+                ZCREATIONDATE TIMESTAMP,
+                ZMODIFICATIONDATE TIMESTAMP,
+                ZIDENTIFIER VARCHAR,
+                ZREMOTEFILEURLSTRING VARCHAR,
+                ZMERGEABLEDATA BLOB,
+                ZMERGEABLEDATA1 BLOB,
+                ZMERGEABLEDATA2 BLOB
             );
             CREATE TABLE Z_METADATA (Z_UUID VARCHAR);
             INSERT INTO Z_METADATA VALUES ('11111111-2222-3333-4444-555555555555');
-            INSERT INTO ZICCLOUDSYNCINGOBJECT VALUES
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+              (Z_PK, ZTITLE1, ZTITLE, ZSNIPPET, ZCREATIONDATE1, ZMODIFICATIONDATE1,
+               ZISPASSWORDPROTECTED, ZMARKEDFORDELETION, ZNOTEDATA)
+              VALUES
               (8, 'Synthetic planning note', 'Fallback', 'Synthetic only', 10, 20, 0, 0, 1);
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+              (Z_PK, ZTITLE1, ZTITLE, ZMARKEDFORDELETION, ZNOTE, ZFILENAME,
+               ZFILESIZE, ZTYPEUTI, ZCREATIONDATE, ZMODIFICATIONDATE, ZIDENTIFIER,
+               ZMERGEABLEDATA1)
+              VALUES
+              (18, NULL, NULL, 0, 8, 'cli-packet.pdf', 8, 'com.adobe.pdf', 11, 21,
+               'CLI-ATTACHMENT-UUID', X'434C492D424C4F42');
             """
         )
 
@@ -287,6 +308,86 @@ def test_cli_notes_content_uses_exact_handle(tmp_path: Path, monkeypatch, capsys
     assert parsed["source"] == "notes"
     assert parsed["status"] == "ok"
     assert parsed["result"]["content_text"] == "Synthetic note content."
+
+
+def test_cli_notes_attachments_and_export_use_exact_handles(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    db_path = tmp_path / "notes.sqlite"
+    notes_container = tmp_path / "notes-container"
+    output_dir = tmp_path / "exports"
+    _notes_db(db_path)
+    media_path = (
+        notes_container
+        / "Accounts"
+        / "LocalAccount"
+        / "Media"
+        / "CLI-ATTACHMENT-UUID"
+        / "Files"
+        / "cli-packet.pdf"
+    )
+    media_path.parent.mkdir(parents=True, exist_ok=True)
+    media_path.write_bytes(b"CLI-MEDIA")
+
+    search_exit_code = main(
+        [
+            "notes",
+            "search",
+            "--json",
+            "--query",
+            "planning",
+            "--db",
+            str(db_path),
+        ]
+    )
+    assert search_exit_code == 0
+    parsed_search = json.loads(capsys.readouterr().out)
+
+    attachments_exit_code = main(
+        [
+            "notes",
+            "attachments",
+            "--json",
+            "--handle",
+            parsed_search["results"][0]["handle"],
+            "--db",
+            str(db_path),
+            "--notes-container",
+            str(notes_container),
+        ]
+    )
+    assert attachments_exit_code == 0
+    attachments = json.loads(capsys.readouterr().out)
+    assert attachments["status"] == "ok"
+    assert attachments["result_count"] == 1
+    assert attachments["results"][0]["handle"].startswith("notes:attachment:v1:")
+
+    export_exit_code = main(
+        [
+            "notes",
+            "export-attachment",
+            "--json",
+            "--handle",
+            attachments["results"][0]["handle"],
+            "--output-dir",
+            str(output_dir),
+            "--filename",
+            "../review packet.pdf",
+            "--db",
+            str(db_path),
+            "--notes-container",
+            str(notes_container),
+        ]
+    )
+    assert export_exit_code == 0
+    exported = json.loads(capsys.readouterr().out)
+    assert exported["status"] == "ok"
+    assert exported["result"]["exported_filename"] == "review-packet.pdf"
+    assert Path(exported["result"]["exported_path"]).read_bytes() == b"CLI-MEDIA"
+    assert str(media_path) not in str(exported)
 
 
 def test_cli_notes_plan_and_apply_create(monkeypatch, capsys) -> None:

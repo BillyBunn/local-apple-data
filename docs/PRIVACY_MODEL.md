@@ -213,8 +213,22 @@ The v1.2 implementation:
 - Reads one selected note through local Notes automation with a hard timeout.
 - Returns bounded plain text with truncation metadata.
 - Rejects raw IDs, old handles, fabricated handles, and direct paths.
-- Excludes locked/deleted notes, attachments, raw database rows, local paths, broad content search, background indexing, and durable content caches.
+- Excludes locked/deleted notes, source attachment paths, inline attachment bytes, raw database rows, local paths, broad content search, background indexing, and durable content caches.
 - Keeps automated tests synthetic-only and verifies the live path only by redacted status/count output when explicitly requested.
+
+## v1.20 Notes Attachment Export
+
+The implemented v1.20 phase adds exact-handle Apple Notes attachment metadata and local export. It is not permission to run broad Notes exports or return attachment bytes inline.
+
+The v1.20 implementation:
+
+- Requires a `notes:note:v2:` handle returned by `notes_search` before listing attachments.
+- Returns bounded metadata and opaque `notes:attachment:v1:` handles for attachments on that selected note.
+- Exports one selected attachment only to a caller-selected output directory.
+- Prefers locally available Notes media files and falls back to local database BLOB data when present.
+- Does not return source media paths, remote attachment URLs, or attachment bytes inline.
+- Does not fetch remote iCloud-only attachments.
+- Keeps automated tests synthetic-only and verifies redacted logs exclude handles, filenames, warning messages, and export paths.
 
 ## v1.3 iCloud Drive Content Retrieval
 

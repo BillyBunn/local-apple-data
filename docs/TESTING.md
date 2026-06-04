@@ -6,10 +6,10 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 
 ## Test Layers
 
-- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Mail create-draft plan/apply, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval/pagination/create/append-text plan/apply, synthetic Calendar and Reminders EventKit helper responses, synthetic Calendar create-event plan/apply, synthetic Contacts helper responses and create-contact plan/apply, synthetic Photos helper responses and import plan/apply, synthetic iCloud Drive file retrieval and create/append-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
+- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Mail create-draft plan/apply, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval/pagination/attachment export/create/append-text plan/apply, synthetic Calendar and Reminders EventKit helper responses, synthetic Calendar create-event plan/apply, synthetic Contacts helper responses and create-contact plan/apply, synthetic Photos helper responses and import plan/apply, synthetic iCloud Drive file retrieval and create/append-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
 - CLI tests: synthetic Mail/Messages/Hide My Email/Voice Memos/Notes/Calendar/Contacts/Photos/iCloud Drive/Reminders stores or mocked helpers with redacted logs.
 - MCP tests: tool listing plus read-only and approved write annotations.
-- Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows and synthetic apply flows for the approved write tools.
+- Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail, Messages, Hide My Email, Voice Memos, Notes content/attachment export, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows and synthetic apply flows for the approved write tools.
 - Cross-agent sync smoke: `scripts/verify_cross_agent_sync.py` confirms Codex, Claude Code, and OpenClaw are all pointed at the same project runner and installed plugin version, and verifies Cursor `mcp.json` when a local-apple-data Cursor entry is present or `--require-cursor` is used. Public checkouts can pass `--skip-codex --skip-file-sync --skip-claude --skip-openclaw --skip-cursor` for a source-only smoke.
 - Install consistency: compare source and installed-cache manifest, MCP config, skill, server, handle helper, doctor helper, and adapters.
 - Privacy scans: `scripts/redaction_scan.py` fails on high-confidence secrets and literal iCloud/private-relay email aliases without printing matched values.
@@ -81,6 +81,8 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Notes content accepts only `notes:note:v2:` handles, returns bounded plain text, and rejects raw IDs, old handles, direct database IDs, and fabricated handles.
 - Notes content truncation returns `content_truncated`, `content_total_chars`, and `next_offset` so long imported notes can be retrieved in bounded chunks.
 - Notes content automation failures return safe warning codes without raw AppleScript errors or database paths.
+- Notes attachment listing accepts only exact `notes:note:v2:` handles, returns bounded metadata with `notes:attachment:v1:` handles, and rejects raw note IDs.
+- Notes attachment export accepts only exact `notes:attachment:v1:` handles, writes to a caller-selected output directory, prefers local media files, falls back to local BLOB data, reports remote-only attachments as unavailable, never returns inline bytes, and does not log source media paths.
 - iCloud Drive content accepts only `icloud:file:v1:` handles, returns bounded text for supported text-like files, and rejects direct paths, fabricated handles, symlinks, hidden files, and unsupported binary/document types.
 - iCloud Drive content truncation returns `content_truncated`.
 - iCloud Drive planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, and requires exact opaque parent folder handles.
@@ -262,3 +264,13 @@ The v1.19 Notes append phase expands the existing Notes apply surface without ad
 - Apply refuses stale hashes with `current_content_changed`, refuses shared-note mutation, appends only escaped bounded plaintext through Notes.app body HTML, and verifies exact-content read-back plus `content_sha256`.
 - Logs do not contain planned titles, note content, handles, content hashes, raw Notes IDs, raw paths, approval fingerprints, or approval tokens.
 - Runtime verification covers synthetic append planning, mocked append apply, and stale-hash refusal without touching live Notes content.
+
+## v1.20 Notes Attachment Export Acceptance Criteria
+
+The v1.20 Notes attachment phase adds read/export-only exact attachment access:
+
+- `notes attachments` / `notes_list_attachments` require an exact `notes:note:v2:` handle and return opaque `notes:attachment:v1:` handles.
+- `notes export-attachment` / `notes_export_attachment` require an exact attachment handle and a caller-selected output directory.
+- Media-file export, BLOB fallback, invalid-handle refusal, and remote-only unavailable warnings are covered with synthetic fixtures.
+- Runtime verification covers attachment list/export success and legacy attachment handle refusal without touching live Notes attachments.
+- Redacted logs do not contain attachment handles, note handles, filenames, warning messages, source media paths, or export paths.

@@ -9,8 +9,10 @@ from local_apple_data.handles import make_int_handle
 from local_apple_data.adapters.notes import (
     apply_notes_change,
     check_notes_schema,
+    export_notes_attachment,
     get_notes_content,
     get_notes_metadata,
+    list_notes_attachments,
     plan_notes_change,
     search_notes_metadata,
 )
@@ -29,7 +31,18 @@ def _make_notes_db(path: Path) -> None:
                 ZMODIFICATIONDATE1 TIMESTAMP,
                 ZISPASSWORDPROTECTED INTEGER,
                 ZMARKEDFORDELETION INTEGER,
-                ZNOTEDATA INTEGER
+                ZNOTEDATA INTEGER,
+                ZNOTE INTEGER,
+                ZFILENAME VARCHAR,
+                ZFILESIZE INTEGER,
+                ZTYPEUTI VARCHAR,
+                ZCREATIONDATE TIMESTAMP,
+                ZMODIFICATIONDATE TIMESTAMP,
+                ZIDENTIFIER VARCHAR,
+                ZREMOTEFILEURLSTRING VARCHAR,
+                ZMERGEABLEDATA BLOB,
+                ZMERGEABLEDATA1 BLOB,
+                ZMERGEABLEDATA2 BLOB
             );
             CREATE TABLE Z_METADATA (Z_UUID VARCHAR);
             INSERT INTO Z_METADATA VALUES ('11111111-2222-3333-4444-555555555555');
@@ -40,6 +53,17 @@ def _make_notes_db(path: Path) -> None:
               (20, 'Project Alpha note', 'Alpha fallback', 'Synthetic snippet', 100, 200, 0, 0, 1),
               (21, 'Locked Alpha note', 'Locked fallback', 'Synthetic locked snippet', 100, 201, 1, 0, 2),
               (22, 'Deleted Alpha note', 'Deleted fallback', 'Synthetic deleted snippet', 100, 202, 0, 1, 3);
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+              (Z_PK, ZTITLE1, ZTITLE, ZMARKEDFORDELETION, ZNOTE, ZFILENAME,
+               ZFILESIZE, ZTYPEUTI, ZCREATIONDATE, ZMODIFICATIONDATE, ZIDENTIFIER,
+               ZREMOTEFILEURLSTRING, ZMERGEABLEDATA1)
+              VALUES
+              (130, NULL, NULL, 0, 20, 'packet.pdf', 13, 'com.adobe.pdf', 110, 210,
+               'ATTACHMENT-UUID-1', NULL, X'255044462D424C4F42'),
+              (131, NULL, NULL, 0, 20, 'remote.pdf', 0, 'com.adobe.pdf', 111, 211,
+               'REMOTE-ATTACHMENT', 'https://example.invalid/remote.pdf', NULL),
+              (132, NULL, NULL, 1, 20, 'deleted.pdf', 5, 'com.adobe.pdf', 112, 212,
+               'DELETED-ATTACHMENT', NULL, X'64656C');
             """
         )
 
@@ -193,6 +217,135 @@ def test_get_notes_content_supports_offset_for_long_notes(tmp_path: Path) -> Non
     assert result["result"]["content_total_chars"] == 16
     assert result["result"]["next_offset"] == 10
     assert result["result"]["truncated"] is True
+
+
+def _make_notes_media_file(root: Path, uuid: str, filename: str, data: bytes) -> Path:
+    path = root / "Accounts" / "LocalAccount" / "Media" / uuid / "Files" / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return path
+
+
+def test_list_notes_attachments_returns_exact_attachment_handles(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    media_root = tmp_path / "notes-container"
+    _make_notes_db(db_path)
+    _make_notes_media_file(media_root, "ATTACHMENT-UUID-1", "packet.pdf", b"%PDF-MEDIA")
+    handle = search_notes_metadata("Alpha", db_path=db_path)["results"][0]["handle"]
+
+    result = list_notes_attachments(handle, db_path=db_path, notes_container=media_root)
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["output_tier"] == "metadata"
+    assert result["result_count"] == 2
+    attachment = result["results"][0]
+    assert attachment["handle"].startswith("notes:attachment:v1:")
+    assert attachment["note_handle"] == handle
+    assert attachment["filename"] == "remote.pdf"
+    assert attachment["attachment_content_returned"] is False
+    assert result["results"][1]["filename"] == "packet.pdf"
+    assert result["results"][1]["attachment_type"] == "document"
+    assert result["results"][1]["media_status"] == "available"
+    assert result["results"][1]["blob_status"] == "available"
+
+
+def test_list_notes_attachments_rejects_bad_note_handle(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+
+    result = list_notes_attachments("notes:note:20", db_path=db_path)
+
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "invalid_handle"
+
+
+def test_export_notes_attachment_copies_media_file(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    media_root = tmp_path / "notes-container"
+    output_dir = tmp_path / "exports"
+    _make_notes_db(db_path)
+    source = _make_notes_media_file(
+        media_root,
+        "ATTACHMENT-UUID-1",
+        "packet.pdf",
+        b"%PDF-MEDIA",
+    )
+    note_handle = search_notes_metadata("Alpha", db_path=db_path)["results"][0]["handle"]
+    listing = list_notes_attachments(note_handle, db_path=db_path, notes_container=media_root)
+    attachment = next(item for item in listing["results"] if item["filename"] == "packet.pdf")
+
+    result = export_notes_attachment(
+        attachment["handle"],
+        db_path=db_path,
+        notes_container=media_root,
+        output_dir=output_dir,
+    )
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["output_tier"] == "export"
+    assert result["result"]["attachment_content_returned"] is False
+    assert result["result"]["attachment_content_exported"] is True
+    assert result["result"]["exported_filename"] == "packet.pdf"
+    exported = Path(result["result"]["exported_path"])
+    assert exported.read_bytes() == source.read_bytes()
+    assert str(source) not in str(result)
+
+
+def test_export_notes_attachment_falls_back_to_blob(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    media_root = tmp_path / "notes-container"
+    output_dir = tmp_path / "exports"
+    _make_notes_db(db_path)
+    note_handle = search_notes_metadata("Alpha", db_path=db_path)["results"][0]["handle"]
+    listing = list_notes_attachments(note_handle, db_path=db_path, notes_container=media_root)
+    attachment = next(item for item in listing["results"] if item["filename"] == "packet.pdf")
+
+    result = export_notes_attachment(
+        attachment["handle"],
+        db_path=db_path,
+        notes_container=media_root,
+        output_dir=output_dir,
+        filename="../unsafe name.pdf",
+    )
+
+    assert result["status"] == "ok"
+    assert result["result"]["exported_filename"] == "unsafe-name.pdf"
+    assert Path(result["result"]["exported_path"]).read_bytes() == b"%PDF-BLOB"
+
+
+def test_export_notes_attachment_rejects_bad_handle(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+
+    result = export_notes_attachment(
+        "notes:attachment:30",
+        db_path=db_path,
+        output_dir=tmp_path,
+    )
+
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "invalid_handle"
+
+
+def test_export_notes_attachment_reports_unavailable_for_remote_only(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    media_root = tmp_path / "notes-container"
+    output_dir = tmp_path / "exports"
+    _make_notes_db(db_path)
+    note_handle = search_notes_metadata("Alpha", db_path=db_path)["results"][0]["handle"]
+    listing = list_notes_attachments(note_handle, db_path=db_path, notes_container=media_root)
+    attachment = next(item for item in listing["results"] if item["filename"] == "remote.pdf")
+
+    result = export_notes_attachment(
+        attachment["handle"],
+        db_path=db_path,
+        notes_container=media_root,
+        output_dir=output_dir,
+    )
+
+    assert result["status"] == "content_unavailable"
+    assert result["result"]["remote_status"] == "remote_reference"
+    assert result["warnings"][0]["code"] == "notes_attachment_unavailable"
 
 
 def _notes_token(plan: dict) -> str:
