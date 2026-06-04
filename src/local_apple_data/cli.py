@@ -36,9 +36,11 @@ from .adapters.mail import (
     search_mail_metadata,
 )
 from .adapters.messages import (
+    apply_messages_change,
     export_message_attachment,
     get_message_chat,
     list_message_attachments,
+    plan_messages_change,
     search_message_chats,
 )
 from .adapters.notes import (
@@ -260,6 +262,32 @@ def _messages_export_attachment_command(args: argparse.Namespace) -> int:
         messages_root=Path(args.messages_root).expanduser() if args.messages_root else None,
     )
     log_result("messages.export_attachment", payload)
+    _print_json(payload)
+    return 0
+
+
+def _messages_plan_command(args: argparse.Namespace) -> int:
+    payload = plan_messages_change(
+        args.operation,
+        handle=args.handle,
+        body_text=args.body_text or "",
+        db_path=Path(args.db).expanduser() if args.db else None,
+    )
+    log_result("messages.plan", payload)
+    _print_json(payload)
+    return 0
+
+
+def _messages_apply_command(args: argparse.Namespace) -> int:
+    payload = apply_messages_change(
+        args.operation,
+        handle=args.handle,
+        body_text=args.body_text or "",
+        approval_token=args.approval_token,
+        confirm_apply=args.confirm_apply,
+        db_path=Path(args.db).expanduser() if args.db else None,
+    )
+    log_result("messages.apply", payload)
     _print_json(payload)
     return 0
 
@@ -1076,6 +1104,56 @@ def build_parser() -> argparse.ArgumentParser:
     messages_export_attachment.add_argument("--db", help=argparse.SUPPRESS)
     messages_export_attachment.add_argument("--messages-root", help=argparse.SUPPRESS)
     messages_export_attachment.set_defaults(func=_messages_export_attachment_command)
+
+    messages_plan = messages_subparsers.add_parser(
+        "plan",
+        help="Plan a future exact-chat Messages send without applying it.",
+    )
+    messages_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
+    messages_plan.add_argument(
+        "--operation",
+        required=True,
+        choices=["send-text"],
+        help="Messages change to plan.",
+    )
+    messages_plan.add_argument(
+        "--handle",
+        required=True,
+        help="Opaque messages:chat:v1 handle returned by messages search.",
+    )
+    messages_plan.add_argument("--body-text", required=True, help="Plaintext message body.")
+    messages_plan.add_argument("--db", help=argparse.SUPPRESS)
+    messages_plan.set_defaults(func=_messages_plan_command)
+
+    messages_apply = messages_subparsers.add_parser(
+        "apply",
+        help="Apply an approved exact-chat Messages send.",
+    )
+    messages_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
+    messages_apply.add_argument(
+        "--operation",
+        required=True,
+        choices=["send-text"],
+        help="Messages change to apply.",
+    )
+    messages_apply.add_argument(
+        "--handle",
+        required=True,
+        help="Opaque messages:chat:v1 handle returned by messages search.",
+    )
+    messages_apply.add_argument("--body-text", required=True, help="Plaintext message body.")
+    messages_apply.add_argument(
+        "--approval-token",
+        required=True,
+        help="Exact messages-apply:v1 approval token from the matching plan.",
+    )
+    messages_apply.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required explicit confirmation for Messages send apply.",
+    )
+    messages_apply.add_argument("--db", help=argparse.SUPPRESS)
+    messages_apply.set_defaults(func=_messages_apply_command)
 
     hide_my_email = subparsers.add_parser(
         "hide-my-email",

@@ -54,6 +54,7 @@ SYNC_FILES = [
     "docs/V1_21_MAIL_ATTACHMENT_EXPORT.md",
     "docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md",
     "docs/V1_23_MESSAGES_ATTRIBUTED_BODY.md",
+    "docs/V1_24_MESSAGES_SEND_TEXT_WRITE_DESIGN.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "scripts/audit_release_readiness.py",
     "scripts/audit_mutation_gates.py",

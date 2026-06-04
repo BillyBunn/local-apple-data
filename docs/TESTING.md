@@ -6,10 +6,10 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 
 ## Test Layers
 
-- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing/attachment export/create-draft plan/apply, synthetic Messages chat transcript retrieval and attachment export, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval/pagination/attachment export/create/append-text plan/apply, synthetic Calendar and Reminders EventKit helper responses, synthetic Calendar create-event plan/apply, synthetic Contacts helper responses and create-contact plan/apply, synthetic Photos helper responses and import plan/apply, synthetic iCloud Drive file retrieval and create/append-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
+- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing/attachment export/create-draft plan/apply, synthetic Messages chat transcript retrieval, attachment export, and send-text plan/apply, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval/pagination/attachment export/create/append-text plan/apply, synthetic Calendar and Reminders EventKit helper responses, synthetic Calendar create-event plan/apply, synthetic Contacts helper responses and create-contact plan/apply, synthetic Photos helper responses and import plan/apply, synthetic iCloud Drive file retrieval and create/append-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
 - CLI tests: synthetic Mail/Messages/Hide My Email/Voice Memos/Notes/Calendar/Contacts/Photos/iCloud Drive/Reminders stores or mocked helpers with redacted logs.
 - MCP tests: tool listing plus read-only and approved write annotations.
-- Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail content/attachment export, Messages transcript/attachment export, Hide My Email, Voice Memos, Notes content/attachment export, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows and synthetic apply flows for the approved write tools.
+- Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail content/attachment export, Messages transcript/attachment export/send-text plan/apply, Hide My Email, Voice Memos, Notes content/attachment export, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows and synthetic apply flows for the approved write tools.
 - Cross-agent sync smoke: `scripts/verify_cross_agent_sync.py` confirms Codex, Claude Code, and OpenClaw are all pointed at the same project runner and installed plugin version, and verifies Cursor `mcp.json` when a local-apple-data Cursor entry is present or `--require-cursor` is used. Public checkouts can pass `--skip-codex --skip-file-sync --skip-claude --skip-openclaw --skip-cursor` for a source-only smoke.
 - Install consistency: compare source and installed-cache manifest, MCP config, skill, server, handle helper, doctor helper, and adapters.
 - Privacy scans: `scripts/redaction_scan.py` fails on high-confidence secrets and literal iCloud/private-relay email aliases without printing matched values.
@@ -78,6 +78,8 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Messages transcript truncation returns `content_truncated`.
 - Messages attachment listing accepts only exact `messages:chat:v1:` handles, returns bounded metadata with `messages:attachment:v1:` handles, and rejects raw chat IDs.
 - Messages attachment export requires both the selected chat handle and exact `messages:attachment:v1:` handle, writes to a caller-selected output directory, reports missing local media as unavailable, never returns inline bytes, and does not log source media paths.
+- Messages planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, bounded body preview, and requires exact opaque chat handles.
+- Messages apply requires a matching approval token, explicit confirmation, stale chat-state refusal, Messages.app automation, ghost-row detection, local `chat.db` read-back verification, and does not echo the sent body in apply output.
 - Hide My Email search rejects domain-only and generic queries, returns masked alias previews only, includes `authoritative_inventory:false`, and never returns full aliases during search.
 - Hide My Email get accepts only `hide_my_email:alias:v1:` handles, returns exact selected alias detail, rejects raw identifiers and fabricated handles, and reports local Mail metadata provenance.
 - Voice Memos get accepts only `voice_memos:recording:v1:` handles, returns bounded existing embedded transcript text when available, rejects raw recording IDs and fabricated handles, and does not return audio bytes, raw paths, or recording identifiers.
@@ -109,8 +111,8 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Reminders apply requires a matching approval token, explicit confirmation, expected state, EventKit helper apply, and read-back verification.
 - Health and doctor do not expose full local executable paths.
 - Health and doctor report broad local Apple data readiness without content reads, raw rows, credentials, prompt-triggering framework access, or raw absolute store paths.
-- Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, and other framework-backed surfaces.
-- Write-design gates require the Reminders, iCloud Drive, Calendar, Contacts, Notes create/append, Mail draft, and Photos import write design contracts and allow only `reminders apply` / `reminders_apply_change`, `icloud-drive apply` / `icloud_drive_apply_change`, `calendar apply` / `calendar_apply_change`, `contacts apply` / `contacts_apply_change`, `notes apply` / `notes_apply_change`, `mail apply` / `mail_apply_change`, and `photos apply` / `photos_apply_change` as approved write tools.
+- Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, Messages automation, and other framework-backed surfaces.
+- Write-design gates require the Reminders, iCloud Drive, Calendar, Contacts, Notes create/append, Mail draft, Photos import, and Messages send-text write design contracts and allow only `reminders apply` / `reminders_apply_change`, `icloud-drive apply` / `icloud_drive_apply_change`, `calendar apply` / `calendar_apply_change`, `contacts apply` / `contacts_apply_change`, `notes apply` / `notes_apply_change`, `mail apply` / `mail_apply_change`, `photos apply` / `photos_apply_change`, and `messages apply` / `messages_apply_change` as approved write tools.
 - No repo docs or tests persist real personal search terms or result metadata.
 
 ## v1.1 Acceptance Criteria
@@ -300,3 +302,17 @@ The v1.22 Messages attachment phase adds read/export-only exact attachment acces
 - Local attachment bytes are copied to the output directory with sanitized filenames; missing local media returns `messages_attachment_unavailable`.
 - Runtime verification covers Messages attachment list/export success and legacy attachment-handle refusal without touching live Messages attachments.
 - Redacted logs do not contain attachment handles, chat handles, filenames, warning messages, source media paths, or export paths.
+
+## v1.24 Messages Send-Text Acceptance Criteria
+
+The v1.24 Messages send-text phase adds one approved apply surface:
+
+- `messages plan` / `messages_plan_change` require an exact `messages:chat:v1:` handle and non-empty bounded plaintext body.
+- Planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:true`, a deterministic `messages-plan:v1:` idempotency key, bounded body preview, current chat-state metadata, and an approval fingerprint.
+- `messages apply` / `messages_apply_change` require the matching `messages-apply:v1:<approval_fingerprint>` token, explicit confirmation, the same exact chat handle, and the same body text.
+- Apply recomputes the plan before sending so changed body text or changed chat state refuses through approval-token mismatch.
+- Apply uses a mocked script runner in tests and verifies local `chat.db` read-back for a newer outgoing row joined to the selected chat with matching body hash.
+- Apply output includes read-back metadata and body SHA-256, but not the sent body text.
+- Ghost-row detection returns a non-success warning when automation creates an empty unjoined outgoing row.
+- Runtime verification covers synthetic Messages plan/apply success and missing-confirmation refusal without touching live Messages.
+- Redacted logs do not contain body text, body previews, body hashes, chat handles, chat GUIDs, participant identifiers, approval fingerprints, approval tokens, raw AppleScript errors, warning messages, source media paths, or local database paths.

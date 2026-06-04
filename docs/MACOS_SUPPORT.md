@@ -12,7 +12,7 @@ The project is expected to need macOS because it depends on local Apple stores a
 | Surface | Local mechanism | Permission class |
 | --- | --- | --- |
 | Mail | Mail.app local metadata and `.emlx` content/attachment MIME files plus save-only Mail.app automation for approved create-draft apply | Full Disk Access and Automation may be required |
-| Messages | Messages local `chat.db`, native `NSUnarchiver` plaintext fallback for exact selected `attributedBody` rows, and local attachment files for exact selected-chat attachment export | Full Disk Access may be required |
+| Messages | Messages local `chat.db`, native `NSUnarchiver` plaintext fallback for exact selected `attributedBody` rows, local attachment files for exact selected-chat attachment export, and Messages.app automation for approved send-text apply | Full Disk Access may be required for local stores; Automation permission may be required for send apply |
 | Hide My Email | Inferred local Mail address metadata | Full Disk Access may be required |
 | Voice Memos | Voice Memos local database and embedded transcript atom | Full Disk Access may be required |
 | Notes | Local Notes SQLite plus bounded Notes.app automation for exact content and approved create/append-text apply; local Notes media files for exact attachment export | Full Disk Access and Automation may be required |
@@ -40,7 +40,7 @@ Expected degraded cases include:
 - This is not an iCloud web client.
 - It does not manage iCloud account state.
 - Hide My Email support is inferred from local Mail evidence, not an authoritative iCloud inventory.
-- Messages support returns bounded transcripts from local text or attributed-body plaintext fallback and can export one exact selected attachment to a caller-selected output directory. It does not return participant identifiers, raw attributed-body blobs, source media paths, inline attachment bytes, or fetch unavailable iCloud media.
+- Messages support returns bounded transcripts from local text or attributed-body plaintext fallback, can export one exact selected attachment to a caller-selected output directory, and can send one approved plaintext message to an exact existing chat only after plan approval-token and explicit-confirmation checks. It does not return participant identifiers, raw attributed-body blobs, source media paths, inline attachment bytes, sent body text in apply output, or fetch unavailable iCloud media.
 - Photos support returns asset/resource metadata, can export one exact selected asset to a caller-selected output directory, and can import one caller-selected image/video source file after plan approval. It does not return image or video bytes inline and does not edit, delete, target albums, mutate metadata, or fetch iCloud media over the network.
 - Voice Memos support returns existing embedded transcript text when present and can export one exact selected `.m4a` to a caller-selected output directory; it does not generate transcripts.
-- Write and mutation tools require separate approval gates before implementation. The current Mail write gate is limited to save-only draft creation; it does not send mail. The current Photos write gate is limited to importing one local image or video file; it does not edit or delete Photos assets.
+- Write and mutation tools require separate approval gates before implementation. The current Mail write gate is limited to save-only draft creation; it does not send mail. The current Photos write gate is limited to importing one local image or video file; it does not edit or delete Photos assets. The current Messages write gate is limited to send-text apply for one exact existing chat; it does not support direct recipients, new chats, SMS fallback selection, file sends, reactions, edit, or delete.

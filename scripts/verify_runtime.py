@@ -46,9 +46,11 @@ from local_apple_data.adapters.mail import (
     search_mail_metadata,
 )
 from local_apple_data.adapters.messages import (
+    apply_messages_change,
     export_message_attachment,
     get_message_chat,
     list_message_attachments,
+    plan_messages_change,
     search_message_chats,
 )
 from local_apple_data.adapters.notes import (
@@ -809,6 +811,75 @@ def _messages_attachment_smoke(tmp_path: Path) -> dict[str, Any]:
         "messages_attachment_exported_bytes": exported_path.stat().st_size,
         "messages_attachment_legacy_export_status": legacy_export["status"],
         "messages_attachment_legacy_export_warning": legacy_export["warnings"][0]["code"],
+    }
+
+
+def _messages_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
+    db_path = tmp_path / "messages-send.sqlite"
+    _make_messages_db(db_path)
+    search = search_message_chats("runtime", db_path=db_path)
+    handle = search["results"][0]["handle"]
+    body_text = "Synthetic runtime outgoing text."
+    plan = plan_messages_change(
+        "send-text",
+        handle=handle,
+        body_text=body_text,
+        db_path=db_path,
+    )
+    token = "messages-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    missing_confirmation = apply_messages_change(
+        "send-text",
+        handle=handle,
+        body_text=body_text,
+        approval_token=token,
+        confirm_apply=False,
+        db_path=db_path,
+        script_runner=lambda _script, _timeout: "",
+        read_back_timeout=0,
+    )
+
+    def runner(script: str, _timeout: float) -> str:
+        if "chat id" not in script or "send messageText to targetChat" not in script:
+            raise RuntimeError("Messages send smoke saw unexpected script")
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "INSERT INTO message VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (13, body_text, 802310700, 1, 0, "iMessage", None),
+            )
+            connection.execute("INSERT INTO chat_message_join VALUES (?, ?)", (1, 13))
+        return ""
+
+    result = apply_messages_change(
+        "send-text",
+        handle=handle,
+        body_text=body_text,
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+        read_back_timeout=0,
+    )
+    read_back = result["read_back"]
+    return {
+        "messages_plan_status": plan["status"],
+        "messages_plan_mode": plan["mode"],
+        "messages_plan_mutation_applied": plan["mutation_applied"],
+        "messages_plan_apply_available": plan["apply_available"],
+        "messages_plan_idempotency_key": plan["preview"]["idempotency_key"].startswith(
+            "messages-plan:v1:"
+        ),
+        "messages_apply_status": result["status"],
+        "messages_apply_mode": result["mode"],
+        "messages_apply_mutation_applied": result["mutation_applied"],
+        "messages_apply_read_back_confirmed": read_back["chat_handle_confirmed"],
+        "messages_apply_read_back_direction": read_back["direction"],
+        "messages_apply_read_back_text_source": read_back["text_source"],
+        "messages_apply_read_back_body_chars": read_back["body_chars"],
+        "messages_apply_read_back_hash_ok": read_back["body_sha256"]
+        == hashlib.sha256(body_text.encode("utf-8")).hexdigest(),
+        "messages_apply_body_not_returned": "text" not in read_back
+        and "body_text" not in read_back,
+        "messages_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
     }
 
 
@@ -1593,7 +1664,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 49,
+        "tool_count": 51,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1654,6 +1725,21 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "messages_attachment_exported_bytes": 16,
         "messages_attachment_legacy_export_status": "error",
         "messages_attachment_legacy_export_warning": "invalid_handle",
+        "messages_plan_status": "ok",
+        "messages_plan_mode": "plan",
+        "messages_plan_mutation_applied": False,
+        "messages_plan_apply_available": True,
+        "messages_plan_idempotency_key": True,
+        "messages_apply_status": "ok",
+        "messages_apply_mode": "apply",
+        "messages_apply_mutation_applied": True,
+        "messages_apply_read_back_confirmed": True,
+        "messages_apply_read_back_direction": "sent",
+        "messages_apply_read_back_text_source": "text",
+        "messages_apply_read_back_body_chars": 32,
+        "messages_apply_read_back_hash_ok": True,
+        "messages_apply_body_not_returned": True,
+        "messages_apply_missing_confirmation": "missing_apply_confirmation",
         "hide_my_email_opaque_handle": True,
         "hide_my_email_search_status": "ok",
         "hide_my_email_alias_preview": "ru***@icloud.com",
@@ -1809,6 +1895,7 @@ def main() -> None:
         summary.update(_mail_plan_apply_smoke(tmp_path))
         summary.update(_messages_content_smoke(tmp_path))
         summary.update(_messages_attachment_smoke(tmp_path))
+        summary.update(_messages_plan_apply_smoke(tmp_path))
         summary.update(_hide_my_email_smoke(tmp_path))
         summary.update(_voice_memos_content_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))

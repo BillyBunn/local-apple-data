@@ -191,3 +191,70 @@ def test_cli_messages_attachments_and_export_use_exact_handles(
     assert parsed["result"]["exported_filename"] == "cli-packet.pdf"
     assert Path(parsed["result"]["exported_path"]).read_bytes() == b"CLIPDF!"
     assert str(messages_root) not in str(parsed)
+
+
+def test_cli_messages_plan_and_apply_refusal_use_synthetic_db(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    search_exit = main(
+        [
+            "messages",
+            "search",
+            "--json",
+            "--query",
+            "CLI",
+            "--db",
+            str(db_path),
+        ]
+    )
+    chat_handle = json.loads(capsys.readouterr().out)["results"][0]["handle"]
+
+    plan_exit = main(
+        [
+            "messages",
+            "plan",
+            "--json",
+            "--operation",
+            "send-text",
+            "--handle",
+            chat_handle,
+            "--body-text",
+            "Synthetic CLI outbound",
+            "--db",
+            str(db_path),
+        ]
+    )
+    plan_payload = json.loads(capsys.readouterr().out)
+    token = "messages-apply:v1:" + plan_payload["preview"]["approval"]["approval_fingerprint"]
+    apply_exit = main(
+        [
+            "messages",
+            "apply",
+            "--json",
+            "--operation",
+            "send-text",
+            "--handle",
+            chat_handle,
+            "--body-text",
+            "Synthetic CLI outbound",
+            "--approval-token",
+            token,
+            "--db",
+            str(db_path),
+        ]
+    )
+
+    assert search_exit == 0
+    assert plan_exit == 0
+    assert apply_exit == 0
+    assert plan_payload["status"] == "ok"
+    assert plan_payload["preview"]["target"]["handle"] == chat_handle
+    assert "chat-guid-1" not in str(plan_payload)
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "error"
+    assert parsed["warnings"][0]["code"] == "missing_apply_confirmation"

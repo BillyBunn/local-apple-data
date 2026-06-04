@@ -170,6 +170,13 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
     assert health["surfaces"]["calendar"]["prompts"] is False
     assert any(
+        requirement["surface"] == "messages"
+        and requirement["permission_class"] == "Full Disk Access and Automation may be required"
+        and requirement["check_mode"] == "schema_only_without_automation_probe"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert any(
         requirement["surface"] == "photos"
         and requirement["check_mode"] == "non_prompting_photokit"
         and requirement["prompts"] is False

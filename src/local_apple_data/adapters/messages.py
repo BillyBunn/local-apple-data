@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import re
 import shutil
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import unquote, urlparse
 
 from ..handles import is_opaque_handle, make_opaque_handle, opaque_handle_matches
@@ -35,9 +37,17 @@ DEFAULT_ATTACHMENTS_LIMIT = 20
 DEFAULT_CONTENT_CHARS = 4000
 MAX_CONTENT_CHARS = 12000
 MESSAGE_TEXT_CHARS = 2000
+MAX_SEND_TEXT_CHARS = 12000
+MAX_SEND_PREVIEW_CHARS = 240
 MESSAGES_HELPER_TIMEOUT = 5.0
+MESSAGES_APPLESCRIPT_TIMEOUT_SECONDS = 10.0
+MESSAGES_SEND_READ_BACK_TIMEOUT_SECONDS = 8.0
+MESSAGES_SEND_READ_BACK_INTERVAL_SECONDS = 0.4
 CHAT_HANDLE_PREFIX = "messages:chat"
 MESSAGE_ATTACHMENT_HANDLE_PREFIX = "messages:attachment"
+PLAN_OPERATIONS = {"send_text"}
+APPROVAL_TOKEN_PREFIX = "messages-apply:v1:"
+ScriptRunner = Callable[[str, float], str]
 
 
 def _privacy() -> dict[str, bool | str]:
@@ -77,6 +87,24 @@ def _export_privacy() -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "export",
+    }
+
+
+def _preview_privacy() -> dict[str, bool | str]:
+    return {
+        "content_inspected": False,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "preview",
+    }
+
+
+def _mutation_privacy(*, content_inspected: bool = False) -> dict[str, bool | str]:
+    return {
+        "content_inspected": content_inspected,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "mutation",
     }
 
 
@@ -466,6 +494,205 @@ def export_message_attachment(
     }
 
 
+def plan_messages_change(
+    operation: str,
+    *,
+    handle: str = "",
+    body_text: str = "",
+    db_path: Path | None = None,
+) -> dict[str, Any]:
+    normalized_operation = operation.strip().replace("-", "_")
+    warnings: list[dict[str, str]] = []
+    if normalized_operation not in PLAN_OPERATIONS:
+        warnings.append(_warning("invalid_operation", "Expected operation send_text."))
+    if not is_opaque_handle(handle, CHAT_HANDLE_PREFIX):
+        warnings.append(_warning("invalid_handle", "Messages send planning requires a messages:chat:v1 handle."))
+    normalized_body, body_warning = _normalize_send_body(body_text)
+    if body_warning is not None:
+        warnings.append(body_warning)
+    if warnings:
+        return _plan_error(warnings)
+
+    try:
+        with connect_readonly(db_path or DEFAULT_MESSAGES_DB) as connection:
+            fingerprint = _check_schema(connection)
+            chat_id = _resolve_chat_id(connection, fingerprint, handle)
+            if chat_id is None:
+                return {
+                    "schema_version": 1,
+                    "status": "not_found",
+                    "source": "messages",
+                    "privacy": _preview_privacy(),
+                    "mode": "plan",
+                    "mutation_applied": False,
+                    "apply_available": False,
+                    "preview": None,
+                    "warnings": [],
+                }
+            chat_state = _select_chat_send_state(connection, chat_id)
+    except StoreUnavailableError as exc:
+        return _store_degraded_result(exc, content=False, preview=True)
+
+    if not _bounded_string(chat_state["guid"], 500):
+        return _plan_error([_warning("messages_chat_not_sendable", "Selected Messages chat is missing a sendable chat id.")])
+
+    body_preview, body_preview_truncated = _bounded_text(
+        normalized_body,
+        MAX_SEND_PREVIEW_CHARS,
+    )
+    target = {
+        "handle": make_opaque_handle(CHAT_HANDLE_PREFIX, fingerprint, int(chat_state["chat_id"])),
+        "display_name": _bounded_string(chat_state["display_name"], 500),
+        "service_name": _bounded_string(chat_state["service_name"], 50),
+        "participants_count": int(chat_state["participants_count"] or 0),
+        "message_count": int(chat_state["message_count"] or 0),
+        "last_message_date": _message_date(chat_state["last_message_date"]),
+        "last_message_rowid": _nonnegative_int(chat_state["last_message_rowid"]),
+    }
+    proposed = {
+        "kind": "messages_send_text",
+        "format": "plaintext",
+        "body_chars": len(normalized_body),
+        "body_preview_text": body_preview,
+        "body_preview_chars": len(body_preview),
+        "body_preview_truncated": body_preview_truncated,
+        "attachments_permitted": False,
+        "direct_recipient_send_permitted": False,
+    }
+    fingerprint_payload = {
+        "operation": normalized_operation,
+        "target": target,
+        "proposed": {
+            **proposed,
+            "body_sha256": hashlib.sha256(normalized_body.encode("utf-8")).hexdigest(),
+        },
+    }
+    idempotency_key = _plan_idempotency_key(fingerprint_payload)
+    approval_fingerprint = _approval_fingerprint(
+        {
+            **fingerprint_payload,
+            "idempotency_key": idempotency_key,
+        }
+    )
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "messages",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": True,
+        "preview": {
+            "operation": normalized_operation,
+            "target": target,
+            "proposed": proposed,
+            "idempotency_key": idempotency_key,
+            "approval": {
+                "required_for_apply": True,
+                "apply_tool_available": True,
+                "approval_fingerprint": approval_fingerprint,
+                "approval_token_format": f"{APPROVAL_TOKEN_PREFIX}<approval_fingerprint>",
+            },
+            "read_back_required_after_apply": True,
+        },
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
+def apply_messages_change(
+    operation: str,
+    *,
+    handle: str = "",
+    body_text: str = "",
+    approval_token: str = "",
+    confirm_apply: bool = False,
+    db_path: Path | None = None,
+    script_runner: ScriptRunner | None = None,
+    read_back_timeout: float = MESSAGES_SEND_READ_BACK_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    plan = plan_messages_change(operation, handle=handle, body_text=body_text, db_path=db_path)
+    if plan.get("status") != "ok":
+        return _apply_error(_safe_warnings(plan), plan=plan)
+
+    preview = plan["preview"]
+    approval = preview["approval"]
+    fingerprint = str(approval["approval_fingerprint"])
+    expected_token = _approval_token(fingerprint)
+    if not confirm_apply:
+        return _apply_error(
+            [_warning("missing_apply_confirmation", "Messages apply requires confirm_apply=true.")],
+            plan=plan,
+        )
+    if approval_token.strip() != expected_token:
+        return _apply_error(
+            [_warning("invalid_approval_token", "Messages apply approval token did not match the plan.")],
+            plan=plan,
+        )
+
+    normalized_body, _ = _normalize_send_body(body_text)
+    resolved_db_path = db_path or DEFAULT_MESSAGES_DB
+    try:
+        with connect_readonly(resolved_db_path) as connection:
+            fingerprint = _check_schema(connection)
+            chat_id = _resolve_chat_id(connection, fingerprint, handle)
+            if chat_id is None:
+                return _apply_error([_warning("invalid_handle", "Selected Messages chat no longer exists.")], plan=plan)
+            chat_state = _select_chat_send_state(connection, chat_id)
+            before_rowid = _nonnegative_int(chat_state["last_message_rowid"]) or 0
+            chat_guid = _bounded_string(chat_state["guid"], 500)
+    except StoreUnavailableError as exc:
+        return _store_degraded_result(exc, content=False, mutation=True)
+
+    if not chat_guid:
+        return _apply_error(
+            [_warning("messages_chat_not_sendable", "Selected Messages chat is missing a sendable chat id.")],
+            plan=plan,
+        )
+
+    runner = script_runner or _run_osascript
+    try:
+        runner(_messages_send_text_script(chat_guid=chat_guid, body_text=normalized_body), MESSAGES_APPLESCRIPT_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return _apply_error(
+            [_warning("automation_timeout", "Messages send timed out through local automation.")],
+            plan=plan,
+            status="degraded",
+        )
+    except MessagesAutomationError:
+        return _apply_error(
+            [_warning("write_error", "Messages send could not be completed safely.")],
+            plan=plan,
+        )
+
+    read_back = _wait_for_matching_sent_message(
+        chat_id,
+        normalized_body,
+        after_rowid=before_rowid,
+        db_path=resolved_db_path,
+        timeout=read_back_timeout,
+    )
+    if read_back is None:
+        ghost = _messages_ghost_row_detected(
+            after_rowid=before_rowid,
+            db_path=resolved_db_path,
+        )
+        warning = (
+            _warning("messages_send_ghost_row", "Messages automation produced an unjoined empty outgoing row.")
+            if ghost
+            else _warning("read_back_unavailable", "Messages send was attempted but local read-back did not confirm it.")
+        )
+        return _apply_error([warning], plan=plan, status="partial", mutation_applied=True)
+
+    return _apply_success(
+        read_back,
+        idempotency_key=preview["idempotency_key"],
+        approval_fingerprint=fingerprint,
+        mutation_applied=True,
+        warnings=[],
+    )
+
+
 def _select_chat(connection, chat_id: int):
     row = connection.execute(
         """
@@ -476,6 +703,33 @@ def _select_chat(connection, chat_id: int):
             COUNT(DISTINCT chj.handle_id) AS participants_count,
             COUNT(DISTINCT m.ROWID) AS message_count,
             MAX(m.date) AS last_message_date
+        FROM chat c
+        LEFT JOIN chat_handle_join chj ON chj.chat_id = c.ROWID
+        LEFT JOIN chat_message_join cmj ON cmj.chat_id = c.ROWID
+        LEFT JOIN message m ON m.ROWID = cmj.message_id
+        WHERE c.ROWID = ?
+        GROUP BY c.ROWID
+        LIMIT 1
+        """,
+        (chat_id,),
+    ).fetchone()
+    if row is None:
+        raise StoreUnavailableError("Messages chat could not be selected.")
+    return row
+
+
+def _select_chat_send_state(connection, chat_id: int):
+    row = connection.execute(
+        """
+        SELECT
+            c.ROWID AS chat_id,
+            c.guid AS guid,
+            COALESCE(c.display_name, '') AS display_name,
+            c.service_name AS service_name,
+            COUNT(DISTINCT chj.handle_id) AS participants_count,
+            COUNT(DISTINCT m.ROWID) AS message_count,
+            MAX(m.date) AS last_message_date,
+            MAX(m.ROWID) AS last_message_rowid
         FROM chat c
         LEFT JOIN chat_handle_join chj ON chj.chat_id = c.ROWID
         LEFT JOIN chat_message_join cmj ON cmj.chat_id = c.ROWID
@@ -516,6 +770,30 @@ def _select_messages(connection, chat_id: int, limit: int):
         (chat_id, limit),
     ).fetchall()
     return list(reversed(rows))
+
+
+def _select_new_outgoing_messages(connection, chat_id: int, after_rowid: int):
+    message_columns = table_columns(connection, "message")
+    attributed_body_expr = "m.attributedBody" if "attributedBody" in message_columns else "NULL"
+    return connection.execute(
+        f"""
+        SELECT
+            m.ROWID AS message_id,
+            m.text AS text,
+            {attributed_body_expr} AS attributed_body,
+            m.date AS message_date,
+            m.is_from_me AS is_from_me,
+            m.service AS service
+        FROM message m
+        JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+        WHERE cmj.chat_id = ?
+          AND m.ROWID > ?
+          AND COALESCE(m.is_from_me, 0) = 1
+        ORDER BY m.ROWID DESC
+        LIMIT 20
+        """,
+        (chat_id, after_rowid),
+    ).fetchall()
 
 
 def _select_attachment_rows(connection, chat_id: int, limit: int | None):
@@ -580,6 +858,84 @@ def _resolve_chat_id(connection, fingerprint: str, handle: str) -> int | None:
         if opaque_handle_matches(handle, CHAT_HANDLE_PREFIX, fingerprint, chat_id):
             return chat_id
     return None
+
+
+def _wait_for_matching_sent_message(
+    chat_id: int,
+    body_text: str,
+    *,
+    after_rowid: int,
+    db_path: Path,
+    timeout: float,
+) -> dict[str, Any] | None:
+    deadline = time.monotonic() + max(0.0, timeout)
+    while True:
+        match = _find_matching_sent_message(
+            chat_id,
+            body_text,
+            after_rowid=after_rowid,
+            db_path=db_path,
+        )
+        if match is not None or time.monotonic() >= deadline:
+            return match
+        time.sleep(MESSAGES_SEND_READ_BACK_INTERVAL_SECONDS)
+
+
+def _find_matching_sent_message(
+    chat_id: int,
+    body_text: str,
+    *,
+    after_rowid: int,
+    db_path: Path,
+) -> dict[str, Any] | None:
+    try:
+        with connect_readonly(db_path) as connection:
+            _check_schema(connection)
+            rows = _select_new_outgoing_messages(connection, chat_id, after_rowid)
+    except StoreUnavailableError:
+        return None
+
+    decoded, _ = _decode_attributed_body_texts(rows)
+    expected = _normalize_for_compare(body_text)
+    for row in rows:
+        text = _bounded_string(row["text"], MAX_SEND_TEXT_CHARS)
+        text_source = "text"
+        if not text:
+            text = decoded.get(int(row["message_id"]), "")
+            text_source = "attributed_body" if text else "unavailable"
+        if _normalize_for_compare(text) != expected:
+            continue
+        return {
+            "chat_handle_confirmed": True,
+            "message_date": _message_date(row["message_date"]),
+            "direction": "sent",
+            "service": _bounded_string(row["service"], 50),
+            "text_source": text_source,
+            "body_chars": len(text),
+            "body_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        }
+    return None
+
+
+def _messages_ghost_row_detected(*, after_rowid: int, db_path: Path) -> bool:
+    try:
+        with connect_readonly(db_path) as connection:
+            rows = connection.execute(
+                """
+                SELECT m.ROWID AS message_id
+                FROM message m
+                LEFT JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+                WHERE m.ROWID > ?
+                  AND COALESCE(m.is_from_me, 0) = 1
+                  AND cmj.chat_id IS NULL
+                  AND (m.text IS NULL OR m.text = '')
+                LIMIT 1
+                """,
+                (after_rowid,),
+            ).fetchall()
+    except StoreUnavailableError:
+        return False
+    return bool(rows)
 
 
 def _chat_metadata(row, fingerprint: str) -> dict[str, Any]:
@@ -892,6 +1248,35 @@ def _unique_output_path(directory: Path, filename: str) -> Path:
     raise OSError("could not allocate unique output path")
 
 
+def _bounded_text(value: str, limit: int) -> tuple[str, bool]:
+    bounded = value[:limit]
+    return bounded, len(value) > len(bounded)
+
+
+def _normalize_send_body(value: str) -> tuple[str, dict[str, str] | None]:
+    normalized = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    normalized = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]+", "", normalized).strip()
+    if not normalized:
+        return "", _warning("missing_body_text", "Messages send requires non-empty body_text.")
+    if len(normalized) > MAX_SEND_TEXT_CHARS:
+        return "", _warning("body_too_long", "Messages send body_text exceeded the maximum length.")
+    return normalized, None
+
+
+def _normalize_for_compare(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value).replace("\r\n", "\n").replace("\r", "\n")).strip()
+
+
+def _nonnegative_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        integer = int(value)
+    except (TypeError, ValueError):
+        return None
+    return integer if integer >= 0 else None
+
+
 def _message_date(value: Any) -> str | None:
     if value is None:
         return None
@@ -940,6 +1325,134 @@ def _invalid_attachment_chat_handle_result(*, export: bool = False) -> dict[str,
     }
 
 
+def _plan_error(warnings: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "messages",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": False,
+        "preview": None,
+        "warnings": warnings,
+    }
+
+
+def _apply_error(
+    warnings: list[dict[str, str]],
+    *,
+    plan: dict[str, Any] | None = None,
+    status: str = "error",
+    mutation_applied: bool = False,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": status,
+        "source": "messages",
+        "privacy": _mutation_privacy(content_inspected=False),
+        "mode": "apply",
+        "mutation_applied": mutation_applied,
+        "plan": plan.get("preview") if isinstance(plan, dict) else None,
+        "result": None,
+        "warnings": warnings,
+    }
+
+
+def _apply_success(
+    read_back: dict[str, Any],
+    *,
+    idempotency_key: str,
+    approval_fingerprint: str,
+    mutation_applied: bool,
+    warnings: list[dict[str, str]],
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "messages",
+        "privacy": _mutation_privacy(content_inspected=True),
+        "mode": "apply",
+        "mutation_applied": mutation_applied,
+        "idempotency_key": idempotency_key,
+        "approval": {
+            "approval_fingerprint": approval_fingerprint,
+            "approval_token_verified": True,
+        },
+        "read_back": read_back,
+        "result_count": 1,
+        "warnings": warnings,
+    }
+
+
+def _safe_warnings(payload: dict[str, Any]) -> list[dict[str, str]]:
+    warnings = payload.get("warnings")
+    if not isinstance(warnings, list):
+        return []
+    safe: list[dict[str, str]] = []
+    for warning in warnings:
+        if not isinstance(warning, dict):
+            continue
+        code = warning.get("code")
+        message = warning.get("message")
+        if isinstance(code, str) and isinstance(message, str):
+            safe.append({"code": code, "message": message})
+    return safe
+
+
+def _plan_idempotency_key(payload: dict[str, Any]) -> str:
+    digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+    return f"messages-plan:v1:{digest}"
+
+
+def _approval_fingerprint(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+
+
+def _approval_token(fingerprint: str) -> str:
+    return f"{APPROVAL_TOKEN_PREFIX}{fingerprint}"
+
+
+def _canonical_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def _messages_send_text_script(*, chat_guid: str, body_text: str) -> str:
+    return "\n".join(
+        [
+            f"set messageText to {_applescript_string(body_text)}",
+            f"set chatIdentifier to {_applescript_string(chat_guid)}",
+            'tell application "Messages"',
+            "    set targetChat to chat id chatIdentifier",
+            "    send messageText to targetChat",
+            "end tell",
+        ]
+    ) + "\n"
+
+
+def _applescript_string(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+class MessagesAutomationError(RuntimeError):
+    pass
+
+
+def _run_osascript(script: str, timeout: float) -> str:
+    completed = subprocess.run(
+        ["osascript"],
+        input=script,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise MessagesAutomationError()
+    return completed.stdout
+
+
 def _invalid_attachment_export_handle_result() -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -956,17 +1469,41 @@ def _invalid_attachment_export_handle_result() -> dict[str, Any]:
     }
 
 
-def _store_degraded_result(exc: StoreUnavailableError, *, content: bool) -> dict[str, Any]:
-    return {
+def _store_degraded_result(
+    exc: StoreUnavailableError,
+    *,
+    content: bool,
+    preview: bool = False,
+    mutation: bool = False,
+) -> dict[str, Any]:
+    if mutation:
+        privacy = _mutation_privacy(content_inspected=False)
+    elif preview:
+        privacy = _preview_privacy()
+    else:
+        privacy = _content_privacy(content_inspected=False) if content else _privacy()
+    result = {
         "schema_version": 1,
         "status": "degraded",
         "source": "messages",
-        "privacy": _content_privacy(content_inspected=False) if content else _privacy(),
-        "results": [] if not content else None,
-        "result": None if content else None,
-        "result_count": 0 if not content else None,
+        "privacy": privacy,
+        "result": None,
         "warnings": [_warning("messages_store_unavailable", str(exc))],
     }
+    if mutation:
+        result.update({"mode": "apply", "mutation_applied": False})
+    elif preview:
+        result.update(
+            {
+                "mode": "plan",
+                "mutation_applied": False,
+                "apply_available": False,
+                "preview": None,
+            }
+        )
+    elif not content:
+        result.update({"results": [], "result_count": 0})
+    return result
 
 
 def _messages_attachment_degraded_result(

@@ -496,6 +496,63 @@ def test_log_result_excludes_photos_apply_content(
     assert "do not log warning" not in text
 
 
+def test_log_result_excludes_messages_apply_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "messages",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "apply",
+        "privacy": {
+            "output_tier": "mutation",
+            "content_inspected": True,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "plan": {
+            "target": {
+                "handle": "messages:chat:v1:abcdef0123456789abcdef0123456789",
+                "display_name": "do not log chat name",
+                "last_message_rowid": 123,
+            },
+            "proposed": {
+                "body_preview_text": "do not log message body",
+                "body_sha256": "do-not-log-body-hash",
+            },
+            "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
+        },
+        "approval": {
+            "approval_fingerprint": "do-not-log-fingerprint",
+            "approval_token_verified": True,
+        },
+        "read_back": {
+            "chat_handle_confirmed": True,
+            "service": "iMessage",
+            "body_chars": 24,
+            "body_sha256": "do-not-log-body-hash",
+        },
+        "warnings": [{"code": "already_applied", "message": "do not log warning"}],
+    }
+
+    log_result("messages.apply", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "messages.apply"
+    assert event["privacy"]["output_tier"] == "mutation"
+    assert event["warning_codes"] == ["already_applied"]
+    assert "messages:chat:v1:" not in text
+    assert "do not log chat name" not in text
+    assert "do not log message body" not in text
+    assert "do-not-log-body-hash" not in text
+    assert "do-not-log-fingerprint" not in text
+    assert "do not log warning" not in text
+
+
 def test_log_result_excludes_notes_attachment_export_content(
     tmp_path: Path,
     monkeypatch,

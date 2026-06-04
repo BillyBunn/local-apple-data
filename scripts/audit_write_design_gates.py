@@ -28,6 +28,8 @@ APPROVED_WRITE_TOOLS: tuple[str, ...] = (
     "icloud_drive_apply_change",
     "mail_apply",
     "mail_apply_change",
+    "messages_apply",
+    "messages_apply_change",
     "notes_apply",
     "notes_apply_change",
     "photos_apply",
@@ -44,6 +46,8 @@ APPROVED_PREVIEW_TOOLS: tuple[str, ...] = (
     "icloud_drive_plan_change",
     "mail_plan",
     "mail_plan_change",
+    "messages_plan",
+    "messages_plan_change",
     "notes_plan",
     "notes_plan_change",
     "photos_plan",
@@ -51,9 +55,9 @@ APPROVED_PREVIEW_TOOLS: tuple[str, ...] = (
     "reminders_plan_change",
 )
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, `mail_apply_change`, `photos apply`, and `photos_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply are the only approved write surfaces",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, `mail_apply_change`, `photos apply`, `photos_apply_change`, `messages apply`, and `messages_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply are the only approved write surfaces",
 }
 REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
@@ -239,6 +243,29 @@ REQUIRED_DESIGN_DOCS = {
             "redaction",
             "Synthetic Tests Required",
             "The current release allows Notes create-note and append-text apply only.",
+        ),
+    },
+    "messages_send_text_write_v1": {
+        "path": "docs/V1_24_MESSAGES_SEND_TEXT_WRITE_DESIGN.md",
+        "phrases": (
+            "Status: Apply-capable implementation.",
+            "Approved write tools: `local-apple-data messages apply` and `messages_apply_change`.",
+            "`local-apple-data messages plan` and `messages_plan_change`",
+            "No other mutating CLI or MCP tools are approved or exposed by this document.",
+            "preview",
+            "apply",
+            "read_back",
+            "mutation_applied:false",
+            "approval token",
+            "exact opaque `messages:chat:v1:` handle",
+            "existing chat",
+            "AppleScript",
+            "stale chat-state refusal",
+            "ghost-row detection",
+            "idempotency",
+            "redaction",
+            "Synthetic Tests Required",
+            "The current release allows only this Messages send-text apply surface.",
         ),
     },
 }

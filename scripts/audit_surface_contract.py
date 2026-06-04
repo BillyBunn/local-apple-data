@@ -47,12 +47,14 @@ SURFACE_CONTRACTS = (
         label="Messages",
         cli_group="messages",
         cli_subparser="messages_subparsers",
-        cli_commands=("search", "get", "attachments", "export-attachment"),
+        cli_commands=("search", "get", "attachments", "export-attachment", "plan", "apply"),
         mcp_tools=(
             "messages_search",
             "messages_get_chat",
             "messages_list_attachments",
             "messages_export_attachment",
+            "messages_plan_change",
+            "messages_apply_change",
         ),
     ),
     SurfaceContract(

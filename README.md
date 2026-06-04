@@ -17,11 +17,11 @@ This project provides a privacy-gated CLI and MCP server for locally synced:
 - Apple Photos
 - iCloud Drive local files and folders
 
-The current release is local-only and read-mostly. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation. The plugin does not use the Gmail connector, Gmail API, IMAP credentials, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
+The current release is local-only and read-mostly. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, and each requires a matching plan approval token plus explicit confirmation. The plugin does not use the Gmail connector, Gmail API, IMAP credentials, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
 
 ## Current Status
 
-The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, and Photos import apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, Notes, Mail draft, or Photos import apply operation generated from a matching plan.
+The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, or Messages send-text apply operation generated from a matching plan.
 
 Implemented now:
 
@@ -38,6 +38,8 @@ Implemented now:
 - `local-apple-data messages search/get` commands for local Messages chat display-name metadata and exact bounded transcripts, including modern local `attributedBody` plaintext fallback when `message.text` is empty
 - `local-apple-data messages attachments --json --handle <messages:chat:v1:...>` for exact selected-chat attachment metadata with opaque `messages:attachment:v1:` handles
 - `local-apple-data messages export-attachment --json --chat-handle <messages:chat:v1:...> --handle <messages:attachment:v1:...> --output-dir <dir>` for exact local Messages attachment export without inline bytes or source media paths
+- `local-apple-data messages plan --json --operation send-text --handle <messages:chat:v1:...> --body-text <text>` for non-mutating future send-text previews with chat-state, body-hash, idempotency, and approval metadata
+- `local-apple-data messages apply --json --operation send-text --handle <messages:chat:v1:...> --body-text <text> --approval-token <token> --confirm-apply` for the approved Messages send-text path, with Messages.app automation, stale chat-state refusal, ghost-row detection, and local read-back verification without echoing the sent body in apply output
 - `local-apple-data hide-my-email search/get` commands for inferred Hide My Email aliases observed in local Mail address metadata
 - `local-apple-data voice-memos search/get/export` commands for local Voice Memos title/filename metadata, exact existing embedded transcripts, and exact-handle `.m4a` export to a caller-selected output directory
 - `local-apple-data notes search/get` metadata commands
@@ -69,7 +71,7 @@ Implemented now:
 - `local-apple-data reminders plan --json --operation create|complete|update-due-date ...` for non-mutating future-change previews with idempotency and approval metadata
 - `local-apple-data reminders apply --json --operation create|complete|update-due-date ... --approval-token <token> --confirm-apply` for the approved Reminders create/complete/due-date update path, with EventKit apply and read-back verification
 - Highest-version Mail store discovery without exposing raw local store paths in normal output
-- `local-apple-data-mcp` stdio MCP server with read-only tools plus the approved non-destructive `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, `contacts_apply_change`, `notes_apply_change`, `mail_apply_change`, and `photos_apply_change` write tools
+- `local-apple-data-mcp` stdio MCP server with read-only tools plus the approved non-destructive `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, `contacts_apply_change`, `notes_apply_change`, `mail_apply_change`, `photos_apply_change`, and `messages_apply_change` write tools
 - MCP runner script that avoids package builds during normal plugin startup
 - Codex skill under `skills/local-apple-data/`
 - Local plugin manifest under `.codex-plugin/plugin.json`
@@ -96,7 +98,7 @@ Implemented now:
 - Repo-local redaction scanner under `scripts/redaction_scan.py`
 - Release-readiness auditor under `scripts/audit_release_readiness.py`
 - Mutation-gate auditor under `scripts/audit_mutation_gates.py` so write-like CLI/MCP surfaces cannot appear without explicit gates
-- Write-design gate auditor under `scripts/audit_write_design_gates.py` so first-tranche write tools stay machine-checkable and limited to the approved Reminders, iCloud Drive, Calendar, Contacts, Notes create/append, Mail draft, and Photos import apply surfaces
+- Write-design gate auditor under `scripts/audit_write_design_gates.py` so first-tranche write tools stay machine-checkable and limited to the approved Reminders, iCloud Drive, Calendar, Contacts, Notes create/append, Mail draft, Photos import, and Messages send-text apply surfaces
 - Surface-contract auditor under `scripts/audit_surface_contract.py` so MCP tools, CLI commands, health surfaces, access requirements, and the capability matrix stay aligned
 - MCP client config renderer for generic stdio, Claude Code, Cursor, and OpenClaw under `scripts/render_mcp_client_config.py`
 - Public release tree builder under `scripts/build_public_release_tree.py`
@@ -107,8 +109,8 @@ Implemented now:
 
 Deferred:
 
-- Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create/append-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, Notes create/append-text apply surface, Mail create-draft apply surface, and Photos import apply surface
-- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages send/edit/delete/other mutation, broad Messages attachment export, Messages attachment mutation, Voice Memos mutation or attachments, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
+- Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create/append-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, Notes create/append-text apply surface, Mail create-draft apply surface, Photos import apply surface, and Messages send-text apply surface
+- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages direct-recipient send/new-chat/SMS-fallback selection/edit/delete/reaction/tapback/file-send/other mutation, broad Messages attachment export, Messages attachment mutation, Voice Memos mutation or attachments, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
 
 The v1.1 design gate for exact-handle Mail content retrieval is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`.
 The v1.2 Notes content and broader local Apple data expansion plan is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`.
@@ -129,6 +131,7 @@ The first Notes attachment export design gate is documented in `docs/V1_20_NOTES
 The first Mail attachment export design gate is documented in `docs/V1_21_MAIL_ATTACHMENT_EXPORT.md`.
 The first Messages attachment export design gate is documented in `docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md`.
 The Messages attributed-body fallback design gate is documented in `docs/V1_23_MESSAGES_ATTRIBUTED_BODY.md`.
+The first Messages send-text write design gate is documented in `docs/V1_24_MESSAGES_SEND_TEXT_WRITE_DESIGN.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.

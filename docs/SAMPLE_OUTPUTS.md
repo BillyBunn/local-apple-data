@@ -182,6 +182,75 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## Messages Send-Text Plan
+
+```json
+{
+  "status": "ok",
+  "source": "messages",
+  "mode": "plan",
+  "mutation_applied": false,
+  "apply_available": true,
+  "preview": {
+    "operation": "send_text",
+    "target": {
+      "handle": "<opaque messages:chat:v1 handle>",
+      "display_name": "Synthetic Chat",
+      "service_name": "iMessage",
+      "participants_count": 1,
+      "message_count": 12,
+      "last_message_date": "2026-06-04T09:31:00+00:00",
+      "last_message_rowid": 1200
+    },
+    "proposed": {
+      "kind": "messages_send_text",
+      "format": "plaintext",
+      "body_chars": 29,
+      "body_preview_text": "Synthetic outgoing message.",
+      "body_preview_chars": 29,
+      "body_preview_truncated": false,
+      "attachments_permitted": false,
+      "direct_recipient_send_permitted": false
+    },
+    "idempotency_key": "messages-plan:v1:<hash>",
+    "approval": {
+      "required_for_apply": true,
+      "apply_tool_available": true,
+      "approval_fingerprint": "<hash>",
+      "approval_token_format": "messages-apply:v1:<approval_fingerprint>"
+    },
+    "read_back_required_after_apply": true
+  },
+  "warnings": []
+}
+```
+
+## Messages Send-Text Apply
+
+```json
+{
+  "status": "ok",
+  "source": "messages",
+  "mode": "apply",
+  "mutation_applied": true,
+  "idempotency_key": "messages-plan:v1:<hash>",
+  "approval": {
+    "approval_fingerprint": "<hash>",
+    "approval_token_verified": true
+  },
+  "read_back": {
+    "chat_handle_confirmed": true,
+    "message_date": "2026-06-04T09:32:00+00:00",
+    "direction": "sent",
+    "service": "iMessage",
+    "text_source": "text",
+    "body_chars": 29,
+    "body_sha256": "<sha256>"
+  },
+  "warnings": []
+}
+```
+
 ## Notes Content
 
 ```json
@@ -386,7 +455,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 49,
+  "tool_count": 51,
   "mail_content_status": "ok",
   "mail_plan_status": "ok",
   "mail_plan_mutation_applied": false,
@@ -444,6 +513,12 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "messages_attachment_list_status": "ok",
   "messages_attachment_export_status": "ok",
   "messages_attachment_content_exported": true,
+  "messages_plan_status": "ok",
+  "messages_plan_mutation_applied": false,
+  "messages_plan_apply_available": true,
+  "messages_apply_status": "ok",
+  "messages_apply_mutation_applied": true,
+  "messages_apply_body_not_returned": true,
   "voice_memos_transcript_status": "ok",
   "voice_memos_export_status": "ok",
   "hide_my_email_detail_status": "ok",

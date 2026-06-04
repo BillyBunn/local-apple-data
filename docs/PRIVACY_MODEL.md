@@ -1,6 +1,6 @@
 # Privacy Model
 
-This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply through plan/apply/read-back gates.
+This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply through plan/apply/read-back gates.
 
 ## Data Tiers
 
@@ -8,8 +8,8 @@ This project handles local personal-data surfaces. The default is metadata-first
 2. Metadata: bounded subjects/titles/snippets and Mail content-availability hints only when the user asks for the workflow.
 3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
 4. Attachments: exact selected Mail, Messages, and Notes attachment metadata/export only, using the selected parent item handle plus selected attachment handle where required. Broad attachment export, inline bytes, source paths, remote fetches, and attachment mutation remain blocked.
-5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating iCloud Drive append-text planning for exact requested file handles plus expected current content hash, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, non-mutating Notes create-note planning for bounded title/body input, non-mutating Notes append-text planning for exact requested note handles plus expected current content hash, non-mutating Mail create-draft planning for bounded recipient/subject/body input, and non-mutating Photos import planning for caller-selected image/video source files.
-6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply; all other mutation requires a separate design and approval phase.
+5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating iCloud Drive append-text planning for exact requested file handles plus expected current content hash, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, non-mutating Notes create-note planning for bounded title/body input, non-mutating Notes append-text planning for exact requested note handles plus expected current content hash, non-mutating Mail create-draft planning for bounded recipient/subject/body input, non-mutating Photos import planning for caller-selected image/video source files, and non-mutating Messages send-text planning for exact existing chat handles plus bounded body preview.
+6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply; all other mutation requires a separate design and approval phase.
 
 ## Never Persist
 
@@ -18,6 +18,7 @@ Do not persist any of the following in logs, docs, prompts, fixtures, tests, com
 - Message bodies
 - Mail draft planned recipients, subjects, body previews, handles, or approval fingerprints outside transient preview/apply responses
 - Messages transcripts outside exact selected responses
+- Messages send body text, body previews, body hashes, chat handles, chat GUIDs, participant identifiers, approval tokens, or approval fingerprints outside transient preview/apply responses
 - Messages attachment metadata outside selected-chat responses and exported Messages attachments outside the caller-selected export path
 - Full Hide My Email aliases outside exact selected responses
 - Voice Memos transcript text outside exact selected responses
@@ -88,7 +89,7 @@ Ask the local operator before:
 - Editing Codex config
 - Editing launchd jobs
 - Editing OpenClaw runtime state
-- Mutating Mail, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes, Mail draft, and Photos import apply gates
+- Mutating Mail, Messages, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply gates
 - Adding direct network mail access
 - Adding authoritative Hide My Email inventory or Hide My Email creation/deactivation/deletion
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
@@ -421,6 +422,33 @@ The v1.17 apply implementation:
 - Recomputes the plan before applying so changed source bytes invalidate stale approval tokens.
 - Applies through a Swift PhotoKit helper and `PHPhotoLibrary.performChanges`.
 - Returns read-back metadata for the created asset through the existing opaque-handle Photos detail shape.
+- Keeps automated tests synthetic-only.
+
+## v1.24 Messages Send-Text Apply
+
+The implemented v1.24 phase adds non-mutating Messages send-text planning and the approved apply-capable mutation surface for sending one bounded plaintext message to one exact existing chat through Messages.app automation. It is not permission to send to direct recipients, create chats, choose SMS fallback or outgoing accounts, send files, react/tapback, edit, unsend, delete, mark read, manage groups, expose participants, or run bulk Messages operations.
+
+The v1.24 planning implementation:
+
+- Exposes `local-apple-data messages plan` and MCP `messages_plan_change`.
+- Returns `mode: "plan"`, `mutation_applied:false`, and `apply_available:true`.
+- Validates requested send-text operations without calling Messages.app or writing Messages data.
+- Requires exact opaque `messages:chat:v1:` handles for target-chat planning.
+- Returns bounded body preview text, body length, deterministic idempotency keys, and approval fingerprints for the apply gate.
+- Binds approval to current chat state, including message count and last-message row.
+- Keeps redacted event logs free of body text, body previews, body hashes, chat GUIDs, handles, participant identifiers, and approval fingerprints.
+- Keeps automated tests synthetic-only.
+
+The v1.24 apply implementation:
+
+- Exposes `local-apple-data messages apply` and MCP `messages_apply_change`.
+- Requires the matching `messages-apply:v1:<approval_fingerprint>` token.
+- Requires explicit confirmation.
+- Recomputes the plan before applying so changed body text or changed chat state invalidates stale approval tokens.
+- Applies through Messages.app AppleScript only after approval checks pass.
+- Returns success only after local `chat.db` read-back confirms a newer outgoing row joined to the selected chat with matching body hash.
+- Detects empty unjoined outgoing ghost rows and returns a non-success status.
+- Does not echo the sent body text in apply read-back.
 - Keeps automated tests synthetic-only.
 
 ## v1.7 Photos Asset Detail Retrieval

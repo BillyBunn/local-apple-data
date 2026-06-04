@@ -32,6 +32,8 @@ from local_apple_data.mcp_server import (
     messages_export_attachment,
     messages_get_chat,
     messages_list_attachments,
+    messages_plan_change,
+    messages_apply_change,
     notes_apply_change,
     notes_export_attachment,
     notes_get_content,
@@ -101,6 +103,18 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
         "bad-handle",
         "bad-attachment",
         str(tmp_path / "exports"),
+    )
+    messages_plan_result = messages_plan_change(
+        "send_text",
+        handle="bad-handle",
+        body_text="Synthetic body.",
+    )
+    messages_apply_result = messages_apply_change(
+        "send_text",
+        handle="bad-handle",
+        body_text="Synthetic body.",
+        approval_token="messages-apply:v1:bad",
+        confirm_apply=True,
     )
     hide_my_email_result = hide_my_email_get_alias("bad-handle")
     voice_memos_result = voice_memos_get_recording("bad-handle")
@@ -201,6 +215,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert messages_attachments_result["warnings"][0]["code"] == "invalid_handle"
     assert messages_export_result["status"] == "error"
     assert messages_export_result["warnings"][0]["code"] == "invalid_handle"
+    assert messages_plan_result["status"] == "error"
+    assert messages_plan_result["warnings"][0]["code"] == "invalid_handle"
+    assert messages_apply_result["status"] == "error"
+    assert messages_apply_result["warnings"][0]["code"] == "invalid_handle"
     assert hide_my_email_result["status"] == "error"
     assert hide_my_email_result["warnings"][0]["code"] == "invalid_handle"
     assert voice_memos_result["status"] == "error"
@@ -284,6 +302,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "messages_get_chat",
                     "messages_list_attachments",
                     "messages_export_attachment",
+                    "messages_plan_change",
+                    "messages_apply_change",
                     "hide_my_email_search",
                     "hide_my_email_get_alias",
                     "voice_memos_search",
@@ -331,6 +351,7 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                             "contacts_apply_change",
                             "notes_apply_change",
                             "mail_apply_change",
+                            "messages_apply_change",
                             "photos_apply_change",
                         }:
                             assert tool.annotations.readOnlyHint is False

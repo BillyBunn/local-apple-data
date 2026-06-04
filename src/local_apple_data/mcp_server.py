@@ -36,9 +36,11 @@ from .adapters.mail import (
     search_mail_metadata,
 )
 from .adapters.messages import (
+    apply_messages_change,
     export_message_attachment,
     get_message_chat,
     list_message_attachments,
+    plan_messages_change,
     search_message_chats,
 )
 from .adapters.notes import (
@@ -80,7 +82,7 @@ INSTRUCTIONS = (
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
     "Mail, Messages, and Notes attachment export are exact-handle only and never return attachment bytes inline. "
-    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation."
+    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
@@ -263,6 +265,42 @@ def messages_export_attachment(
             attachment_handle,
             output_dir=Path(output_dir).expanduser(),
             filename=filename or None,
+        ),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def messages_plan_change(
+    operation: str,
+    handle: str,
+    body_text: str,
+) -> dict[str, Any]:
+    """Plan a future exact-chat Messages send without applying it."""
+
+    return _record(
+        "messages_plan_change",
+        plan_messages_change(operation, handle=handle, body_text=body_text),
+    )
+
+
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
+def messages_apply_change(
+    operation: str,
+    handle: str,
+    body_text: str,
+    approval_token: str,
+    confirm_apply: bool = False,
+) -> dict[str, Any]:
+    """Apply an approved exact-chat Messages send and verify local read-back."""
+
+    return _record(
+        "messages_apply_change",
+        apply_messages_change(
+            operation,
+            handle=handle,
+            body_text=body_text,
+            approval_token=approval_token,
+            confirm_apply=confirm_apply,
         ),
     )
 

@@ -22,7 +22,7 @@ This repo is close to publishable as a local-only Apple data MCP plugin, but pub
 - Public write-tool roadmap that keeps mutation support gated.
 - Public release scanner for local-path and operator-term leakage in public files.
 - Mutation-gate auditor that fails if write-like CLI/MCP surfaces appear before an approved mutation gate.
-- Write-design gate auditor that requires first-tranche write designs and allows only the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, and Photos import apply surfaces.
+- Write-design gate auditor that requires first-tranche write designs and allows only the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply surfaces.
 - Surface-contract auditor that fails if MCP tools, CLI commands, health surfaces, access requirements, or the capability matrix drift out of alignment.
 - Release-readiness auditor that separates local package readiness from GitHub publication readiness.
 - MCP client config renderer for generic stdio, Claude Code, Cursor, and OpenClaw config.
@@ -50,7 +50,7 @@ The public README should explain:
 - That Mail attachment export is exact-message-handle plus exact-attachment-handle gated and never returns inline bytes.
 - That Messages attachment export is exact-chat-handle plus exact-attachment-handle gated and never returns inline bytes.
 - That Notes attachment export is exact-note-handle plus exact-attachment-handle gated and never returns inline bytes.
-- That only Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply are currently available, and only after plan approval-token and explicit-confirmation checks.
+- That only Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply are currently available, and only after plan approval-token and explicit-confirmation checks.
 - That Hide My Email support is inferred local Mail evidence, not iCloud account management.
 - That the plugin does not use Gmail API, IMAP, OAuth, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, telemetry, or network mail services.
 
@@ -81,6 +81,7 @@ Current public-facing docs:
 - `docs/V1_21_MAIL_ATTACHMENT_EXPORT.md`
 - `docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md`
 - `docs/V1_23_MESSAGES_ATTRIBUTED_BODY.md`
+- `docs/V1_24_MESSAGES_SEND_TEXT_WRITE_DESIGN.md`
 - `docs/PRIVACY_MODEL.md`
 - `docs/THREAT_MODEL.md`
 - `docs/TESTING.md`

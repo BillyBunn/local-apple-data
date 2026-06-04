@@ -2,6 +2,21 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604230000 - 2026-06-04
+
+### Added
+
+- Approved Messages send-text apply through `local-apple-data messages apply` and MCP `messages_apply_change`.
+- Non-mutating Messages send-text planning through `local-apple-data messages plan` and MCP `messages_plan_change`.
+- Exact-existing-chat handle binding, body-hash approval tokens, explicit confirmation, stale chat-state refusal, Messages.app automation, ghost-row detection, and local `chat.db` read-back verification for Messages send-text apply.
+- Synthetic adapter, CLI, MCP annotation, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the approved Messages send-text apply surface.
+
+### Security
+
+- `messages_apply_change` is the only approved Messages mutation tool and is non-destructive, idempotent, and closed-world at the MCP annotation level.
+- Apply output confirms the send by metadata and body SHA-256 but does not echo the sent body text.
+- Direct-recipient sends, new chat creation, SMS fallback selection, outgoing-account selection, file sends, rich text/effects, reactions/tapbacks, edit, unsend, delete, group management, participant lookup, broad Messages text search, and Messages attachment mutation remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604220000 - 2026-06-04
 
 ### Added

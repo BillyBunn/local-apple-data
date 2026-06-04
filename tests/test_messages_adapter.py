@@ -5,9 +5,11 @@ import sqlite3
 from pathlib import Path
 
 from local_apple_data.adapters.messages import (
+    apply_messages_change,
     export_message_attachment,
     get_message_chat,
     list_message_attachments,
+    plan_messages_change,
     search_message_chats,
 )
 
@@ -289,6 +291,171 @@ def test_export_message_attachment_writes_selected_file(tmp_path: Path) -> None:
     assert result["result"]["exported_bytes"] == 11
     assert Path(result["result"]["exported_path"]).read_bytes() == b"PDF PAYLOAD"
     assert str(messages_root) not in str(result)
+
+
+def test_plan_messages_send_text_returns_approval_preview(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+
+    result = plan_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        db_path=db_path,
+    )
+
+    assert result["status"] == "ok"
+    assert result["mode"] == "plan"
+    assert result["mutation_applied"] is False
+    assert result["apply_available"] is True
+    preview = result["preview"]
+    assert preview["operation"] == "send_text"
+    assert preview["target"]["handle"] == handle
+    assert preview["target"]["message_count"] == 2
+    assert preview["proposed"]["body_chars"] == len("Synthetic outbound message")
+    assert preview["proposed"]["attachments_permitted"] is False
+    assert preview["approval"]["approval_token_format"].startswith("messages-apply:v1:")
+    assert "chat-guid-1" not in str(result)
+    assert "+15550100" not in str(result)
+
+
+def test_apply_messages_send_text_requires_confirmation(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+    plan = plan_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        db_path=db_path,
+    )
+    token = "messages-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    result = apply_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        approval_token=token,
+        db_path=db_path,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "missing_apply_confirmation"
+
+
+def test_apply_messages_send_text_writes_and_reads_back_with_mock_runner(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+    plan = plan_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        db_path=db_path,
+    )
+    token = "messages-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def runner(script: str, timeout: float) -> str:
+        assert timeout > 0
+        assert "send messageText to targetChat" in script
+        assert "chat-guid-1" in script
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "INSERT INTO message VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (12, "Synthetic outbound message", 802310600, 1, 0, "iMessage", None),
+            )
+            connection.execute("INSERT INTO chat_message_join VALUES (?, ?)", (1, 12))
+        return ""
+
+    result = apply_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+        read_back_timeout=0,
+    )
+
+    assert result["status"] == "ok"
+    assert result["mutation_applied"] is True
+    assert result["approval"]["approval_token_verified"] is True
+    assert result["read_back"]["chat_handle_confirmed"] is True
+    assert result["read_back"]["body_chars"] == len("Synthetic outbound message")
+    assert result["read_back"]["text_source"] == "text"
+    assert "Synthetic outbound message" not in str(result["read_back"])
+    assert "+15550100" not in str(result)
+
+
+def test_apply_messages_send_text_rejects_stale_chat_state(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+    plan = plan_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        db_path=db_path,
+    )
+    token = "messages-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (12, "New intervening message", 802310600, 0, 7, "iMessage", None),
+        )
+        connection.execute("INSERT INTO chat_message_join VALUES (?, ?)", (1, 12))
+
+    result = apply_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "invalid_approval_token"
+
+
+def test_apply_messages_send_text_detects_ghost_row(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+    plan = plan_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        db_path=db_path,
+    )
+    token = "messages-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def runner(_script: str, _timeout: float) -> str:
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "INSERT INTO message VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (12, "", 802310600, 1, 0, "SMS", None),
+            )
+        return ""
+
+    result = apply_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+        read_back_timeout=0,
+    )
+
+    assert result["status"] == "partial"
+    assert result["mutation_applied"] is True
+    assert result["warnings"][0]["code"] == "messages_send_ghost_row"
 
 
 def test_message_attachment_export_rejects_bad_handles(tmp_path: Path) -> None:

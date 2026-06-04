@@ -43,9 +43,9 @@ ACCESS_REQUIREMENTS = [
     },
     {
         "surface": "messages",
-        "permission_class": "Full Disk Access may be required",
+        "permission_class": "Full Disk Access and Automation may be required",
         "status": "covered_by_store_check",
-        "check_mode": "schema_only",
+        "check_mode": "schema_only_without_automation_probe",
         "prompts": False,
     },
     {
