@@ -7,6 +7,12 @@
 
 The project is expected to need macOS because it depends on local Apple stores and Apple frameworks. Older macOS releases may work when the local database schemas and framework permissions match, but support should be verified with the test suite and `health` command before relying on a surface. Health checks are non-prompting: they verify local store presence/readability and supported schema fingerprints where practical, and they report framework access requirements without requesting Calendar, Reminders, Contacts, Photos, or Automation permission.
 
+## Client App Permissions
+
+macOS privacy grants are per host process. A CLI run from Terminal can report `health.status: "ok"` while a GUI MCP client such as Claude Desktop reports `health.status: "degraded"` because that app does not have Full Disk Access or framework permission. In that case the plugin is connected, but local stores behind TCC may be unreadable from that client.
+
+For GUI clients, grant the client app the same privacy access expected for the surfaces you intend to use, then restart the app and rerun `apple_data_health`. At minimum, broad local-store surfaces such as Mail, Messages, Voice Memos, Safari, Freeform, Notes, Books, Podcasts, and legacy Reminders metadata may require Full Disk Access for the client process. Exact apply tools may also require app-specific Automation, Calendar, Reminders, Contacts, or Photos permission depending on the surface.
+
 ## Framework And Store Map
 
 | Surface | Local mechanism | Permission class |

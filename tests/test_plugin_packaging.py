@@ -24,6 +24,7 @@ def test_plugin_manifest_wires_skill_and_mcp() -> None:
     assert "iCloud Drive" in manifest["description"]
     assert "Mail/Messages/Notes attachment export" in manifest["description"]
     assert "Calendar" in manifest["description"]
+    assert len(manifest["interface"]["defaultPrompt"]) <= 3
     assert (
         "approved Reminders, iCloud Drive create/append text, Calendar, Contacts, Notes create/append text, Mail draft, Photos import, and Messages send-text apply"
         in manifest["description"]

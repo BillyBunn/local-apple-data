@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260605053000 - 2026-06-04
+
+### Fixed
+
+- Reduced Codex plugin default prompts to the supported maximum of three prompts so fresh Codex sessions load the manifest without dropping prompt entries.
+
+### Documentation
+
+- Documented that GUI MCP clients such as Claude Desktop need their own macOS privacy grants; a connected MCP server can still report degraded health if the host app lacks Full Disk Access or framework permissions.
+
+### Notes
+
+- This is a packaging hygiene/cache-buster release. The v1.31 Apple Freeform metadata runtime surface is unchanged.
+
 ## 0.1.0+codex.20260605050000 - 2026-06-04
 
 ### Added
