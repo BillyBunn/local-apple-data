@@ -23,7 +23,7 @@ Architecture implication: Notes content retrieval is appropriate for a local Mac
 - `anipotts/imessage-mcp` is a read-only local iMessage MCP server. Its README describes local database access, read-only tool annotations, no uploads, and support for Claude Code, Cursor, Codex CLI, and other clients. Source: https://github.com/anipotts/imessage-mcp
 - `carterlasalle/mac_messages_mcp` exposes querying and sending paths for Messages, including delivery logic and direct Messages database access. Source: https://github.com/carterlasalle/mac_messages_mcp
 
-Architecture implication: Messages reads are common enough to be expected. Sending is also implemented elsewhere, but this plugin should keep Messages mutation out of the read-only release until identity, recipient confirmation, account selection, and AppleScript automation risks are explicitly solved.
+Architecture implication: Messages reads are common enough to be expected. Sending is also implemented elsewhere, but this plugin should keep Messages mutation out of the current release until identity, recipient confirmation, account selection, and AppleScript automation risks are explicitly solved.
 
 ### Voice Memos
 

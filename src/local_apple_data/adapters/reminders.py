@@ -35,6 +35,7 @@ MAX_PREVIEW_LIST_CHARS = 512
 DEFAULT_EVENTKIT_SCAN_LIMIT = 10000
 EVENTKIT_REMINDER_HANDLE_PREFIX = "reminders:reminder:eventkit"
 PLAN_OPERATIONS = {"create", "complete", "update_due_date"}
+APPROVAL_TOKEN_PREFIX = "reminders-apply:v1:"
 EventKitRunner = Callable[[dict[str, Any], float], dict[str, Any]]
 
 
@@ -62,6 +63,15 @@ def _preview_privacy() -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "preview",
+    }
+
+
+def _mutation_privacy(*, content_inspected: bool = False) -> dict[str, bool | str]:
+    return {
+        "content_inspected": content_inspected,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "mutation",
     }
 
 
@@ -658,7 +668,7 @@ def plan_reminder_change(
         "privacy": _preview_privacy(),
         "mode": "plan",
         "mutation_applied": False,
-        "apply_available": False,
+        "apply_available": True,
         "preview": {
             "operation": normalized_operation,
             "target": target,
@@ -666,13 +676,141 @@ def plan_reminder_change(
             "idempotency_key": idempotency_key,
             "approval": {
                 "required_for_apply": True,
-                "apply_tool_available": False,
+                "apply_tool_available": True,
                 "approval_fingerprint": approval_fingerprint,
+                "approval_token_format": f"{APPROVAL_TOKEN_PREFIX}<approval_fingerprint>",
             },
             "read_back_required_after_apply": True,
         },
         "result_count": 1,
         "warnings": [],
+    }
+
+
+def apply_reminder_change(
+    operation: str,
+    *,
+    title: str = "",
+    list_name: str = "",
+    due_date: str = "",
+    notes: str = "",
+    handle: str = "",
+    expected_title: str = "",
+    expected_completed: bool | str | None = None,
+    approval_token: str = "",
+    confirm_apply: bool = False,
+    eventkit_runner: EventKitRunner | None = None,
+) -> dict[str, Any]:
+    plan = plan_reminder_change(
+        operation,
+        title=title,
+        list_name=list_name,
+        due_date=due_date,
+        notes=notes,
+        handle=handle,
+        expected_title=expected_title,
+        expected_completed=expected_completed,
+    )
+    if plan.get("status") != "ok":
+        return _apply_error(_safe_warnings(plan), plan=plan)
+
+    preview = plan.get("preview")
+    if not isinstance(preview, dict):
+        return _apply_error(
+            [_warning("invalid_plan", "Reminder apply requires a valid plan preview.")],
+            plan=plan,
+        )
+
+    approval = preview.get("approval")
+    fingerprint = approval.get("approval_fingerprint") if isinstance(approval, dict) else None
+    expected_token = _approval_token(str(fingerprint or ""))
+    if not confirm_apply:
+        return _apply_error(
+            [_warning("missing_apply_confirmation", "Reminder apply requires confirm_apply=true.")],
+            plan=plan,
+        )
+    if not approval_token.strip() or approval_token.strip() != expected_token:
+        return _apply_error(
+            [_warning("invalid_approval_token", "Reminder apply approval token did not match the plan.")],
+            plan=plan,
+        )
+
+    normalized_operation = str(preview["operation"])
+    runner = eventkit_runner or _run_eventkit_helper
+    helper_payload = _apply_helper_payload(preview)
+    if normalized_operation in {"complete", "update_due_date"}:
+        response = _eventkit_reminders_response(
+            query="",
+            limit=DEFAULT_EVENTKIT_SCAN_LIMIT,
+            include_completed=True,
+            eventkit_runner=eventkit_runner,
+        )
+        if response.get("status") != "ok":
+            return _apply_unavailable(response, plan=plan)
+        reminder_id = _resolve_eventkit_reminder_id(
+            str(preview["target"]["handle"]),
+            response.get("reminders", []),
+        )
+        if reminder_id is None:
+            return _apply_error(
+                [_warning("target_not_found", "Reminder target was not found through EventKit.")],
+                plan=plan,
+            )
+        helper_payload["reminder_id"] = reminder_id
+
+    try:
+        applied = runner(helper_payload, EVENTKIT_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return _apply_error(
+            [_warning("eventkit_timeout", "Reminder apply timed out through the local EventKit helper.")],
+            plan=plan,
+            status="apply_unknown",
+        )
+    except (OSError, ValueError):
+        return _apply_error(
+            [_warning("eventkit_unavailable", "Reminder apply is unavailable through the local EventKit helper.")],
+            plan=plan,
+        )
+
+    if applied.get("status") != "ok":
+        return _apply_error(
+            _safe_warnings(applied)
+            or [_warning("eventkit_apply_failed", "Reminder change could not be applied safely.")],
+            plan=plan,
+            status=str(applied.get("status") or "error"),
+            authorization_status=applied.get("authorization_status"),
+        )
+
+    reminder = applied.get("reminder")
+    if not isinstance(reminder, dict):
+        return _apply_error(
+            [_warning("read_back_unavailable", "Reminder apply succeeded but read-back was unavailable.")],
+            plan=plan,
+            status="apply_unknown",
+            mutation_applied=True,
+            authorization_status=applied.get("authorization_status"),
+        )
+
+    read_back = _eventkit_reminder_metadata(reminder)
+    warnings = _safe_warnings(applied)
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "reminders",
+        "privacy": _mutation_privacy(content_inspected=False),
+        "authorization_status": applied.get("authorization_status"),
+        "mode": "apply",
+        "operation": normalized_operation,
+        "mutation_applied": True,
+        "apply_available": True,
+        "idempotency_key": preview["idempotency_key"],
+        "approval": {
+            "approval_fingerprint": fingerprint,
+            "approval_token_verified": True,
+        },
+        "read_back": read_back,
+        "result_count": 1,
+        "warnings": warnings,
     }
 
 
@@ -778,6 +916,41 @@ def _preview_error(warnings: list[dict[str, str]]) -> dict[str, Any]:
         "result_count": 0,
         "warnings": warnings,
     }
+
+
+def _apply_error(
+    warnings: list[dict[str, str]],
+    *,
+    plan: dict[str, Any] | None,
+    status: str = "error",
+    mutation_applied: bool = False,
+    authorization_status: Any = None,
+) -> dict[str, Any]:
+    preview = plan.get("preview") if isinstance(plan, dict) else None
+    return {
+        "schema_version": 1,
+        "status": status,
+        "source": "reminders",
+        "privacy": _mutation_privacy(content_inspected=False),
+        "authorization_status": authorization_status,
+        "mode": "apply",
+        "mutation_applied": mutation_applied,
+        "apply_available": True,
+        "preview": preview if isinstance(preview, dict) else None,
+        "read_back": None,
+        "result_count": 0,
+        "warnings": warnings,
+    }
+
+
+def _apply_unavailable(response: dict[str, Any], *, plan: dict[str, Any]) -> dict[str, Any]:
+    return _apply_error(
+        _safe_warnings(response)
+        or [_warning("reminders_access_unavailable", "Reminders apply is unavailable.")],
+        plan=plan,
+        status="degraded",
+        authorization_status=response.get("authorization_status"),
+    )
 
 
 def _invalid_eventkit_handle_result() -> dict[str, Any]:
@@ -892,6 +1065,46 @@ def _plan_idempotency_key(payload: dict[str, Any]) -> str:
 
 def _approval_fingerprint(payload: dict[str, Any]) -> str:
     return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+
+
+def _approval_token(fingerprint: str) -> str:
+    return f"{APPROVAL_TOKEN_PREFIX}{fingerprint}"
+
+
+def _apply_helper_payload(preview: dict[str, Any]) -> dict[str, Any]:
+    operation = str(preview["operation"])
+    target = preview["target"]
+    proposed = preview["proposed"]
+    payload: dict[str, Any] = {
+        "command": "reminder_apply_change",
+        "operation": operation,
+    }
+    if operation == "create":
+        payload.update(
+            {
+                "title": proposed["title"],
+                "list_name": target["list_name"],
+                "due_date": proposed["due_date"] or "",
+                "notes": proposed["notes_text"],
+            }
+        )
+    elif operation == "complete":
+        payload.update(
+            {
+                "expected_title": target["expected_title"],
+                "expected_completed": target["expected_completed"],
+                "completed": True,
+            }
+        )
+    else:
+        payload.update(
+            {
+                "expected_title": target["expected_title"],
+                "expected_completed": target["expected_completed"],
+                "due_date": proposed["due_date"],
+            }
+        )
+    return payload
 
 
 def _canonical_json(payload: dict[str, Any]) -> str:

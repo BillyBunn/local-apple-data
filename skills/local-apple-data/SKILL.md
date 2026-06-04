@@ -1,6 +1,6 @@
 ---
 name: local-apple-data
-description: Use when a user asks Codex to search or inspect locally synced Mail.app mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, or iCloud Drive files on this Mac without the Gmail connector. The skill uses the local read-only MCP server, stays metadata-first, and retrieves or exports Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive content/detail only by exact opaque handle.
+description: Use when a user asks Codex to search or inspect locally synced Mail.app mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, or iCloud Drive files on this Mac without the Gmail connector. The skill uses the local MCP server, stays metadata-first, retrieves or exports Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive content/detail only by exact opaque handle, and allows only the approved Reminders apply path after plan-token confirmation.
 ---
 
 # Local Apple Data
@@ -25,8 +25,9 @@ Use the `local-apple-data` MCP server for the user's locally synced Mail.app mai
 14. Call `contacts_get` only on an exact `contacts:contact:v1:` handle the user selected, provided, or approved from Contacts name/organization metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, and never above 12000.
 15. Call `photos_get_asset` only on an exact `photos:asset:v1:` handle the user selected, provided, or approved from Photos original-filename metadata results. This returns asset/resource metadata only. Use `photos_export_asset` only when the user asks to export the selected asset, and provide a caller-selected output directory.
 16. Call `reminders_get_content` only on an exact `reminders:reminder:eventkit:v1:` handle the user selected, provided, or approved from EventKit reminder-title metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, and never above 12000.
-17. Call `reminders_plan_change` only when the user asks to plan a future Reminder create, complete, or due-date update. This is preview-only: it returns `mutation_applied:false` and `apply_available:false`, does not call EventKit, and does not modify Reminders.
-18. If the user asks for attachments, broad content search, Gmail fallback, broad Calendar/Contacts/Photos/Reminder dumps, broad Messages text search, broad Voice Memos transcript search, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, Contact notes/image data, arbitrary document/binary extraction, unsupported UI automation, or apply-capable mutation, stop and explain that those are outside this plugin's approved surface.
+17. Call `reminders_plan_change` only when the user asks to plan a future Reminder create, complete, or due-date update. This is non-mutating: it returns `mutation_applied:false` and `apply_available:true`, does not call EventKit, and does not modify Reminders.
+18. Call `reminders_apply_change` only after a matching Reminders plan, an exact `reminders-apply:v1:<approval_fingerprint>` approval token, explicit user approval for that exact operation, and operation-specific expected state. It is the only approved mutation tool.
+19. If the user asks for attachments, broad content search, Gmail fallback, broad Calendar/Contacts/Photos/Reminder dumps, broad Messages text search, broad Voice Memos transcript search, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, Contact notes/image data, arbitrary document/binary extraction, unsupported UI automation, or mutation other than approved Reminders create/complete/due-date apply, stop and explain that those are outside this plugin's approved surface.
 
 ## Tools
 
@@ -60,11 +61,12 @@ Use the `local-apple-data` MCP server for the user's locally synced Mail.app mai
 - `reminders_eventkit_search`: capped Reminders title metadata search through EventKit.
 - `reminders_get_content`: exact Reminder notes by opaque `reminders:reminder:eventkit:v1:` handle, capped and read-only.
 - `reminders_plan_change`: non-mutating future Reminder create/complete/due-date preview, with idempotency and approval metadata only.
+- `reminders_apply_change`: approved Reminder create/complete/due-date apply, requiring a matching plan approval token, explicit confirmation, expected state, EventKit apply, and read-back verification.
 
 ## Boundaries
 
 - Never print or persist raw MIME, full headers, Messages transcript text outside exact selected responses, full Hide My Email aliases outside exact selected responses, Voice Memos transcript text outside exact selected responses, exported Voice Memos audio outside the caller-selected export path, contact details outside exact selected responses, Photos asset/resource metadata outside exact selected responses, exported Photos assets outside the caller-selected export path, reminder notes outside exact selected responses, Reminder plan titles/notes outside transient preview responses, attachments, credentials, raw database rows, local Mail file paths, raw Voice Memos source paths, raw Photos identifiers, raw iCloud Drive file paths, raw Hide My Email identifiers, or full account identifiers.
 - Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail may be summarized or quoted only from the exact selected handle response, and should not be copied into durable docs or logs.
-- Do not mutate Mail, Notes, Reminders, Hide My Email, Gmail, iCloud, TCC, launchd, Codex config, or OpenClaw runtime state from this skill.
+- Do not mutate Mail, Notes, Hide My Email, Gmail, iCloud, TCC, launchd, Codex config, or OpenClaw runtime state from this skill. Reminders mutation is limited to the approved create/complete/due-date apply path.
 - Do not retry by switching to Gmail plugin access unless the user explicitly asks for Gmail connector behavior.
 - Report warning codes and remediation from the tool output when a local store is degraded or unavailable.

@@ -102,7 +102,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 30,
+  "tool_count": 31,
   "mail_content_status": "ok",
   "notes_content_status": "ok",
   "icloud_drive_content_status": "ok",
@@ -117,7 +117,9 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "reminders_content_status": "ok",
   "reminders_plan_status": "ok",
   "reminders_plan_mutation_applied": false,
-  "reminders_plan_apply_available": false
+  "reminders_plan_apply_available": true,
+  "reminders_apply_status": "ok",
+  "reminders_apply_mutation_applied": true
 }
 ```
 
@@ -129,7 +131,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "source": "reminders",
   "mode": "plan",
   "mutation_applied": false,
-  "apply_available": false,
+  "apply_available": true,
   "preview": {
     "operation": "create",
     "target": {
@@ -143,9 +145,37 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
     "idempotency_key": "reminders-plan:v1:<hash>",
     "approval": {
       "required_for_apply": true,
-      "apply_tool_available": false,
-      "approval_fingerprint": "<hash>"
+      "apply_tool_available": true,
+      "approval_fingerprint": "<hash>",
+      "approval_token_format": "reminders-apply:v1:<approval_fingerprint>"
     }
+  },
+  "warnings": []
+}
+```
+
+## Reminders Apply
+
+```json
+{
+  "status": "ok",
+  "source": "reminders",
+  "mode": "apply",
+  "operation": "complete",
+  "mutation_applied": true,
+  "apply_available": true,
+  "idempotency_key": "reminders-plan:v1:<hash>",
+  "approval": {
+    "approval_fingerprint": "<hash>",
+    "approval_token_verified": true
+  },
+  "read_back": {
+    "handle": "<opaque reminders:reminder:eventkit:v1 handle>",
+    "title": "Synthetic planned reminder",
+    "list_name": "Synthetic List",
+    "due_date": "2026-06-04",
+    "completed": true,
+    "notes_present": false
   },
   "warnings": []
 }

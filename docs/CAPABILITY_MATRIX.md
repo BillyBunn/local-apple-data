@@ -1,6 +1,6 @@
 # Capability Matrix
 
-This matrix describes the current public surface and the intended approval gates for future expansion. The plugin is local-only, metadata-first, and read-only in the current release.
+This matrix describes the current public surface and the intended approval gates for future expansion. The plugin is local-only and metadata-first. The only apply-capable mutation surface is Reminders apply.
 
 For install instructions, see `docs/INSTALL.md`. For macOS support and permission behavior, see `docs/MACOS_SUPPORT.md`. For future write sequencing, see `docs/WRITE_TOOL_ROADMAP.md` and `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 
@@ -13,7 +13,7 @@ For install instructions, see `docs/INSTALL.md`. For macOS support and permissio
 | Notes | Local Notes SQLite plus exact Notes.app automation | Title/snippet metadata | Plain text by `notes:note:v2:` handle | Not implemented | Full Disk Access and Automation permission may be required | No attachments, locked/deleted notes, broad exports, raw database rows, or mutation |
 | iCloud Drive | Local filesystem under iCloud Drive | Filename metadata | Supported text-file content by `icloud:file:v1:` handle | Not implemented | Local file access | No binary/document extraction, hidden files, symlinks, raw paths, broad content search, or mutation |
 | Calendar | EventKit helper | Event title metadata | Event detail by `calendar:event:v1:` handle | Not implemented | Calendar permission | No broad dumps, attendees/URLs, raw EventKit IDs, or mutation |
-| Reminders | EventKit helper plus legacy SQLite metadata | Title/due metadata | Notes by `reminders:reminder:eventkit:v1:` handle | Preview-only plan; no apply/mutation | Reminders permission | EventKit exact handles only for notes; no broad dumps, raw EventKit IDs, or mutation |
+| Reminders | EventKit helper plus legacy SQLite metadata | Title/due metadata | Notes by `reminders:reminder:eventkit:v1:` handle | Approved create, complete, and due-date apply after plan approval token and explicit confirmation | Reminders permission | EventKit exact handles only for notes and apply targets; no broad dumps, raw EventKit IDs, delete, bulk, list/account, URL, attachment, or rich-content mutation |
 | Contacts | Contacts.framework helper | Name/organization metadata | Contact detail by `contacts:contact:v1:` handle | Not implemented | Contacts permission | No contact notes entitlement, image bytes, broad dumps, raw identifiers, or mutation |
 | Photos | PhotoKit helper | Original-filename metadata | Asset/resource metadata and caller-selected asset export by `photos:asset:v1:` handle | Not implemented | Photos permission | No inline asset bytes, thumbnails, raw identifiers, broad dumps, network iCloud fetch, or mutation |
 

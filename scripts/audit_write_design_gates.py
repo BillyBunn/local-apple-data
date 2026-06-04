@@ -19,32 +19,32 @@ if str(SCRIPT_DIR) not in sys.path:
 from audit_mutation_gates import audit_mutation_gates
 
 
-APPROVED_WRITE_TOOLS: tuple[str, ...] = ()
+APPROVED_WRITE_TOOLS: tuple[str, ...] = ("reminders_apply", "reminders_apply_change")
 APPROVED_PREVIEW_TOOLS: tuple[str, ...] = ("reminders_plan_change",)
-REQUIRED_READ_ONLY_TEXT = {
-    "README.md": "The current release is read-only",
-    "docs/MUTATION_GATES.md": "The current plugin is read-only",
-    "docs/WRITE_TOOL_ROADMAP.md": "The current release is read-only",
+REQUIRED_MUTATION_GATE_TEXT = {
+    "README.md": "The only apply-capable mutation surface is Reminders apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply` and `reminders_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply is the only approved write surface",
 }
 REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
         "path": "docs/V1_11_REMINDERS_WRITE_DESIGN.md",
         "phrases": (
-            "Status: Preview-only implementation.",
-            "No mutating CLI or MCP tools are approved or exposed by this document.",
-            "`local-apple-data reminders plan` and `reminders_plan_change` only",
-            "Future implementation requires explicit approval before any apply-capable tool is exposed.",
+            "Status: Apply-capable implementation.",
+            "Approved write tools: `local-apple-data reminders apply` and `reminders_apply_change`.",
+            "`local-apple-data reminders plan` and `reminders_plan_change`",
+            "No other mutating CLI or MCP tools are approved or exposed by this document.",
             "preview",
             "apply",
             "read_back",
             "mutation_applied:false",
-            "apply_available:false",
+            "approval token",
             "EventKit",
             "exact opaque `reminders:reminder:eventkit:v1:` handle",
             "idempotency",
             "redaction",
             "Synthetic Tests Required",
-            "The current release remains read-only.",
+            "The current release allows only this Reminders apply surface.",
         ),
     },
 }
@@ -85,7 +85,7 @@ def audit_write_design_gates(project_root: Path = PROJECT_ROOT) -> dict[str, Any
     findings: list[Finding] = []
 
     design_docs_checked = _check_design_docs(root, findings)
-    _check_read_only_contract(root, findings)
+    _check_mutation_contract(root, findings)
     _check_no_write_phase_tools(root, findings)
     _check_mutation_gate(root, findings)
 
@@ -134,8 +134,8 @@ def _check_design_docs(root: Path, findings: list[Finding]) -> int:
     return checked
 
 
-def _check_read_only_contract(root: Path, findings: list[Finding]) -> None:
-    for relative, required_text in REQUIRED_READ_ONLY_TEXT.items():
+def _check_mutation_contract(root: Path, findings: list[Finding]) -> None:
+    for relative, required_text in REQUIRED_MUTATION_GATE_TEXT.items():
         path = root / relative
         try:
             text = path.read_text(encoding="utf-8")
@@ -146,7 +146,7 @@ def _check_read_only_contract(root: Path, findings: list[Finding]) -> None:
                     path,
                     0,
                     relative,
-                    f"Required read-only contract file is unreadable: {type(exc).__name__}",
+                    f"Required mutation-gate contract file is unreadable: {type(exc).__name__}",
                 )
             )
             continue
@@ -157,7 +157,7 @@ def _check_read_only_contract(root: Path, findings: list[Finding]) -> None:
                     path,
                     0,
                     relative,
-                    f"Missing required read-only contract text: {required_text}",
+                    f"Missing required mutation-gate contract text: {required_text}",
                 )
             )
 

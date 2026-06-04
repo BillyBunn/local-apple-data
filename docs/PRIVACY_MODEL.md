@@ -1,6 +1,6 @@
 # Privacy Model
 
-This project handles local personal-data surfaces. The default is metadata-first and read-only, with content retrieval exposed only through exact opaque handles and bounded output.
+This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surface is Reminders create/complete/due-date apply through the plan/apply/read-back gate.
 
 ## Data Tiers
 
@@ -86,19 +86,29 @@ Ask the local operator before:
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
 - Adding new content classes beyond exact-handle Mail, Messages chat transcripts, inferred Hide My Email aliases, Voice Memos existing embedded transcripts/audio export, Notes, Calendar event detail, Contact detail, Photos asset/resource metadata/export, Reminder notes, and supported iCloud Drive text-file retrieval
 
-## v1.11 Reminders Planning
+## v1.11 Reminders Planning And Apply
 
-The implemented v1.11 phase adds non-mutating Reminders planning only. It is not permission to apply, create, complete, update, or delete Reminders.
+The implemented v1.11 phase adds non-mutating Reminders planning and the first approved apply-capable mutation surface for Reminders create, complete, and due-date update. It is not permission to delete Reminders, run bulk changes, manage lists/accounts, mutate attachments/URLs/rich content, or mutate any other Apple data surface.
 
-The v1.11 implementation:
+The v1.11 planning implementation:
 
 - Exposes `local-apple-data reminders plan` and MCP `reminders_plan_change`.
-- Returns `mode: "plan"`, `mutation_applied:false`, and `apply_available:false`.
+- Returns `mode: "plan"`, `mutation_applied:false`, and `apply_available:true`.
 - Validates requested create, complete, and update-due-date operations without calling EventKit or writing Reminders.
 - Requires exact opaque `reminders:reminder:eventkit:v1:` handles for existing-reminder operation planning.
-- Returns deterministic idempotency and approval fingerprints for a future apply gate.
+- Returns deterministic idempotency keys and approval fingerprints for the apply gate.
 - Keeps automated tests synthetic-only.
 - Keeps redacted event logs free of planned titles, notes, handles, list names, and approval fingerprints.
+
+The v1.11 apply implementation:
+
+- Exposes `local-apple-data reminders apply` and MCP `reminders_apply_change`.
+- Requires the matching `reminders-apply:v1:<approval_fingerprint>` token.
+- Requires explicit confirmation.
+- Recomputes the plan before applying.
+- Resolves exact opaque Reminder handles internally before existing-reminder updates.
+- Calls EventKit only after approval checks pass.
+- Returns read-back metadata and never logs titles, notes, handles, raw EventKit identifiers, list names, or approval tokens.
 
 ## v1.1 Mail Content Retrieval
 

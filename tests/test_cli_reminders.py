@@ -163,6 +163,73 @@ def test_cli_reminders_plan(tmp_path: Path, monkeypatch, capsys) -> None:
     assert parsed["status"] == "ok"
     assert parsed["mode"] == "plan"
     assert parsed["mutation_applied"] is False
-    assert parsed["apply_available"] is False
+    assert parsed["apply_available"] is True
     assert parsed["preview"]["operation"] == "create"
     assert parsed["preview"]["proposed"]["title"] == "Synthetic CLI planned reminder"
+
+
+def test_cli_reminders_apply(monkeypatch, capsys) -> None:
+    def fake_apply(
+        operation: str,
+        *,
+        title: str,
+        list_name: str,
+        due_date: str,
+        notes: str,
+        handle: str,
+        expected_title: str,
+        expected_completed: str | None,
+        approval_token: str,
+        confirm_apply: bool,
+    ) -> dict:
+        assert operation == "create"
+        assert title == "Synthetic CLI planned reminder"
+        assert list_name == "Synthetic List"
+        assert due_date == "2026-06-04"
+        assert notes == "Synthetic notes."
+        assert handle == ""
+        assert expected_title == ""
+        assert expected_completed is None
+        assert approval_token == "reminders-apply:v1:synthetic"
+        assert confirm_apply is True
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "reminders",
+            "privacy": {"content_inspected": False, "output_tier": "mutation"},
+            "mode": "apply",
+            "mutation_applied": True,
+            "apply_available": True,
+            "read_back": {"title": "Synthetic CLI planned reminder"},
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("local_apple_data.cli.apply_reminder_change", fake_apply)
+
+    exit_code = main(
+        [
+            "reminders",
+            "apply",
+            "--json",
+            "--operation",
+            "create",
+            "--title",
+            "Synthetic CLI planned reminder",
+            "--list-name",
+            "Synthetic List",
+            "--due-date",
+            "2026-06-04",
+            "--notes",
+            "Synthetic notes.",
+            "--approval-token",
+            "reminders-apply:v1:synthetic",
+            "--confirm-apply",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "apply"
+    assert parsed["mutation_applied"] is True

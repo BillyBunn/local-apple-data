@@ -19,6 +19,7 @@ from .adapters.messages import get_message_chat, search_message_chats
 from .adapters.notes import get_notes_content, get_notes_metadata, search_notes_metadata
 from .adapters.photos import export_photo_asset, get_photo_asset, search_photos
 from .adapters.reminders import (
+    apply_reminder_change,
     due_reminders_metadata,
     get_reminder_content,
     plan_reminder_change,
@@ -417,6 +418,24 @@ def _reminders_plan_command(args: argparse.Namespace) -> int:
         expected_completed=args.expected_completed,
     )
     log_result("reminders.plan", payload)
+    _print_json(payload)
+    return 0
+
+
+def _reminders_apply_command(args: argparse.Namespace) -> int:
+    payload = apply_reminder_change(
+        args.operation,
+        title=args.title or "",
+        list_name=args.list_name or "",
+        due_date=args.due_date or "",
+        notes=args.notes or "",
+        handle=args.handle or "",
+        expected_title=args.expected_title or "",
+        expected_completed=args.expected_completed,
+        approval_token=args.approval_token or "",
+        confirm_apply=args.confirm_apply,
+    )
+    log_result("reminders.apply", payload)
     _print_json(payload)
     return 0
 
@@ -1065,6 +1084,58 @@ def build_parser() -> argparse.ArgumentParser:
         help="Expected current completion state from a recent read-only result.",
     )
     reminders_plan.set_defaults(func=_reminders_plan_command)
+
+    reminders_apply = reminders_subparsers.add_parser(
+        "apply",
+        help="Apply an approved Reminder change and read back the result.",
+    )
+    reminders_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
+    reminders_apply.add_argument(
+        "--operation",
+        required=True,
+        choices=["create", "complete", "update-due-date", "update_due_date"],
+        help="Approved Reminder operation to apply.",
+    )
+    reminders_apply.add_argument(
+        "--title",
+        help="Reminder title for create apply.",
+    )
+    reminders_apply.add_argument(
+        "--list-name",
+        help="Target Reminders list name for create apply.",
+    )
+    reminders_apply.add_argument(
+        "--due-date",
+        help="YYYY-MM-DD or timezone-aware ISO 8601 due date for create/update apply.",
+    )
+    reminders_apply.add_argument(
+        "--notes",
+        help="Optional Reminder notes for create apply, capped at 12000 characters.",
+    )
+    reminders_apply.add_argument(
+        "--handle",
+        help="Reminder EventKit handle for complete or update-due-date apply.",
+    )
+    reminders_apply.add_argument(
+        "--expected-title",
+        help="Expected current title from a recent read-only result.",
+    )
+    reminders_apply.add_argument(
+        "--expected-completed",
+        choices=["true", "false"],
+        help="Expected current completion state from a recent read-only result.",
+    )
+    reminders_apply.add_argument(
+        "--approval-token",
+        required=True,
+        help="Approval token bound to the matching plan fingerprint.",
+    )
+    reminders_apply.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required explicit confirmation flag for the approved apply operation.",
+    )
+    reminders_apply.set_defaults(func=_reminders_apply_command)
 
     return parser
 

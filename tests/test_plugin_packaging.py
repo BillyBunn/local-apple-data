@@ -19,9 +19,11 @@ def test_plugin_manifest_wires_skill_and_mcp() -> None:
     assert manifest["license"] == "MIT"
     assert manifest["author"]["name"] == "Billy Bunn"
     assert "Read" in manifest["interface"]["capabilities"]
+    assert "Write" in manifest["interface"]["capabilities"]
     assert "MCP" in manifest["interface"]["capabilities"]
     assert "iCloud Drive" in manifest["description"]
     assert "Calendar" in manifest["description"]
+    assert "approved Reminders apply" in manifest["description"]
 
 
 def test_mcp_manifest_uses_local_server_entrypoint() -> None:
@@ -56,6 +58,7 @@ def test_skill_metadata_mentions_local_mcp_dependency() -> None:
     assert "photos_export_asset" in skill
     assert "reminders_get_content" in skill
     assert "reminders_plan_change" in skill
+    assert "reminders_apply_change" in skill
     assert "voice_memos_get_recording" in skill
     assert "voice_memos_export_audio" in skill
     assert 'value: "local-apple-data"' in agent

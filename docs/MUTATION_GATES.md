@@ -1,12 +1,14 @@
 # Mutation Gates
 
-The current plugin is read-only. Write tools are intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
+The current plugin is local-only and read-mostly. Approved write tools: `reminders apply` and `reminders_apply_change`.
 
-For sequencing and first-tranche candidates, see `docs/WRITE_TOOL_ROADMAP.md`. For the first Reminders write design gate and current preview-only planning tools, see `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
+Those tools are limited to Reminders create, complete, and due-date update through the plan/apply/read-back contract in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`. All other write tools remain intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
+
+For sequencing and later candidates, see `docs/WRITE_TOOL_ROADMAP.md`.
 
 ## Global Requirements
 
-Every future mutating tool must satisfy all of these before exposure through CLI or MCP:
+Every mutating tool must satisfy all of these before exposure through CLI or MCP:
 
 - Separate design doc for the specific surface and operation.
 - Explicit user approval for the exact mutation class.
@@ -19,13 +21,15 @@ Every future mutating tool must satisfy all of these before exposure through CLI
 - Tests using synthetic fixtures or mocked Apple framework helpers only.
 - Redaction scan and runtime smoke passing before install.
 
-The current `reminders plan` CLI command and `reminders_plan_change` MCP tool are not mutating tools. They return `mutation_applied:false`, `apply_available:false`, and approval metadata only.
+The current `reminders plan` CLI command and `reminders_plan_change` MCP tool are not mutating tools. They return `mutation_applied:false`, `apply_available:true`, and approval metadata only.
+
+The current `reminders apply` CLI command and `reminders_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, operation-specific expected state, EventKit apply, and read-back verification. MCP annotations mark `reminders_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
 
 ## First Candidate Write Surfaces
 
 | Surface | Candidate operations | Preferred API | Extra approval checks |
 | --- | --- | --- | --- |
-| Reminders | Create reminder, complete reminder, update due date | EventKit helper | Confirm target list, title, due date, and completion state before apply |
+| Reminders | Create reminder, complete reminder, update due date | EventKit helper | Approved. Confirm target list, title, due date, completion state, approval token, and explicit confirmation before apply |
 | Calendar | Create event, update event, delete event | EventKit helper | Confirm calendar, time zone, attendees excluded by default, and recurrence behavior |
 | Notes | Create note, append to note | Notes.app automation or local app bridge | Confirm account/folder, exact note handle for append, and plain-text/HTML conversion |
 | Mail | Create draft only | Mail.app automation | Confirm sender account, recipients, subject, and draft-only behavior; no send in plugin v1 |
@@ -37,12 +41,13 @@ The current `reminders plan` CLI command and `reminders_plan_change` MCP tool ar
 
 ## Default Refusals
 
-Until a specific mutation gate is implemented and approved, the plugin must refuse:
+Outside the approved Reminders apply gate, the plugin must refuse:
 
 - Sending mail or messages.
 - Deleting, archiving, moving, or marking Mail/Messages.
 - Creating, deleting, deactivating, or managing Hide My Email aliases.
 - Deleting Calendar events, Contacts, Photos, Notes, Reminders, Voice Memos, or iCloud Drive files.
+- Reminders bulk mutation, list/account management, attachment mutation, URL/rich-content mutation, delete, or uncomplete.
 - Bulk mutation.
 - Mutation through iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, OAuth, IMAP, or connector fallbacks.
 

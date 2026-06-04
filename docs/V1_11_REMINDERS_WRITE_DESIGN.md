@@ -1,10 +1,12 @@
 # v1.11 Reminders Write Design
 
-Status: Preview-only implementation.
+Status: Apply-capable implementation.
 
-No mutating CLI or MCP tools are approved or exposed by this document. The current implementation exposes `local-apple-data reminders plan` and `reminders_plan_change` only; these tools validate and preview future changes but do not read, apply, or mutate Reminders state. Future implementation requires explicit approval before any apply-capable tool is exposed.
+Approved write tools: `local-apple-data reminders apply` and `reminders_apply_change`.
 
-This document defines the first write lane for local Reminders. It is intentionally narrower than the overall write roadmap: create one reminder, complete one reminder, or update one reminder due date through EventKit, with preview as the default behavior and independent read_back verification after any future apply.
+No other mutating CLI or MCP tools are approved or exposed by this document. The current implementation also exposes `local-apple-data reminders plan` and `reminders_plan_change`; those tools validate and preview future changes without mutating Reminders state.
+
+This document defines the first write lane for local Reminders. It is intentionally narrower than the overall write roadmap: create one reminder, complete one reminder, or update one reminder due date through EventKit, with preview as the default behavior and independent read_back verification after apply.
 
 ## Scope
 
@@ -36,9 +38,9 @@ The apply payload must require an approval token or equivalent explicit approval
 
 The read_back payload must retrieve the changed reminder through EventKit and then return the same bounded public fields used by `reminders_get_content`. It must not trust the apply response alone.
 
-## Current Preview Tools
+## Current Tools
 
-Implemented now:
+Implemented preview tools:
 
 - CLI: `local-apple-data reminders plan`
 - MCP: `reminders_plan_change`
@@ -47,14 +49,29 @@ These tools:
 
 - Return `mode: "plan"`.
 - Return `mutation_applied:false`.
-- Return `apply_available:false`.
+- Return `apply_available:true`.
 - Require operation-specific inputs for `create`, `complete`, or `update_due_date`.
 - Require exact opaque `reminders:reminder:eventkit:v1:` handles for existing-reminder operations.
 - Return a deterministic `reminders-plan:v1:` idempotency key.
-- Return an approval fingerprint for future apply-token binding.
+- Return an approval fingerprint for approval token binding.
 - Do not call EventKit, read Reminders, or mutate Reminders.
 
-They intentionally avoid tool names such as `create`, `complete`, `update`, `apply`, or `write` so agents and auditors do not mistake the preview surface for an approved mutation surface.
+Implemented apply tools:
+
+- CLI: `local-apple-data reminders apply`
+- MCP: `reminders_apply_change`
+
+These tools:
+
+- Return `mode: "apply"`.
+- Require a matching `reminders-apply:v1:<approval_fingerprint>` approval token.
+- Require explicit apply confirmation.
+- Recompute the plan before applying.
+- Require operation-specific expected state.
+- Resolve existing Reminder targets from exact opaque `reminders:reminder:eventkit:v1:` handles.
+- Call the Swift EventKit helper only after the approval token and confirmation checks pass.
+- Return `mutation_applied:true` only after EventKit save succeeds and read_back data is available.
+- Use non-read-only, non-destructive, idempotent, closed-world MCP annotations.
 
 ## Implementation Choice
 
@@ -85,19 +102,19 @@ All inputs must be bounded. Free-form notes must use the same maximum character 
 
 ## Approval Gate
 
-Before any future apply-capable Reminders tool is exposed:
+Before any additional apply-capable Reminders tool is exposed:
 
 - `docs/MUTATION_GATES.md` must name the approved operation.
 - `docs/WRITE_TOOL_ROADMAP.md` must move the operation from candidate to approved.
 - `scripts/audit_mutation_gates.py` must allow only the exact approved CLI and MCP names.
 - `scripts/audit_write_design_gates.py` must move the operation from design-only to approved-with-tests.
-- `reminders_plan_change` may remain read-only; apply-capable tools need separate non-read-only MCP annotations.
+- `reminders_plan_change` remains read-only; `reminders_apply_change` uses separate non-read-only MCP annotations.
 - Runtime smoke must prove MCP write annotations are non-read-only and destructive only when the operation is destructive.
 - The skill, README, privacy model, threat model, testing doc, capability matrix, changelog, and plugin manifest must describe the new state consistently.
 
 ## Idempotency
 
-The future apply path must be retry-safe:
+The apply path must be retry-safe:
 
 - Create uses a deterministic idempotency key derived from target list, normalized title, normalized due date, and caller approval token.
 - Complete is idempotent when the reminder is already complete and the read_back result matches the approved target.
@@ -142,4 +159,4 @@ Before exposure, the Reminders write implementation must add:
 
 ## Current Release Gate
 
-The current release remains read-only. The implemented planning tools exist so the next implementation tranche can be reviewed against a specific contract instead of a vague write roadmap.
+The current release allows only this Reminders apply surface. All other mutation surfaces remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

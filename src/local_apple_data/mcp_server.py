@@ -19,6 +19,7 @@ from .adapters.messages import get_message_chat, search_message_chats
 from .adapters.notes import get_notes_content, get_notes_metadata, search_notes_metadata
 from .adapters.photos import export_photo_asset, get_photo_asset, search_photos
 from .adapters.reminders import (
+    apply_reminder_change,
     due_reminders_metadata,
     get_reminder_content,
     plan_reminder_change,
@@ -37,15 +38,22 @@ from .redacted_log import log_result
 
 INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
-    "read-only. Do not use Gmail connector paths. Do not request broad dumps. "
+    "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
-    "Mutation is not available in this server."
+    "The only apply-capable mutation surface is Reminders apply, and it requires a matching plan approval token plus explicit confirmation."
 )
 
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 
 READ_ONLY_ANNOTATIONS = ToolAnnotations(
     readOnlyHint=True,
+    destructiveHint=False,
+    idempotentHint=True,
+    openWorldHint=False,
+)
+
+WRITE_ANNOTATIONS = ToolAnnotations(
+    readOnlyHint=False,
     destructiveHint=False,
     idempotentHint=True,
     openWorldHint=False,
@@ -404,6 +412,38 @@ def reminders_plan_change(
             handle=handle,
             expected_title=expected_title,
             expected_completed=expected_completed,
+        ),
+    )
+
+
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
+def reminders_apply_change(
+    operation: str,
+    approval_token: str,
+    confirm_apply: bool = False,
+    title: str = "",
+    list_name: str = "",
+    due_date: str = "",
+    notes: str = "",
+    handle: str = "",
+    expected_title: str = "",
+    expected_completed: str = "",
+) -> dict[str, Any]:
+    """Apply an approved Reminder create/complete/due-date change and read back the result."""
+
+    return _record(
+        "reminders_apply_change",
+        apply_reminder_change(
+            operation,
+            title=title,
+            list_name=list_name,
+            due_date=due_date,
+            notes=notes,
+            handle=handle,
+            expected_title=expected_title,
+            expected_completed=expected_completed,
+            approval_token=approval_token,
+            confirm_apply=confirm_apply,
         ),
     )
 

@@ -68,9 +68,9 @@ Use `scripts/generate_release_receipt.py` when you want a path-redacted JSON rec
 
 Use `docs/ECOSYSTEM_REVIEW.md` when you want the public rationale for the project architecture and the comparison against other local Apple-data MCP tools.
 
-Use `scripts/audit_mutation_gates.py` when you want to prove the public CLI and MCP surfaces remain read-only until a mutation gate is intentionally approved.
+Use `scripts/audit_mutation_gates.py` when you want to prove the public CLI and MCP surfaces expose only intentionally approved mutation tools.
 
-Use `scripts/audit_write_design_gates.py` when you want to prove first-tranche write design docs are present and current CLI/MCP surfaces still expose no preview/apply/read_back mutation tools.
+Use `scripts/audit_write_design_gates.py` when you want to prove first-tranche write design docs are present and current CLI/MCP surfaces expose only approved preview/apply/read_back tools.
 
 Use `scripts/audit_surface_contract.py` when you want to prove the supported Apple data surfaces are aligned across MCP tools, CLI commands, health output, access requirements, and `docs/CAPABILITY_MATRIX.md`.
 

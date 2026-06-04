@@ -187,7 +187,11 @@ def _mutation_gate_check(root: Path) -> Check:
     return Check(
         "mutation_gate_audit",
         "ok",
-        f"{payload['mcp_tools_checked']} MCP tools and {payload['cli_handlers_checked']} CLI handlers read-only",
+        (
+            f"{payload['mcp_tools_checked']} MCP tools, "
+            f"{payload['cli_handlers_checked']} CLI handlers, "
+            f"{len(payload.get('approved_write_tools', []))} approved write tools"
+        ),
     )
 
 

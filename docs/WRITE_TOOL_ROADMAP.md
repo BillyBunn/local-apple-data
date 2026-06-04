@@ -1,10 +1,10 @@
 # Write Tool Roadmap
 
-The current release is read-only. This roadmap defines the sequence and engineering contract for future mutation support. It does not approve or expose any write tools by itself.
+The current release is read-mostly. Reminders apply is the only approved write surface; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
 
 Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 
-Current progress: `reminders plan` and `reminders_plan_change` implement preview-only planning. They do not call EventKit, write Reminders, or expose apply-capable tools.
+Current progress: `reminders plan` / `reminders_plan_change` implement non-mutating previews, and `reminders apply` / `reminders_apply_change` implement approved Reminder create, complete, and due-date update with approval-token checks and read-back verification.
 
 ## Principle
 
@@ -14,8 +14,8 @@ Write support must be boring, narrow, and independently verifiable. A write tool
 
 Every mutation class should expose three layers:
 
-- `preview`: validate inputs and return the planned change without touching Apple data. Reminders preview-only planning is implemented as `reminders plan` / `reminders_plan_change`.
-- `apply`: perform the exact approved change.
+- `preview`: validate inputs and return the planned change without touching Apple data. Reminders planning is implemented as `reminders plan` / `reminders_plan_change`.
+- `apply`: perform the exact approved change. Reminders apply is implemented as `reminders apply` / `reminders_apply_change`.
 - `read_back`: verify the resulting state through the normal read-only adapter.
 
 The MCP tool annotations must mark write tools as not read-only. Destructive tools must be annotated as destructive and should stay absent until non-destructive writes are proven.
@@ -26,12 +26,13 @@ Start with low-risk local writes through public Apple APIs or user-visible app a
 
 | Priority | Surface | Operation | Preferred implementation | Read-back |
 | --- | --- | --- | --- | --- |
-| 1 | Reminders | Create reminder | Swift EventKit helper | EventKit search by generated handle/title |
-| 2 | Reminders | Complete reminder | Swift EventKit helper | EventKit exact reminder fetch |
-| 3 | Calendar | Create event | Swift EventKit helper | EventKit search by event title/time |
-| 4 | Notes | Create note | Notes.app automation | Notes metadata search and exact content |
-| 5 | iCloud Drive | Create text file | Local filesystem with parent handle | iCloud Drive metadata and text content |
-| 6 | Mail | Create draft only | Mail.app automation | Mail metadata search for draft |
+| 1 | Reminders | Create reminder | Swift EventKit helper | Implemented; EventKit read-back |
+| 2 | Reminders | Complete reminder | Swift EventKit helper | Implemented; EventKit read-back |
+| 3 | Reminders | Update due date | Swift EventKit helper | Implemented; EventKit read-back |
+| 4 | Calendar | Create event | Swift EventKit helper | EventKit search by event title/time |
+| 5 | Notes | Create note | Notes.app automation | Notes metadata search and exact content |
+| 6 | iCloud Drive | Create text file | Local filesystem with parent handle | iCloud Drive metadata and text content |
+| 7 | Mail | Create draft only | Mail.app automation | Mail metadata search for draft |
 
 No first-tranche tool should delete, send, archive, move, overwrite, bulk edit, or manage account state.
 
@@ -41,7 +42,7 @@ These need separate design documents:
 
 - Contact create/update through Contacts.framework.
 - Calendar update/delete.
-- Reminder update/delete.
+- Reminder delete, uncomplete, list/account management, attachments, URLs, and rich-content mutation.
 - Note append/update with rich-text conversion.
 - iCloud Drive append/overwrite/delete.
 - Mail send.

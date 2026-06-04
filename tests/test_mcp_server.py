@@ -11,6 +11,7 @@ from mcp.client.stdio import stdio_client
 from local_apple_data.mcp_server import (
     INSTRUCTIONS,
     READ_ONLY_ANNOTATIONS,
+    WRITE_ANNOTATIONS,
     calendar_get_event,
     contacts_get,
     hide_my_email_get_alias,
@@ -23,6 +24,7 @@ from local_apple_data.mcp_server import (
     notes_get_metadata,
     photos_export_asset,
     photos_get_asset,
+    reminders_apply_change,
     reminders_get_content,
     reminders_plan_change,
     voice_memos_export_audio,
@@ -32,9 +34,10 @@ from local_apple_data.mcp_server import (
 
 def test_mcp_instructions_preserve_safety_boundaries() -> None:
     assert "metadata-first" in INSTRUCTIONS
-    assert "read-only" in INSTRUCTIONS
+    assert "bounded" in INSTRUCTIONS
     assert "Gmail connector" in INSTRUCTIONS
     assert "exact-handle" in INSTRUCTIONS
+    assert "approval token" in INSTRUCTIONS
 
 
 def test_mcp_tools_use_read_only_annotations() -> None:
@@ -42,6 +45,10 @@ def test_mcp_tools_use_read_only_annotations() -> None:
     assert READ_ONLY_ANNOTATIONS.destructiveHint is False
     assert READ_ONLY_ANNOTATIONS.idempotentHint is True
     assert READ_ONLY_ANNOTATIONS.openWorldHint is False
+    assert WRITE_ANNOTATIONS.readOnlyHint is False
+    assert WRITE_ANNOTATIONS.destructiveHint is False
+    assert WRITE_ANNOTATIONS.idempotentHint is True
+    assert WRITE_ANNOTATIONS.openWorldHint is False
 
 
 def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch) -> None:
@@ -64,6 +71,13 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     reminder_result = reminders_get_content("bad-handle")
     reminder_plan_result = reminders_plan_change(
         "complete",
+        handle="bad-handle",
+        expected_title="Synthetic reminder",
+    )
+    reminder_apply_result = reminders_apply_change(
+        "complete",
+        approval_token="reminders-apply:v1:bad",
+        confirm_apply=True,
         handle="bad-handle",
         expected_title="Synthetic reminder",
     )
@@ -98,6 +112,8 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert reminder_result["warnings"][0]["code"] == "invalid_handle"
     assert reminder_plan_result["status"] == "error"
     assert reminder_plan_result["warnings"][0]["code"] == "invalid_handle"
+    assert reminder_apply_result["status"] == "error"
+    assert reminder_apply_result["warnings"][0]["code"] == "invalid_handle"
 
 
 def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
@@ -147,11 +163,15 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "reminders_eventkit_search",
                     "reminders_get_content",
                     "reminders_plan_change",
+                    "reminders_apply_change",
                 }.issubset(names)
                 for tool in tools.tools:
                     if tool.name in names:
                         assert tool.annotations is not None
-                        assert tool.annotations.readOnlyHint is True
+                        if tool.name == "reminders_apply_change":
+                            assert tool.annotations.readOnlyHint is False
+                        else:
+                            assert tool.annotations.readOnlyHint is True
                         assert tool.annotations.destructiveHint is False
                         assert tool.annotations.idempotentHint is True
                         assert tool.annotations.openWorldHint is False

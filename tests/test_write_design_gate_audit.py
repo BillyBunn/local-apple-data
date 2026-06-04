@@ -24,7 +24,7 @@ def test_current_project_write_design_gate_audit_passes() -> None:
     assert payload["write_design_gate"] is True
     assert payload["design_docs_checked"] >= 1
     assert payload["approved_preview_tools"] == ["reminders_plan_change"]
-    assert payload["approved_write_tools"] == []
+    assert payload["approved_write_tools"] == ["reminders_apply", "reminders_apply_change"]
     assert payload["findings"] == []
 
 
@@ -43,7 +43,7 @@ def test_write_design_gate_flags_incomplete_design_doc(tmp_path: Path) -> None:
     path = root / "docs/V1_11_REMINDERS_WRITE_DESIGN.md"
     path.write_text(
         path.read_text(encoding="utf-8").replace(
-            "Status: Preview-only implementation.",
+            "Status: Apply-capable implementation.",
             "Status: Draft.",
         ),
         encoding="utf-8",
@@ -56,12 +56,12 @@ def test_write_design_gate_flags_incomplete_design_doc(tmp_path: Path) -> None:
 
 
 def test_write_design_gate_flags_write_phase_mcp_tool(tmp_path: Path) -> None:
-    root = _minimal_project(tmp_path, mcp_tool_name="reminders_apply")
+    root = _minimal_project(tmp_path, mcp_tool_name="mail_apply")
 
     payload = audit_write_design_gates.audit_write_design_gates(root)
 
     assert payload["status"] == "error"
-    assert _finding(payload, "write_phase_mcp_tool", "reminders_apply")
+    assert _finding(payload, "write_phase_mcp_tool", "mail_apply")
 
 
 def test_write_design_gate_flags_write_phase_cli_handler(tmp_path: Path) -> None:
@@ -102,15 +102,15 @@ def _minimal_project(
     root.joinpath("docs").mkdir()
 
     (root / "README.md").write_text(
-        "The current release is read-only.\n",
+        "The only apply-capable mutation surface is Reminders apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "The current plugin is read-only.\n",
+        "Approved write tools: `reminders apply` and `reminders_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "The current release is read-only.\n",
+        "Reminders apply is the only approved write surface.\n",
         encoding="utf-8",
     )
     (root / "docs/V1_11_REMINDERS_WRITE_DESIGN.md").write_text(
@@ -125,7 +125,7 @@ def _minimal_project(
         f"""
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "Mutation is not available in this server."
+INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def {mcp_tool_name}() -> dict:

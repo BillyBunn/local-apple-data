@@ -21,9 +21,10 @@ def test_current_project_mutation_gate_audit_passes() -> None:
     )
 
     assert payload["status"] == "ok"
-    assert payload["read_only"] is True
-    assert payload["mcp_tools_checked"] >= 29
-    assert payload["cli_handlers_checked"] >= 29
+    assert payload["read_only"] is False
+    assert payload["approved_write_tools"] == ["reminders_apply_change"]
+    assert payload["mcp_tools_checked"] >= 31
+    assert payload["cli_handlers_checked"] >= 31
     assert payload["findings"] == []
 
 
@@ -33,7 +34,7 @@ def test_mutation_gate_audit_flags_mcp_write_tool(tmp_path: Path) -> None:
         """
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "Mutation is not available in this server."
+INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def reminders_create() -> dict:
@@ -56,7 +57,7 @@ def test_mutation_gate_audit_flags_non_readonly_mcp_annotation(tmp_path: Path) -
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
 WRITE_ANNOTATIONS = object()
-INSTRUCTIONS = "Mutation is not available in this server."
+INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=WRITE_ANNOTATIONS)
 def reminders_search() -> dict:
@@ -95,15 +96,15 @@ def _minimal_project(tmp_path: Path) -> Path:
     root.joinpath("docs").mkdir()
 
     (root / "README.md").write_text(
-        "The current release is read-only.\n",
+        "The only apply-capable mutation surface is Reminders apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "The current plugin is read-only.\n",
+        "Approved write tools: `reminders apply` and `reminders_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "The current release is read-only.\n",
+        "Reminders apply is the only approved write surface.\n",
         encoding="utf-8",
     )
     (root / ".codex-plugin/plugin.json").write_text(
@@ -114,7 +115,7 @@ def _minimal_project(tmp_path: Path) -> Path:
         """
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "Mutation is not available in this server."
+INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def reminders_search() -> dict:

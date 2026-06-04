@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604100000 - 2026-06-04
+
+### Added
+
+- Approved Reminders apply through `local-apple-data reminders apply` and MCP `reminders_apply_change`.
+- Apply support for Reminder create, complete, and due-date update through the Swift EventKit helper.
+- Approval-token, explicit-confirmation, expected-state, idempotency, and read-back verification checks for Reminders apply.
+- Synthetic adapter, CLI, MCP annotation, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the approved apply surface.
+
+### Security
+
+- `reminders_apply_change` is the only non-read-only MCP tool and is annotated non-destructive, idempotent, and closed-world.
+- All non-Reminders mutation surfaces remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604090000 - 2026-06-04
 
 ### Added

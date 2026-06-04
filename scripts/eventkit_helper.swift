@@ -25,6 +25,22 @@ func intValue(_ request: [String: Any], _ key: String, _ defaultValue: Int) -> I
     return defaultValue
 }
 
+func boolValue(_ request: [String: Any], _ key: String) -> Bool? {
+    if let value = request[key] as? Bool {
+        return value
+    }
+    if let value = request[key] as? String {
+        let lowered = value.lowercased()
+        if lowered == "true" {
+            return true
+        }
+        if lowered == "false" {
+            return false
+        }
+    }
+    return nil
+}
+
 func stringValue(_ request: [String: Any], _ key: String) -> String {
     return (request[key] as? String) ?? ""
 }
@@ -178,6 +194,59 @@ func fetchReminders(_ store: EKEventStore) -> [EKReminder]? {
         return nil
     }
     return fetched
+}
+
+func dateComponents(fromDueDate value: String) -> DateComponents? {
+    if value.isEmpty {
+        return nil
+    }
+    let dateOnlyPattern = #"^\d{4}-\d{2}-\d{2}$"#
+    if value.range(of: dateOnlyPattern, options: .regularExpression) != nil {
+        let parts = value.split(separator: "-").compactMap { Int($0) }
+        if parts.count == 3 {
+            return DateComponents(calendar: Calendar.current, year: parts[0], month: parts[1], day: parts[2])
+        }
+        return nil
+    }
+    let parser = ISO8601DateFormatter()
+    parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    var parsed = parser.date(from: value)
+    if parsed == nil {
+        parser.formatOptions = [.withInternetDateTime]
+        parsed = parser.date(from: value)
+    }
+    guard let date = parsed else {
+        return nil
+    }
+    return Calendar.current.dateComponents(in: TimeZone.current, from: date)
+}
+
+func dueDateMatches(_ components: DateComponents?, _ value: String) -> Bool {
+    guard let desired = dateComponents(fromDueDate: value) else {
+        return components == nil || reminderDateString(components).isEmpty
+    }
+    guard let left = Calendar.current.date(from: components ?? DateComponents()),
+          let right = Calendar.current.date(from: desired)
+    else {
+        return false
+    }
+    return abs(left.timeIntervalSince(right)) < 1
+}
+
+func emitReminderApplyError(
+    _ status: String,
+    _ code: String,
+    _ message: String,
+    authorizationStatus: EKAuthorizationStatus = EKEventStore.authorizationStatus(for: .reminder)
+) -> Never {
+    emit([
+        "schema_version": 1,
+        "status": status,
+        "source": "reminders",
+        "authorization_status": authorizationName(authorizationStatus),
+        "reminder": NSNull(),
+        "warnings": [warning(code, message)],
+    ])
 }
 
 let command = stringValue(request, "command")
@@ -362,6 +431,145 @@ if command == "reminder_by_id" {
         "status": "ok",
         "source": "reminders",
         "reminder": reminderPayload(reminder, includeContent: true),
+        "warnings": [],
+    ])
+}
+
+if command == "reminder_apply_change" {
+    let store = ensureAccess(
+        .reminder,
+        source: "reminders",
+        warningCode: "reminders_access_unavailable"
+    )!
+    let operation = stringValue(request, "operation")
+    if operation != "create" && operation != "complete" && operation != "update_due_date" {
+        emitReminderApplyError("error", "invalid_operation", "Unsupported Reminder apply operation.")
+    }
+
+    if operation == "create" {
+        let title = stringValue(request, "title")
+        let listName = stringValue(request, "list_name")
+        let dueDate = stringValue(request, "due_date")
+        let notes = stringValue(request, "notes")
+        if title.isEmpty || listName.isEmpty {
+            emitReminderApplyError("error", "missing_required_field", "Reminder create requires a title and list.")
+        }
+        let matchingLists = store.calendars(for: .reminder).filter { $0.title == listName }
+        if matchingLists.isEmpty {
+            emitReminderApplyError("not_found", "target_list_not_found", "Reminder list was not found.")
+        }
+        if matchingLists.count > 1 {
+            emitReminderApplyError("error", "ambiguous_target_list", "Reminder list name matched more than one list.")
+        }
+        guard dueDate.isEmpty || dateComponents(fromDueDate: dueDate) != nil else {
+            emitReminderApplyError("error", "invalid_due_date", "Reminder due date could not be parsed.")
+        }
+        let list = matchingLists[0]
+        if let reminders = fetchReminders(store) {
+            if let existing = reminders.first(where: {
+                $0.calendar.calendarIdentifier == list.calendarIdentifier
+                    && ($0.title ?? "") == title
+                    && !$0.isCompleted
+                    && dueDateMatches($0.dueDateComponents, dueDate)
+            }) {
+                emit([
+                    "schema_version": 1,
+                    "status": "ok",
+                    "source": "reminders",
+                    "authorization_status": authorizationName(EKEventStore.authorizationStatus(for: .reminder)),
+                    "reminder": reminderPayload(existing, includeContent: false),
+                    "warnings": [warning("already_applied", "Reminder create already matches an existing item.")],
+                ])
+            }
+        }
+
+        let reminder = EKReminder(eventStore: store)
+        reminder.title = title
+        reminder.calendar = list
+        if !notes.isEmpty {
+            reminder.notes = notes
+        }
+        reminder.dueDateComponents = dateComponents(fromDueDate: dueDate)
+        do {
+            try store.save(reminder, commit: true)
+        } catch {
+            emitReminderApplyError("error", "eventkit_apply_failed", "Reminder create could not be applied.")
+        }
+        emit([
+            "schema_version": 1,
+            "status": "ok",
+            "source": "reminders",
+            "authorization_status": authorizationName(EKEventStore.authorizationStatus(for: .reminder)),
+            "reminder": reminderPayload(reminder, includeContent: false),
+            "warnings": [],
+        ])
+    }
+
+    let reminderId = stringValue(request, "reminder_id")
+    if reminderId.isEmpty {
+        emitReminderApplyError("error", "invalid_reminder_id", "Expected EventKit reminder identifier.")
+    }
+    guard let reminders = fetchReminders(store),
+          let reminder = reminders.first(where: { $0.calendarItemIdentifier == reminderId })
+    else {
+        emitReminderApplyError("not_found", "target_not_found", "Reminder target was not found.")
+    }
+
+    let expectedTitle = stringValue(request, "expected_title")
+    if expectedTitle.isEmpty || (reminder.title ?? "") != expectedTitle {
+        emitReminderApplyError("error", "expected_state_mismatch", "Reminder title did not match expected state.")
+    }
+
+    if operation == "complete" {
+        if reminder.isCompleted {
+            emit([
+                "schema_version": 1,
+                "status": "ok",
+                "source": "reminders",
+                "authorization_status": authorizationName(EKEventStore.authorizationStatus(for: .reminder)),
+                "reminder": reminderPayload(reminder, includeContent: false),
+                "warnings": [warning("already_applied", "Reminder is already complete.")],
+            ])
+        }
+        if let expectedCompleted = boolValue(request, "expected_completed"),
+           reminder.isCompleted != expectedCompleted {
+            emitReminderApplyError("error", "expected_state_mismatch", "Reminder completion state did not match expected state.")
+        }
+        reminder.isCompleted = true
+        reminder.completionDate = Date()
+    } else {
+        if let expectedCompleted = boolValue(request, "expected_completed"),
+           reminder.isCompleted != expectedCompleted {
+            emitReminderApplyError("error", "expected_state_mismatch", "Reminder completion state did not match expected state.")
+        }
+        let dueDate = stringValue(request, "due_date")
+        guard !dueDate.isEmpty, let components = dateComponents(fromDueDate: dueDate) else {
+            emitReminderApplyError("error", "invalid_due_date", "Reminder due date could not be parsed.")
+        }
+        if dueDateMatches(reminder.dueDateComponents, dueDate) {
+            emit([
+                "schema_version": 1,
+                "status": "ok",
+                "source": "reminders",
+                "authorization_status": authorizationName(EKEventStore.authorizationStatus(for: .reminder)),
+                "reminder": reminderPayload(reminder, includeContent: false),
+                "warnings": [warning("already_applied", "Reminder due date already matches.")],
+            ])
+        }
+        reminder.dueDateComponents = components
+    }
+
+    do {
+        try store.save(reminder, commit: true)
+    } catch {
+        emitReminderApplyError("error", "eventkit_apply_failed", "Reminder change could not be applied.")
+    }
+    emit([
+        "schema_version": 1,
+        "status": "ok",
+        "source": "reminders",
+        "authorization_status": authorizationName(EKEventStore.authorizationStatus(for: .reminder)),
+        "reminder": reminderPayload(reminder, includeContent: false),
         "warnings": [],
     ])
 }

@@ -51,15 +51,15 @@ def _make_minimal_project(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (root / "README.md").write_text(
-        "The current release is read-only.\n",
+        "The only apply-capable mutation surface is Reminders apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "The current plugin is read-only.\n",
+        "Approved write tools: `reminders apply` and `reminders_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "The current release is read-only.\n",
+        "Reminders apply is the only approved write surface.\n",
         encoding="utf-8",
     )
     (root / "docs/V1_11_REMINDERS_WRITE_DESIGN.md").write_text(
@@ -77,13 +77,15 @@ def _write_surface_contract_files(root: Path) -> None:
     mcp_lines = [
         "from mcp.server.fastmcp import FastMCP",
         "READ_ONLY_ANNOTATIONS = object()",
-        'INSTRUCTIONS = "Mutation is not available in this server."',
+        "WRITE_ANNOTATIONS = object()",
+        'INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."',
         'mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)',
     ]
     for tool in tools:
+        annotation = "WRITE_ANNOTATIONS" if tool == "reminders_apply_change" else "READ_ONLY_ANNOTATIONS"
         mcp_lines.extend(
             [
-                "@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)",
+                f"@mcp.tool(annotations={annotation})",
                 f"def {tool}() -> dict:",
                 "    return {}",
                 "",

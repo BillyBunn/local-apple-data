@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MUTATION_VERBS = {
     "add",
     "append",
+    "apply",
     "archive",
     "complete",
     "create",
@@ -32,6 +33,8 @@ MUTATION_VERBS = {
     "update",
     "write",
 }
+APPROVED_WRITE_MCP_TOOLS = {"reminders_apply_change"}
+APPROVED_WRITE_CLI_HANDLERS = {"reminders_apply"}
 MANIFEST_WRITE_CAPABILITIES = {
     "Create",
     "Delete",
@@ -42,11 +45,11 @@ MANIFEST_WRITE_CAPABILITIES = {
     "Update",
     "Write",
 }
-REQUIRED_READ_ONLY_TEXT = {
-    "README.md": "The current release is read-only",
-    "docs/MUTATION_GATES.md": "The current plugin is read-only",
-    "docs/WRITE_TOOL_ROADMAP.md": "The current release is read-only",
-    "src/local_apple_data/mcp_server.py": "Mutation is not available in this server.",
+REQUIRED_MUTATION_GATE_TEXT = {
+    "README.md": "The only apply-capable mutation surface is Reminders apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply` and `reminders_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply is the only approved write surface",
+    "src/local_apple_data/mcp_server.py": "The only apply-capable mutation surface is Reminders apply",
 }
 
 
@@ -78,6 +81,7 @@ class ExposedName:
     path: Path
     line: int
     read_only_annotations: bool = True
+    write_annotations: bool = False
 
 
 def audit_mutation_gates(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
@@ -87,8 +91,9 @@ def audit_mutation_gates(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
     cli_handlers = _cli_handlers(root / "src/local_apple_data/cli.py", findings)
 
     for tool in mcp_tools:
+        approved_write = tool.name in APPROVED_WRITE_MCP_TOOLS
         terms = _mutation_terms(tool.name)
-        if terms:
+        if terms and not approved_write:
             findings.append(
                 Finding(
                     "mutation_like_mcp_tool",
@@ -98,7 +103,17 @@ def audit_mutation_gates(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                     f"Exposed MCP tool name contains mutation verb(s): {', '.join(terms)}",
                 )
             )
-        if not tool.read_only_annotations:
+        if approved_write and not tool.write_annotations:
+            findings.append(
+                Finding(
+                    "approved_write_mcp_tool_annotation",
+                    tool.path,
+                    tool.line,
+                    tool.name,
+                    "Approved MCP write tool must use WRITE_ANNOTATIONS.",
+                )
+            )
+        if not approved_write and not tool.read_only_annotations:
             findings.append(
                 Finding(
                     "mcp_tool_not_read_only",
@@ -111,8 +126,9 @@ def audit_mutation_gates(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
 
     for handler in cli_handlers:
         exposed_name = handler.name.removesuffix("_command").removeprefix("_")
+        approved_write = exposed_name in APPROVED_WRITE_CLI_HANDLERS
         terms = _mutation_terms(exposed_name)
-        if terms:
+        if terms and not approved_write:
             findings.append(
                 Finding(
                     "mutation_like_cli_handler",
@@ -123,7 +139,7 @@ def audit_mutation_gates(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
                 )
             )
 
-    findings.extend(_read_only_contract_findings(root))
+    findings.extend(_mutation_contract_findings(root))
     findings.extend(_plugin_manifest_findings(root))
 
     return {
@@ -131,7 +147,8 @@ def audit_mutation_gates(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
         "findings": [finding.to_json(root) for finding in findings],
         "mcp_tools_checked": len(mcp_tools),
         "mutation_verbs": sorted(MUTATION_VERBS),
-        "read_only": not findings,
+        "approved_write_tools": sorted(APPROVED_WRITE_MCP_TOOLS),
+        "read_only": not APPROVED_WRITE_MCP_TOOLS and not findings,
         "status": "ok" if not findings else "error",
     }
 
@@ -153,6 +170,7 @@ def _mcp_tools(path: Path, findings: list[Finding]) -> list[ExposedName]:
                 path=path,
                 line=node.lineno,
                 read_only_annotations=_uses_read_only_annotations(decorator),
+                write_annotations=_uses_write_annotations(decorator),
             )
         )
     return tools
@@ -211,11 +229,21 @@ def _mcp_tool_decorator(decorators: Iterable[ast.expr]) -> ast.Call | None:
 
 
 def _uses_read_only_annotations(decorator: ast.Call) -> bool:
+    return _annotation_name(decorator) == "READ_ONLY_ANNOTATIONS"
+
+
+def _uses_write_annotations(decorator: ast.Call) -> bool:
+    return _annotation_name(decorator) == "WRITE_ANNOTATIONS"
+
+
+def _annotation_name(decorator: ast.Call) -> str | None:
     for keyword in decorator.keywords:
         if keyword.arg != "annotations":
             continue
-        return isinstance(keyword.value, ast.Name) and keyword.value.id == "READ_ONLY_ANNOTATIONS"
-    return False
+        if isinstance(keyword.value, ast.Name):
+            return keyword.value.id
+        return None
+    return None
 
 
 def _mutation_terms(name: str) -> list[str]:
@@ -223,9 +251,9 @@ def _mutation_terms(name: str) -> list[str]:
     return sorted(tokens & MUTATION_VERBS)
 
 
-def _read_only_contract_findings(root: Path) -> list[Finding]:
+def _mutation_contract_findings(root: Path) -> list[Finding]:
     findings: list[Finding] = []
-    for relative, required_text in REQUIRED_READ_ONLY_TEXT.items():
+    for relative, required_text in REQUIRED_MUTATION_GATE_TEXT.items():
         path = root / relative
         try:
             text = path.read_text(encoding="utf-8")
@@ -236,7 +264,7 @@ def _read_only_contract_findings(root: Path) -> list[Finding]:
                     path,
                     0,
                     relative,
-                    f"Required read-only contract file is unreadable: {type(exc).__name__}",
+                    f"Required mutation-gate contract file is unreadable: {type(exc).__name__}",
                 )
             )
             continue
@@ -247,7 +275,7 @@ def _read_only_contract_findings(root: Path) -> list[Finding]:
                     path,
                     0,
                     relative,
-                    f"Missing required read-only contract text: {required_text}",
+                    f"Missing required mutation-gate contract text: {required_text}",
                 )
             )
     return findings
@@ -270,7 +298,7 @@ def _plugin_manifest_findings(root: Path) -> list[Finding]:
 
     capabilities = set(manifest.get("interface", {}).get("capabilities", []))
     write_capabilities = sorted(capabilities & MANIFEST_WRITE_CAPABILITIES)
-    if not write_capabilities:
+    if not write_capabilities or APPROVED_WRITE_MCP_TOOLS:
         return []
     return [
         Finding(

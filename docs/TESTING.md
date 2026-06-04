@@ -8,13 +8,13 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 
 - Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Contacts and Photos helper responses, synthetic iCloud Drive file retrieval, reminder due-window caps, and non-mutating Reminders plan previews.
 - CLI tests: synthetic Mail/Messages/Hide My Email/Voice Memos/Notes/Calendar/Contacts/Photos/iCloud Drive/Reminders stores or mocked helpers with redacted logs.
-- MCP tests: tool listing and read-only annotations.
+- MCP tests: tool listing plus read-only and approved write annotations.
 - Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows.
 - Cross-agent sync smoke: `scripts/verify_cross_agent_sync.py` confirms Codex, Claude Code, and OpenClaw are all pointed at the same project runner and installed plugin version, and verifies Cursor `mcp.json` when a local-apple-data Cursor entry is present or `--require-cursor` is used. Public checkouts can pass `--skip-codex --skip-file-sync --skip-claude --skip-openclaw --skip-cursor` for a source-only smoke.
 - Install consistency: compare source and installed-cache manifest, MCP config, skill, server, handle helper, doctor helper, and adapters.
 - Privacy scans: `scripts/redaction_scan.py` fails on high-confidence secrets and literal iCloud/private-relay email aliases without printing matched values.
 - Public release scan: `scripts/public_release_scan.py` fails when public files contain local operator paths, private note titles, or operator-specific terms outside explicit author metadata.
-- Mutation-gate audit: `scripts/audit_mutation_gates.py` fails if write-like CLI/MCP surfaces appear without an intentional mutation gate or if MCP tools are not annotated read-only.
+- Mutation-gate audit: `scripts/audit_mutation_gates.py` fails if write-like CLI/MCP surfaces appear without an intentional mutation gate, if approved write tools lack write annotations, or if unapproved MCP tools are not annotated read-only.
 - Write-design gate audit: `scripts/audit_write_design_gates.py` fails if first-tranche write design docs are missing, required design-only safeguards drift, or preview/apply/read_back tool names appear before approval.
 - Surface-contract audit: `scripts/audit_surface_contract.py` fails if a supported Apple data surface is missing from the MCP tools, CLI parser, health summary, access requirements, or public capability matrix.
 
@@ -87,11 +87,12 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Photos get/export accepts only `photos:asset:v1:` handles, returns exact asset/resource or destination metadata, rejects raw Photos identifiers and fabricated handles, and never returns inline asset bytes.
 - Reminders content accepts only `reminders:reminder:eventkit:v1:` handles, returns bounded exact reminder notes, and rejects raw EventKit identifiers, legacy SQLite reminder handles, and fabricated handles.
 - Reminder notes truncation returns `content_truncated`.
-- Reminders planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:false`, deterministic idempotency metadata, and requires exact EventKit reminder handles for existing-reminder operations.
+- Reminders planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, and requires exact EventKit reminder handles for existing-reminder operations.
+- Reminders apply requires a matching approval token, explicit confirmation, expected state, EventKit helper apply, and read-back verification.
 - Health and doctor do not expose full local executable paths.
 - Health and doctor report broad local Apple data readiness without content reads, raw rows, credentials, prompt-triggering framework access, or raw absolute store paths.
 - Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, and other framework-backed surfaces.
-- Write-design gates require the first Reminders write design contract while the current CLI and MCP surfaces remain read-only.
+- Write-design gates require the first Reminders write design contract and allow only `reminders apply` / `reminders_apply_change` as approved write tools.
 - No repo docs or tests persist real personal search terms or result metadata.
 
 ## v1.1 Acceptance Criteria
@@ -222,13 +223,16 @@ The v1.10 Hide My Email phase keeps the same synthetic-first test posture:
 
 ## v1.11 Acceptance Criteria
 
-The v1.11 Reminders planning phase keeps mutation unavailable:
+The v1.11 Reminders phase exposes planning plus one approved apply surface:
 
-- `reminders plan` and `reminders_plan_change` return `mode: "plan"`, `mutation_applied:false`, and `apply_available:false`.
+- `reminders plan` and `reminders_plan_change` return `mode: "plan"`, `mutation_applied:false`, and `apply_available:true`.
 - Create planning requires title and target list name.
 - Existing-reminder planning requires an exact opaque `reminders:reminder:eventkit:v1:` handle.
 - Due-date planning accepts `YYYY-MM-DD` or timezone-aware ISO 8601 and rejects naive timestamps.
 - Planning returns a deterministic `reminders-plan:v1:` idempotency key and approval fingerprint.
+- `reminders apply` and `reminders_apply_change` require the matching `reminders-apply:v1:<approval_fingerprint>` token and explicit confirmation.
+- Existing-reminder apply resolves exact opaque handles internally and checks expected state before calling EventKit.
+- Apply returns `mode: "apply"`, `mutation_applied:true`, and read-back metadata only after EventKit save succeeds.
 - Logs do not contain planned titles, notes, list names, handles, or approval fingerprints.
-- Runtime verification covers synthetic planning without touching live Reminders.
-- Apply-capable Reminders tools remain absent.
+- Runtime verification covers synthetic planning and mocked apply without touching live Reminders.
+- MCP annotation tests prove `reminders_apply_change` is non-read-only while other tools remain read-only.

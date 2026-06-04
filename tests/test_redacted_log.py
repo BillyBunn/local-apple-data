@@ -77,3 +77,46 @@ def test_log_result_excludes_reminder_plan_content(
     assert "do not log reminder title" not in text
     assert "do not log reminder notes" not in text
     assert "do-not-log-fingerprint" not in text
+
+
+def test_log_result_excludes_reminder_apply_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "reminders",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "apply",
+        "privacy": {
+            "output_tier": "mutation",
+            "content_inspected": False,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "approval": {
+            "approval_fingerprint": "do-not-log-fingerprint",
+            "approval_token_verified": True,
+        },
+        "read_back": {
+            "title": "do not log reminder title",
+            "list_name": "do not log list",
+            "handle": "do-not-log-handle",
+        },
+        "warnings": [{"code": "already_applied", "message": "do not log warning"}],
+    }
+
+    log_result("reminders.apply", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "reminders.apply"
+    assert event["privacy"]["output_tier"] == "mutation"
+    assert event["warning_codes"] == ["already_applied"]
+    assert "do not log reminder title" not in text
+    assert "do not log list" not in text
+    assert "do-not-log-handle" not in text
+    assert "do-not-log-fingerprint" not in text
+    assert "do not log warning" not in text

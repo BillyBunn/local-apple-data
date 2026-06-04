@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from local_apple_data.adapters.reminders import (
+    apply_reminder_change,
     check_reminders_schema,
     due_reminders_metadata,
     get_reminder_content,
@@ -278,7 +279,7 @@ def test_plan_reminder_change_create_returns_preview_only() -> None:
     assert result["status"] == "ok"
     assert result["privacy"]["output_tier"] == "preview"
     assert result["mutation_applied"] is False
-    assert result["apply_available"] is False
+    assert result["apply_available"] is True
     preview = result["preview"]
     assert preview["operation"] == "create"
     assert preview["target"] == {"list_name": "Synthetic List"}
@@ -287,7 +288,10 @@ def test_plan_reminder_change_create_returns_preview_only() -> None:
     assert preview["proposed"]["notes_chars"] == 20
     assert preview["idempotency_key"].startswith("reminders-plan:v1:")
     assert preview["approval"]["required_for_apply"] is True
-    assert preview["approval"]["apply_tool_available"] is False
+    assert preview["approval"]["apply_tool_available"] is True
+    assert preview["approval"]["approval_token_format"] == (
+        "reminders-apply:v1:<approval_fingerprint>"
+    )
 
 
 def test_plan_reminder_change_complete_requires_eventkit_handle() -> None:
@@ -334,3 +338,217 @@ def test_plan_reminder_change_rejects_oversized_notes() -> None:
 
     assert result["status"] == "error"
     assert result["warnings"][0]["code"] == "input_too_large"
+
+
+def _approval_token(plan: dict) -> str:
+    fingerprint = plan["preview"]["approval"]["approval_fingerprint"]
+    return f"reminders-apply:v1:{fingerprint}"
+
+
+def test_apply_reminder_change_requires_confirmation_before_runner() -> None:
+    called = False
+    plan = plan_reminder_change(
+        "create",
+        title="Synthetic planned reminder",
+        list_name="Synthetic List",
+    )
+
+    def runner(_payload: dict, _timeout: float) -> dict:
+        nonlocal called
+        called = True
+        return {}
+
+    result = apply_reminder_change(
+        "create",
+        title="Synthetic planned reminder",
+        list_name="Synthetic List",
+        approval_token=_approval_token(plan),
+        eventkit_runner=runner,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "missing_apply_confirmation"
+    assert called is False
+
+
+def test_apply_reminder_change_rejects_wrong_approval_token() -> None:
+    called = False
+
+    def runner(_payload: dict, _timeout: float) -> dict:
+        nonlocal called
+        called = True
+        return {}
+
+    result = apply_reminder_change(
+        "create",
+        title="Synthetic planned reminder",
+        list_name="Synthetic List",
+        approval_token="reminders-apply:v1:not-the-plan",
+        confirm_apply=True,
+        eventkit_runner=runner,
+    )
+
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "invalid_approval_token"
+    assert called is False
+
+
+def test_apply_reminder_change_create_calls_eventkit_and_reads_back() -> None:
+    plan = plan_reminder_change(
+        "create",
+        title="Synthetic planned reminder",
+        list_name="Synthetic List",
+        due_date="2026-06-04",
+        notes="Synthetic notes.",
+    )
+
+    def runner(payload: dict, _timeout: float) -> dict:
+        assert payload == {
+            "command": "reminder_apply_change",
+            "operation": "create",
+            "title": "Synthetic planned reminder",
+            "list_name": "Synthetic List",
+            "due_date": "2026-06-04",
+            "notes": "Synthetic notes.",
+        }
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "reminders",
+            "authorization_status": "authorized",
+            "reminder": {
+                "reminder_id": "created-reminder-1",
+                "title": "Synthetic planned reminder",
+                "list_name": "Synthetic List",
+                "due_date": "2026-06-04T00:00:00.000Z",
+                "start_date": "",
+                "completed": False,
+                "priority": 0,
+                "notes_present": True,
+                "url_present": False,
+                "alarms_count": 0,
+            },
+            "warnings": [],
+        }
+
+    result = apply_reminder_change(
+        "create",
+        title="Synthetic planned reminder",
+        list_name="Synthetic List",
+        due_date="2026-06-04",
+        notes="Synthetic notes.",
+        approval_token=_approval_token(plan),
+        confirm_apply=True,
+        eventkit_runner=runner,
+    )
+
+    assert result["status"] == "ok"
+    assert result["mode"] == "apply"
+    assert result["mutation_applied"] is True
+    assert result["approval"]["approval_token_verified"] is True
+    assert result["read_back"]["handle"].startswith("reminders:reminder:eventkit:v1:")
+    assert result["read_back"]["title"] == "Synthetic planned reminder"
+    assert "created-reminder-1" not in str(result)
+
+
+def test_apply_reminder_change_complete_resolves_exact_handle_and_applies() -> None:
+    search = search_reminders_eventkit("runtime", eventkit_runner=_eventkit_runner)
+    handle = search["results"][0]["handle"]
+    plan = plan_reminder_change(
+        "complete",
+        handle=handle,
+        expected_title="Synthetic runtime reminder",
+        expected_completed=False,
+    )
+    calls: list[str] = []
+
+    def runner(payload: dict, _timeout: float) -> dict:
+        calls.append(payload["command"])
+        if payload["command"] == "reminders":
+            return _eventkit_runner(payload, _timeout)
+        assert payload["command"] == "reminder_apply_change"
+        assert payload["operation"] == "complete"
+        assert payload["reminder_id"] == "runtime-reminder-1"
+        assert payload["expected_title"] == "Synthetic runtime reminder"
+        assert payload["expected_completed"] is False
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "reminders",
+            "authorization_status": "authorized",
+            "reminder": {
+                "reminder_id": "runtime-reminder-1",
+                "title": "Synthetic runtime reminder",
+                "list_name": "Synthetic List",
+                "due_date": "2026-06-04T17:00:00.000Z",
+                "start_date": "",
+                "completed": True,
+                "priority": 5,
+                "notes_present": True,
+                "url_present": False,
+                "alarms_count": 1,
+            },
+            "warnings": [],
+        }
+
+    result = apply_reminder_change(
+        "complete",
+        handle=handle,
+        expected_title="Synthetic runtime reminder",
+        expected_completed=False,
+        approval_token=_approval_token(plan),
+        confirm_apply=True,
+        eventkit_runner=runner,
+    )
+
+    assert result["status"] == "ok"
+    assert result["read_back"]["completed"] is True
+    assert calls == ["reminders", "reminder_apply_change"]
+    assert "runtime-reminder-1" not in str(result)
+
+
+def test_apply_reminder_change_update_due_date_propagates_helper_warning() -> None:
+    search = search_reminders_eventkit("runtime", eventkit_runner=_eventkit_runner)
+    handle = search["results"][0]["handle"]
+    plan = plan_reminder_change(
+        "update_due_date",
+        handle=handle,
+        expected_title="Synthetic runtime reminder",
+        expected_completed=False,
+        due_date="2026-06-06",
+    )
+
+    def runner(payload: dict, _timeout: float) -> dict:
+        if payload["command"] == "reminders":
+            return _eventkit_runner(payload, _timeout)
+        assert payload["operation"] == "update_due_date"
+        assert payload["due_date"] == "2026-06-06"
+        return {
+            "schema_version": 1,
+            "status": "error",
+            "source": "reminders",
+            "authorization_status": "authorized",
+            "reminder": None,
+            "warnings": [
+                {
+                    "code": "expected_state_mismatch",
+                    "message": "Reminder due date did not match expected state.",
+                }
+            ],
+        }
+
+    result = apply_reminder_change(
+        "update_due_date",
+        handle=handle,
+        expected_title="Synthetic runtime reminder",
+        expected_completed=False,
+        due_date="2026-06-06",
+        approval_token=_approval_token(plan),
+        confirm_apply=True,
+        eventkit_runner=runner,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "expected_state_mismatch"

@@ -22,7 +22,7 @@ This repo is close to publishable as a local-only Apple data MCP plugin, but pub
 - Public write-tool roadmap that keeps mutation support gated.
 - Public release scanner for local-path and operator-term leakage in public files.
 - Mutation-gate auditor that fails if write-like CLI/MCP surfaces appear before an approved mutation gate.
-- Write-design gate auditor that requires first-tranche write designs while keeping current CLI/MCP surfaces read-only.
+- Write-design gate auditor that requires first-tranche write designs and allows only the approved Reminders apply surface.
 - Surface-contract auditor that fails if MCP tools, CLI commands, health surfaces, access requirements, or the capability matrix drift out of alignment.
 - Release-readiness auditor that separates local package readiness from GitHub publication readiness.
 - MCP client config renderer for generic stdio, Claude Code, Cursor, and OpenClaw config.
@@ -47,7 +47,7 @@ The public README should explain:
 - What the plugin does.
 - What local permissions may be required.
 - That search is metadata-first and exact content/detail is handle-gated.
-- That write tools are not currently available.
+- That only Reminders create/complete/due-date apply is currently available, and only after plan approval-token and explicit-confirmation checks.
 - That Hide My Email support is inferred local Mail evidence, not iCloud account management.
 - That the plugin does not use Gmail API, IMAP, OAuth, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, telemetry, or network mail services.
 
