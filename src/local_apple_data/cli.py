@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from .adapters.books import get_book, list_book_annotations, search_books
 from .adapters.calendar import (
     apply_calendar_change,
     get_calendar_event,
@@ -397,6 +398,42 @@ def _shortcuts_search_command(args: argparse.Namespace) -> int:
 def _shortcuts_get_command(args: argparse.Namespace) -> int:
     payload = get_shortcuts_item(args.handle, max_scan_items=args.max_scan_items)
     log_result("shortcuts.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _books_search_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {"limit": args.limit}
+    if args.library_db:
+        kwargs["library_db_path"] = Path(args.library_db).expanduser()
+    if args.annotations_db:
+        kwargs["annotations_db_path"] = Path(args.annotations_db).expanduser()
+    payload = search_books(args.query, **kwargs)
+    log_result("books.search", payload)
+    _print_json(payload)
+    return 0
+
+
+def _books_get_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {}
+    if args.library_db:
+        kwargs["library_db_path"] = Path(args.library_db).expanduser()
+    if args.annotations_db:
+        kwargs["annotations_db_path"] = Path(args.annotations_db).expanduser()
+    payload = get_book(args.handle, **kwargs)
+    log_result("books.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _books_annotations_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {"limit": args.limit, "max_chars": args.max_chars}
+    if args.library_db:
+        kwargs["library_db_path"] = Path(args.library_db).expanduser()
+    if args.annotations_db:
+        kwargs["annotations_db_path"] = Path(args.annotations_db).expanduser()
+    payload = list_book_annotations(args.handle, **kwargs)
+    log_result("books.annotations", payload)
     _print_json(payload)
     return 0
 
@@ -1417,6 +1454,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum Shortcuts items to scan while resolving the handle.",
     )
     shortcuts_get.set_defaults(func=_shortcuts_get_command)
+
+    books = subparsers.add_parser(
+        "books",
+        help="Apple Books metadata and annotation commands.",
+    )
+    books_subparsers = books.add_subparsers(dest="books_command", required=True)
+
+    books_search = books_subparsers.add_parser(
+        "search",
+        help="Search Apple Books library metadata by title, author, or genre.",
+    )
+    books_search.add_argument("--json", action="store_true", help="Emit JSON output.")
+    books_search.add_argument("--query", required=True, help="Book title, author, or genre query text.")
+    books_search.add_argument("--limit", type=int, default=20, help="Maximum results, capped at 50.")
+    books_search.add_argument("--library-db", help=argparse.SUPPRESS)
+    books_search.add_argument("--annotations-db", help=argparse.SUPPRESS)
+    books_search.set_defaults(func=_books_search_command)
+
+    books_get = books_subparsers.add_parser(
+        "get",
+        help="Get exact Apple Books metadata by handle.",
+    )
+    books_get.add_argument("--json", action="store_true", help="Emit JSON output.")
+    books_get.add_argument("--handle", required=True, help="Book handle from search output.")
+    books_get.add_argument("--library-db", help=argparse.SUPPRESS)
+    books_get.add_argument("--annotations-db", help=argparse.SUPPRESS)
+    books_get.set_defaults(func=_books_get_command)
+
+    books_annotations = books_subparsers.add_parser(
+        "annotations",
+        help="List bounded annotations for one exact selected Apple Books book handle.",
+    )
+    books_annotations.add_argument("--json", action="store_true", help="Emit JSON output.")
+    books_annotations.add_argument("--handle", required=True, help="Book handle from search output.")
+    books_annotations.add_argument("--limit", type=int, default=20, help="Maximum annotations, capped at 50.")
+    books_annotations.add_argument("--max-chars", type=int, default=4000, help="Maximum annotation text characters, capped at 12000.")
+    books_annotations.add_argument("--library-db", help=argparse.SUPPRESS)
+    books_annotations.add_argument("--annotations-db", help=argparse.SUPPRESS)
+    books_annotations.set_defaults(func=_books_annotations_command)
 
     notes = subparsers.add_parser("notes", help="Apple Notes metadata commands.")
     notes_subparsers = notes.add_subparsers(dest="notes_command", required=True)

@@ -16,6 +16,7 @@ from typing import Any
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
+from local_apple_data.adapters.books import get_book, list_book_annotations, search_books
 from local_apple_data.adapters.calendar import (
     apply_calendar_change,
     get_calendar_event,
@@ -419,6 +420,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
                     "shortcuts_search",
                     {"query": "Shortcuts"},
                 )
+                wildcard_books = await session.call_tool("books_search", {"query": "Books"})
                 wildcard_notes = await session.call_tool("notes_search", {"query": "%"})
                 wildcard_icloud = await session.call_tool("icloud_drive_search", {"query": "%"})
                 wildcard_calendar = await session.call_tool("calendar_search", {"query": "%"})
@@ -442,6 +444,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
         "wildcard_voice_memos": _payload(wildcard_voice_memos)["warnings"][0]["code"],
         "wildcard_safari": _payload(wildcard_safari)["warnings"][0]["code"],
         "wildcard_shortcuts": _payload(wildcard_shortcuts)["warnings"][0]["code"],
+        "wildcard_books": _payload(wildcard_books)["warnings"][0]["code"],
         "wildcard_notes": _payload(wildcard_notes)["warnings"][0]["code"],
         "wildcard_icloud": _payload(wildcard_icloud)["warnings"][0]["code"],
         "wildcard_calendar": _payload(wildcard_calendar)["warnings"][0]["code"],
@@ -660,6 +663,104 @@ def _shortcuts_smoke() -> dict[str, Any]:
         "shortcuts_folder_kind": folder["results"][0]["kind"],
         "shortcuts_legacy_detail_status": legacy_detail["status"],
         "shortcuts_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
+    }
+
+
+def _make_books_dbs(library_db: Path, annotations_db: Path) -> None:
+    library_db.parent.mkdir(parents=True, exist_ok=True)
+    annotations_db.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(library_db) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE ZBKLIBRARYASSET (
+                Z_PK INTEGER PRIMARY KEY,
+                ZASSETID TEXT,
+                ZASSETGUID TEXT,
+                ZSTOREID TEXT,
+                ZTITLE TEXT,
+                ZAUTHOR TEXT,
+                ZGENRE TEXT,
+                ZKIND TEXT,
+                ZCONTENTTYPE INTEGER,
+                ZISFINISHED INTEGER,
+                ZREADINGPROGRESS REAL,
+                ZLASTOPENDATE REAL,
+                ZPATH TEXT
+            );
+            INSERT INTO ZBKLIBRARYASSET
+              (Z_PK, ZASSETID, ZASSETGUID, ZSTOREID, ZTITLE, ZAUTHOR, ZGENRE,
+               ZKIND, ZCONTENTTYPE, ZISFINISHED, ZREADINGPROGRESS, ZLASTOPENDATE, ZPATH)
+            VALUES
+              (1, 'RUNTIME-BOOK-ASSET-ID', 'RUNTIME-BOOK-GUID', 'RUNTIME-BOOK-STORE-ID',
+               'Synthetic runtime Apple Books item', 'Runtime Author', 'Engineering',
+               'ebook', 1, 0, 0.5, 802310400.0, '/private/synthetic/runtime-book.epub');
+            """
+        )
+    with sqlite3.connect(annotations_db) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE ZAEANNOTATION (
+                Z_PK INTEGER PRIMARY KEY,
+                ZANNOTATIONASSETID TEXT,
+                ZANNOTATIONDELETED INTEGER,
+                ZANNOTATIONTYPE INTEGER,
+                ZANNOTATIONSTYLE INTEGER,
+                ZANNOTATIONCREATIONDATE REAL,
+                ZANNOTATIONMODIFICATIONDATE REAL,
+                ZANNOTATIONNOTE TEXT,
+                ZANNOTATIONREPRESENTATIVETEXT TEXT,
+                ZANNOTATIONSELECTEDTEXT TEXT,
+                ZANNOTATIONUUID TEXT
+            );
+            INSERT INTO ZAEANNOTATION
+              (Z_PK, ZANNOTATIONASSETID, ZANNOTATIONDELETED, ZANNOTATIONTYPE,
+               ZANNOTATIONSTYLE, ZANNOTATIONCREATIONDATE, ZANNOTATIONMODIFICATIONDATE,
+               ZANNOTATIONNOTE, ZANNOTATIONREPRESENTATIVETEXT, ZANNOTATIONSELECTEDTEXT,
+               ZANNOTATIONUUID)
+            VALUES
+              (10, 'RUNTIME-BOOK-ASSET-ID', 0, 1, 2, 802310410.0, 802310420.0,
+               'Synthetic runtime book note.', 'Runtime surrounding context.',
+               'Synthetic runtime highlighted text.', 'RUNTIME-ANNOTATION-UUID');
+            """
+        )
+
+
+def _books_smoke(tmp_path: Path) -> dict[str, Any]:
+    library_db = tmp_path / "Books/BKLibrary.sqlite"
+    annotations_db = tmp_path / "Books/AEAnnotation.sqlite"
+    _make_books_dbs(library_db, annotations_db)
+    search = search_books(
+        "runtime Apple",
+        library_db_path=library_db,
+        annotations_db_path=annotations_db,
+    )
+    handle = search["results"][0]["handle"]
+    detail = get_book(handle, library_db_path=library_db, annotations_db_path=annotations_db)
+    annotations = list_book_annotations(
+        handle,
+        library_db_path=library_db,
+        annotations_db_path=annotations_db,
+        max_chars=4000,
+    )
+    legacy_detail = get_book(
+        "books:book:1",
+        library_db_path=library_db,
+        annotations_db_path=annotations_db,
+    )
+    return {
+        "books_opaque_handle": handle.startswith("books:book:v1:"),
+        "books_search_status": search["status"],
+        "books_annotation_count": search["results"][0]["annotation_count"],
+        "books_raw_identifier_returned": "RUNTIME-BOOK-ASSET-ID" in str(search),
+        "books_book_text_returned": search["results"][0]["book_text_returned"],
+        "books_detail_status": detail["status"],
+        "books_annotations_status": annotations["status"],
+        "books_annotations_returned": annotations["result"]["annotations_returned"],
+        "books_annotation_text_returned": annotations["privacy"]["annotation_text_returned"],
+        "books_annotation_chars": annotations["result"]["annotation_text_chars"],
+        "books_annotation_raw_identifier_returned": "RUNTIME-ANNOTATION-UUID" in str(annotations),
+        "books_legacy_detail_status": legacy_detail["status"],
+        "books_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
     }
 
 
@@ -1778,7 +1879,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 55,
+        "tool_count": 58,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1788,6 +1889,7 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "wildcard_voice_memos": "broad_query",
         "wildcard_safari": "broad_query",
         "wildcard_shortcuts": "broad_query",
+        "wildcard_books": "broad_query",
         "wildcard_notes": "broad_query",
         "wildcard_icloud": "broad_query",
         "wildcard_calendar": "broad_query",
@@ -1893,6 +1995,19 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "shortcuts_folder_kind": "folder",
         "shortcuts_legacy_detail_status": "error",
         "shortcuts_legacy_detail_warning": "invalid_handle",
+        "books_opaque_handle": True,
+        "books_search_status": "ok",
+        "books_annotation_count": 1,
+        "books_raw_identifier_returned": False,
+        "books_book_text_returned": False,
+        "books_detail_status": "ok",
+        "books_annotations_status": "ok",
+        "books_annotations_returned": 1,
+        "books_annotation_text_returned": True,
+        "books_annotation_chars": 63,
+        "books_annotation_raw_identifier_returned": False,
+        "books_legacy_detail_status": "error",
+        "books_legacy_detail_warning": "invalid_handle",
         "notes_opaque_handle": True,
         "notes_content_status": "ok",
         "notes_content_chars": 31,
@@ -2036,6 +2151,7 @@ def main() -> None:
         summary.update(_voice_memos_content_smoke(tmp_path))
         summary.update(_safari_smoke(tmp_path))
         summary.update(_shortcuts_smoke())
+        summary.update(_books_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))
         summary.update(_notes_attachment_smoke(tmp_path))
         summary.update(_notes_plan_apply_smoke(tmp_path))

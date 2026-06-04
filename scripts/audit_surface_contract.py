@@ -94,6 +94,14 @@ SURFACE_CONTRACTS = (
         mcp_tools=("shortcuts_search", "shortcuts_get_item"),
     ),
     SurfaceContract(
+        name="books",
+        label="Books",
+        cli_group="books",
+        cli_subparser="books_subparsers",
+        cli_commands=("search", "get", "annotations"),
+        mcp_tools=("books_search", "books_get", "books_list_annotations"),
+    ),
+    SurfaceContract(
         name="notes",
         label="Notes",
         cli_group="notes",

@@ -22,6 +22,7 @@ These examples are synthetic. They are shape examples only and must not be repla
     "voice_memos": {"status": "ok"},
     "safari": {"status": "ok", "schema_check": "not_applicable"},
     "shortcuts": {"status": "available", "schema_check": "not_applicable"},
+    "books": {"status": "ok", "schema_check": "ok"},
     "notes": {"status": "ok", "automation_check": "on_exact_content_call"},
     "calendar": {"status": "checked_on_tool_call", "permission_check": "non_prompting_eventkit", "prompts": false},
     "reminders": {"status": "ok", "eventkit_check": "on_tool_call"},
@@ -33,14 +34,78 @@ These examples are synthetic. They are shape examples only and must not be repla
     "mail": {"status": "ok", "warnings": []},
     "messages": {"status": "ok", "warnings": []},
     "voice_memos": {"status": "ok", "warnings": []},
+    "books": {"status": "ok", "warnings": []},
     "notes": {"status": "ok", "warnings": []},
     "reminders": {"status": "ok", "warnings": []}
   },
   "access_requirements": [
+    {"surface": "books", "check_mode": "schema_only", "prompts": false},
     {"surface": "calendar", "check_mode": "non_prompting_eventkit", "prompts": false},
     {"surface": "contacts", "check_mode": "non_prompting_contacts_framework", "prompts": false},
     {"surface": "photos", "check_mode": "non_prompting_photokit", "prompts": false}
   ]
+}
+```
+
+## Books Search
+
+```json
+{
+  "status": "ok",
+  "source": "books",
+  "results": [
+    {
+      "handle": "<opaque books:book:v1 handle>",
+      "title": "Synthetic Book",
+      "author": "Synthetic Author",
+      "genre": "Reference",
+      "kind": "epub",
+      "reading_progress": 0.42,
+      "annotation_count": 2,
+      "book_text_returned": false,
+      "raw_identifier_returned": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Books Exact Item
+
+```json
+{
+  "status": "ok",
+  "source": "books",
+  "result": {
+    "handle": "<opaque books:book:v1 handle>",
+    "title": "Synthetic Book",
+    "author": "Synthetic Author",
+    "genre": "Reference",
+    "annotation_count": 2,
+    "book_text_returned": false,
+    "raw_identifier_returned": false
+  },
+  "warnings": []
+}
+```
+
+## Books Annotations
+
+```json
+{
+  "status": "ok",
+  "source": "books",
+  "book_handle": "<opaque books:book:v1 handle>",
+  "results": [
+    {
+      "handle": "<opaque books:annotation:v1 handle>",
+      "selected_text": "Synthetic highlighted text.",
+      "note_text": "Synthetic reader note.",
+      "annotation_text_returned": true,
+      "raw_identifier_returned": false
+    }
+  ],
+  "warnings": []
 }
 ```
 

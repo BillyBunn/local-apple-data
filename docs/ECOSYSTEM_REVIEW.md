@@ -52,6 +52,15 @@ Architecture implication: Voice Memos belongs in the broad local Apple data surf
 
 Architecture implication: local iCloud Drive text-file content can be exact-handle and file-system based, but binary extraction, broad content search, symlink traversal, hidden files, and network iCloud fetches should remain out of scope.
 
+### Books
+
+- Apple Support documents highlights and notes in Books on Mac and notes that the feature depends on book type. Source: https://support.apple.com/en-ae/guide/books/ibks3975f128/mac
+- `jladicos/apple-books-highlights` exports Apple Books highlights and notes by reading the local Books SQLite databases after refreshing Books.app. Source: https://github.com/jladicos/apple-books-highlights
+- BooknoteWorthy documents the local Apple Books `BKLibrary` and `AEAnnotation` SQLite files and exports annotations from those stores without uploading data. Source: https://oliwang.github.io/BooknoteWorthy/
+- The OpenClaw Apple Books skill describes local read-only access to Books library metadata, highlights, notes, collections, and reading progress through the same local SQLite database family. Source: https://clawhub.ai/alexissan/apple-books
+
+Architecture implication: Books belongs in the broad local Apple data surface. Existing tools prove that reading highlights and notes from local SQLite stores is normal, but this plugin should avoid broad annotation exports by default. The durable first tranche is specific-query metadata search plus selected-book annotations behind an opaque `books:book:v1:` handle, without book/chapter/PDF/EPUB text extraction, raw IDs, local paths, iCloud fetches, Books.app automation, or mutation.
+
 ### Safari
 
 - `MrGo2/icloud-mcp` includes Safari as one of its local-mode services and advertises Safari tab access in examples. Source: https://github.com/MrGo2/icloud-mcp
@@ -78,7 +87,7 @@ Architecture implication: Calendar, Reminders, Contacts, and Photos should use n
 
 This plugin should be broader than single-surface MCP servers and stricter than most single-surface examples:
 
-- Broad surface: Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Notes, iCloud Drive, Calendar, Reminders, Contacts, and Photos.
+- Broad surface: Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Books metadata/selected-book annotations, Notes, iCloud Drive, Calendar, Reminders, Contacts, and Photos.
 - Local-only transport: stdio MCP and CLI through local files/frameworks only.
 - Metadata-first search: narrow query gates before local store/framework access.
 - Exact-handle content: content/detail/export requires opaque handles returned by matching search tools.
@@ -92,5 +101,5 @@ This plugin should be broader than single-surface MCP servers and stricter than 
 
 - Whether to add a small privileged helper architecture for users who do not want their AI client process to hold Full Disk Access.
 - Whether future generated transcription belongs in this plugin or a separate transcription tool connected by handles.
-- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, Messages exact-chat send-text, Safari bookmark/Reading List reads, Shortcuts metadata reads, and Mail/Messages/Notes attachment export tranches should prioritize Mail send, richer Messages mutation, Photos edit/delete/album support, arbitrary Notes update/delete/move, Safari history/tabs/bookmark mutation, Shortcuts run/import/export, or richer framework-backed edits.
+- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, Messages exact-chat send-text, Safari bookmark/Reading List reads, Shortcuts metadata reads, Books metadata/selected annotation reads, and Mail/Messages/Notes attachment export tranches should prioritize Mail send, richer Messages mutation, Photos edit/delete/album support, arbitrary Notes update/delete/move, Safari history/tabs/bookmark mutation, Shortcuts run/import/export, Books richer export/mutation, or richer framework-backed edits.
 - Whether public registry packaging should target npm, PyPI, a Codex personal marketplace, Smithery-style registries, or only GitHub source installation first.

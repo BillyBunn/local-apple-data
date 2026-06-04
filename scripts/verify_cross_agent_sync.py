@@ -57,6 +57,7 @@ SYNC_FILES = [
     "docs/V1_24_MESSAGES_SEND_TEXT_WRITE_DESIGN.md",
     "docs/V1_25_SAFARI_BOOKMARKS.md",
     "docs/V1_26_SHORTCUTS_METADATA.md",
+    "docs/V1_27_BOOKS_METADATA.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "scripts/audit_release_readiness.py",
     "scripts/audit_mutation_gates.py",
@@ -80,6 +81,7 @@ SYNC_FILES = [
     "src/local_apple_data/cli.py",
     "src/local_apple_data/health.py",
     "src/local_apple_data/mcp_server.py",
+    "src/local_apple_data/adapters/books.py",
     "src/local_apple_data/adapters/calendar.py",
     "src/local_apple_data/adapters/contacts.py",
     "src/local_apple_data/adapters/hide_my_email.py",
@@ -94,8 +96,10 @@ SYNC_FILES = [
     "src/local_apple_data/adapters/voice_memos.py",
     "tests/test_cli_safari.py",
     "tests/test_cli_shortcuts.py",
+    "tests/test_cli_books.py",
     "tests/test_safari_adapter.py",
     "tests/test_shortcuts_adapter.py",
+    "tests/test_books_adapter.py",
 ]
 
 

@@ -52,6 +52,7 @@ The current `messages apply` CLI command and `messages_apply_change` MCP tool ar
 | Messages | Send plaintext to one exact existing chat | Messages.app automation plus local `chat.db` read-back | Approved. Confirm exact chat handle, body length/preview, approval token, explicit confirmation, stale chat-state refusal, and ghost-row detection before success; no direct-recipient send, new chat, SMS fallback selection, file send, reactions, edit, delete, or account selection |
 | Safari | None | Local `Bookmarks.plist` is read-only in the current release | Bookmark/Reading List mutation, history/tabs access, cookies, passwords, page content, and browser state require separate design and approval |
 | Shortcuts | None | Apple `shortcuts` CLI is used only for name metadata in the current release | Run/open/view/sign/export, body/action-graph reads, dynamic run tools, import/export, and mutation require separate design and approval |
+| Books | None | Local Books SQLite stores are read-only in the current release | Book/chapter/PDF/EPUB text extraction, broad library or annotation dumps/searches, iCloud fetch, Books.app automation, and mutation require separate design and approval |
 | Hide My Email | None | No approved local public API | Authoritative inventory or mutation requires a new source review and explicit approval |
 | iCloud Drive | Create text file; append text to an exact text file | Local filesystem | Approved. Confirm exact parent folder or file by opaque handle, filename or expected current SHA-256, content hash, approval token, and explicit confirmation before apply; no overwrite/rename/move/copy/delete |
 
@@ -68,6 +69,7 @@ Outside the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail dr
 - Photos edit, album targeting, album create/update/delete, hidden/favorite mutation, metadata mutation, thumbnails, inline asset bytes, network iCloud fetch, importing from URLs, and bulk Photos operations.
 - Safari bookmark creation/update/delete/move, history access, open tabs/iCloud tabs, private browsing data, cookies, passwords, browser caches, page content, or Safari UI automation.
 - Shortcuts run/open/view/sign/export, shortcut body/action graph reads, dynamic run tools, folder-scoped handles, Shortcuts SQLite scraping, import, create, update, delete, duplicate, or mutation.
+- Books book/chapter/PDF/EPUB text extraction, broad library dumps, broad annotation search/dumps, raw Books IDs/paths, iCloud content fetch, Books.app automation, or mutation.
 - Notes arbitrary update, delete, move, folder/account targeting, rich-text editing, checklist state, attachment mutation, broad attachment export, locked/shared-note mutation, Recently Deleted management, or bulk operations.
 - Calendar update, delete, move, recurrence, attendees, invitations, URLs, alarms, attachments, travel time, availability changes, all-day events, default-calendar guessing, or bulk operations.
 - Contacts update, delete, merge, move, group membership, postal addresses, birthdays, dates, relationships, social profiles, instant messaging addresses, notes, image data, custom labels beyond bounded local labels, or bulk operations.

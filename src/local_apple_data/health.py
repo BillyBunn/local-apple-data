@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
+from .adapters.books import check_books_schema
 from .adapters.mail import check_mail_schema, mail_db_relative_path
 from .adapters.messages import check_messages_schema
 from .adapters.notes import check_notes_schema
@@ -24,6 +25,14 @@ DEFAULT_STORE_PATHS = {
         "Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db"
     ),
     "safari_bookmarks": Path("Library/Safari/Bookmarks.plist"),
+    "books_library_store": Path(
+        "Library/Containers/com.apple.iBooksX/Data/Documents/BKLibrary/"
+        "BKLibrary-1-091020131601.sqlite"
+    ),
+    "books_annotations_store": Path(
+        "Library/Containers/com.apple.iBooksX/Data/Documents/AEAnnotation/"
+        "AEAnnotation_v10312011_1727_local.sqlite"
+    ),
     "notes_store": Path("Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"),
     "reminders_stores": Path(
         "Library/Group Containers/group.com.apple.reminders/Container_v1/Stores"
@@ -75,6 +84,13 @@ ACCESS_REQUIREMENTS = [
         "permission_class": "Shortcuts CLI",
         "status": "covered_by_tool_check",
         "check_mode": "cli_availability_without_listing",
+        "prompts": False,
+    },
+    {
+        "surface": "books",
+        "permission_class": "Full Disk Access may be required",
+        "status": "covered_by_store_check",
+        "check_mode": "schema_only",
         "prompts": False,
     },
     {
@@ -287,6 +303,12 @@ def _surface_summary(
             "schema_check": "not_applicable",
             "prompts": False,
         },
+        "books": {
+            "status": _schema_status(schema_checks, "books"),
+            "library_store_status": _store_status(stores, "books_library_store"),
+            "annotations_store_status": _store_status(stores, "books_annotations_store"),
+            "schema_check": _schema_status(schema_checks, "books"),
+        },
         "notes": {
             "status": _schema_status(schema_checks, "notes"),
             "store_status": _store_status(stores, "notes_store"),
@@ -373,6 +395,22 @@ def build_health(
         )
         if "voice_memos_store" in store_paths and _store_available(stores, "voice_memos_store")
         else _skipped_schema_check("voice_memos", "voice_memos_schema_skipped"),
+        "books": _safe_schema_check(
+            "books",
+            "books_schema_unavailable",
+            ["ZBKLIBRARYASSET", "ZAEANNOTATION"],
+            lambda: check_books_schema(
+                library_db_path=home / store_paths["books_library_store"],
+                annotations_db_path=home / store_paths["books_annotations_store"],
+            ),
+        )
+        if (
+            "books_library_store" in store_paths
+            and "books_annotations_store" in store_paths
+            and _store_available(stores, "books_library_store")
+            and _store_available(stores, "books_annotations_store")
+        )
+        else _skipped_schema_check("books", "books_schema_skipped"),
         "notes": _safe_schema_check(
             "notes",
             "notes_schema_unavailable",

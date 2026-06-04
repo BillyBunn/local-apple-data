@@ -6,6 +6,7 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
+from .adapters.books import get_book, list_book_annotations, search_books
 from .adapters.calendar import (
     apply_calendar_change,
     get_calendar_event,
@@ -82,7 +83,7 @@ from .redacted_log import log_result
 INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
-    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
+    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
     "Mail, Messages, and Notes attachment export are exact-handle only and never return attachment bytes inline. "
     "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, and each requires a matching plan approval token plus explicit confirmation."
 )
@@ -416,6 +417,34 @@ def shortcuts_get_item(handle: str, max_scan_items: int = 5000) -> dict[str, Any
     return _record(
         "shortcuts_get_item",
         get_shortcuts_item(handle, max_scan_items=max_scan_items),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def books_search(query: str, limit: int = 20) -> dict[str, Any]:
+    """Search local Apple Books metadata by title, author, or genre."""
+
+    return _record("books_search", search_books(query, limit=limit))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def books_get(handle: str) -> dict[str, Any]:
+    """Get exact local Apple Books metadata by opaque handle."""
+
+    return _record("books_get", get_book(handle))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def books_list_annotations(
+    handle: str,
+    limit: int = 20,
+    max_chars: int = 4000,
+) -> dict[str, Any]:
+    """List bounded annotations for one exact selected Apple Books book handle."""
+
+    return _record(
+        "books_list_annotations",
+        list_book_annotations(handle, limit=limit, max_chars=max_chars),
     )
 
 

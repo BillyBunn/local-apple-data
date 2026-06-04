@@ -2,6 +2,21 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260605010000 - 2026-06-04
+
+### Added
+
+- Read-only Apple Books library metadata search through `local-apple-data books search` and MCP `books_search`.
+- Exact selected Apple Books metadata retrieval through `local-apple-data books get` and MCP `books_get`.
+- Exact selected-book annotation listing through `local-apple-data books annotations` and MCP `books_list_annotations`, with bounded highlight/note text.
+- Synthetic Apple Books SQLite fixtures, adapter, CLI, MCP, health, runtime, surface-contract, and redaction coverage for the Books surface.
+
+### Security
+
+- Books search returns title/author/genre metadata and opaque handles only; raw asset IDs, local paths, and annotation UUIDs are not returned.
+- Annotation text is returned only after an exact `books:book:v1:` handle from the Books metadata flow.
+- Book/chapter text extraction, PDF/EPUB parsing, broad annotation dumps/search, raw local book paths, iCloud fetch, and Books mutation remain blocked.
+
 ## 0.1.0+codex.20260605000000 - 2026-06-04
 
 ### Added

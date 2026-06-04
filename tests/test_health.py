@@ -146,6 +146,50 @@ def _make_schema_stores(
     safari.parent.mkdir(parents=True, exist_ok=True)
     safari.write_bytes(b"bplist00")
 
+    books_library = tmp_path / DEFAULT_STORE_PATHS["books_library_store"]
+    books_library.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(books_library) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE ZBKLIBRARYASSET (
+                Z_PK INTEGER PRIMARY KEY,
+                ZASSETID TEXT,
+                ZASSETGUID TEXT,
+                ZSTOREID TEXT,
+                ZTITLE TEXT,
+                ZAUTHOR TEXT,
+                ZGENRE TEXT,
+                ZKIND TEXT,
+                ZCONTENTTYPE INTEGER,
+                ZISFINISHED INTEGER,
+                ZREADINGPROGRESS REAL,
+                ZLASTOPENDATE REAL,
+                ZPATH TEXT
+            );
+            """
+        )
+
+    books_annotations = tmp_path / DEFAULT_STORE_PATHS["books_annotations_store"]
+    books_annotations.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(books_annotations) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE ZAEANNOTATION (
+                Z_PK INTEGER PRIMARY KEY,
+                ZANNOTATIONASSETID TEXT,
+                ZANNOTATIONDELETED INTEGER,
+                ZANNOTATIONTYPE INTEGER,
+                ZANNOTATIONSTYLE INTEGER,
+                ZANNOTATIONCREATIONDATE REAL,
+                ZANNOTATIONMODIFICATIONDATE REAL,
+                ZANNOTATIONNOTE TEXT,
+                ZANNOTATIONREPRESENTATIVETEXT TEXT,
+                ZANNOTATIONSELECTEDTEXT TEXT,
+                ZANNOTATIONUUID TEXT
+            );
+            """
+        )
+
     icloud_drive = tmp_path / DEFAULT_STORE_PATHS["icloud_drive_root"]
     icloud_drive.mkdir(parents=True, exist_ok=True)
 
@@ -174,6 +218,8 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["surfaces"]["safari"]["schema_check"] == "not_applicable"
     assert health["surfaces"]["shortcuts"]["status"] == "available"
     assert health["surfaces"]["shortcuts"]["tool_check"] == "shortcuts_cli"
+    assert health["surfaces"]["books"]["status"] == "ok"
+    assert health["surfaces"]["books"]["schema_check"] == "ok"
     assert health["surfaces"]["icloud_drive"]["status"] == "ok"
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
     assert health["surfaces"]["calendar"]["prompts"] is False
@@ -199,6 +245,12 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert any(
         requirement["surface"] == "shortcuts"
         and requirement["check_mode"] == "cli_availability_without_listing"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert any(
+        requirement["surface"] == "books"
+        and requirement["check_mode"] == "schema_only"
         and requirement["prompts"] is False
         for requirement in health["access_requirements"]
     )
