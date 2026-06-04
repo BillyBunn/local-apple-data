@@ -35,7 +35,7 @@ Implemented now:
 - `local-apple-data mail export-attachment --json --message-handle <mail:message:v2:...> --handle <mail:attachment:v1:...> --output-dir <dir>` for exact local Mail attachment export without inline bytes or source message paths
 - `local-apple-data mail plan --json --operation create-draft --to <address> --subject <subject> --body-text <text>` for non-mutating future draft-create previews with idempotency and approval metadata
 - `local-apple-data mail apply --json --operation create-draft --to <address> --subject <subject> --body-text <text> --approval-token <token> --confirm-apply` for the approved Mail create-draft path, with save-only Mail.app automation and local read-back verification when the Drafts store exposes the saved draft
-- `local-apple-data messages search/get` commands for local Messages chat display-name metadata and exact bounded transcripts
+- `local-apple-data messages search/get` commands for local Messages chat display-name metadata and exact bounded transcripts, including modern local `attributedBody` plaintext fallback when `message.text` is empty
 - `local-apple-data messages attachments --json --handle <messages:chat:v1:...>` for exact selected-chat attachment metadata with opaque `messages:attachment:v1:` handles
 - `local-apple-data messages export-attachment --json --chat-handle <messages:chat:v1:...> --handle <messages:attachment:v1:...> --output-dir <dir>` for exact local Messages attachment export without inline bytes or source media paths
 - `local-apple-data hide-my-email search/get` commands for inferred Hide My Email aliases observed in local Mail address metadata
@@ -77,7 +77,7 @@ Implemented now:
 - Redacted command event logging
 - Opaque signed handles for exact Mail/Messages/Voice Memos/Notes/Calendar/Contacts/Photos/Reminders/iCloud Drive metadata fetches
 - Exact Mail content retrieval through the same opaque `mail:message:v2:` handles
-- Exact Messages chat transcript retrieval through opaque `messages:chat:v1:` handles
+- Exact Messages chat transcript retrieval through opaque `messages:chat:v1:` handles, using local text plus bounded `attributedBody` plaintext fallback when available
 - Exact Messages attachment metadata/export through opaque `messages:chat:v1:` and `messages:attachment:v1:` handles
 - Exact inferred Hide My Email alias detail through opaque `hide_my_email:alias:v1:` handles
 - Exact Voice Memos transcript retrieval through opaque `voice_memos:recording:v1:` handles when Apple-generated local transcript data is embedded in the selected `.m4a`
@@ -128,6 +128,7 @@ The first Notes append-text write design gate is documented in `docs/V1_19_NOTES
 The first Notes attachment export design gate is documented in `docs/V1_20_NOTES_ATTACHMENT_EXPORT.md`.
 The first Mail attachment export design gate is documented in `docs/V1_21_MAIL_ATTACHMENT_EXPORT.md`.
 The first Messages attachment export design gate is documented in `docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md`.
+The Messages attributed-body fallback design gate is documented in `docs/V1_23_MESSAGES_ATTRIBUTED_BODY.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.

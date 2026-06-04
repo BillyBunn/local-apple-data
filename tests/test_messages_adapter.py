@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import sqlite3
 from pathlib import Path
 
@@ -8,6 +9,20 @@ from local_apple_data.adapters.messages import (
     get_message_chat,
     list_message_attachments,
     search_message_chats,
+)
+
+ATTRIBUTED_BODY_B64 = (
+    "BAtzdHJlYW10eXBlZIHoA4QBQISEhBlOU011dGFibGVBdHRyaWJ1dGVkU3RyaW5nAISEEk5T"
+    "QXR0cmlidXRlZFN0cmluZwCEhAhOU09iamVjdACFkoSEhA9OU011dGFibGVTdHJpbmcBhIQI"
+    "TlNTdHJpbmcBlYQBKxdBdHRyaWJ1dGVkIHJ1bnRpbWUgdGV4dIaEAmlJAReShISEDE5TRGlj"
+    "dGlvbmFyeQCVhAFpAIaG"
+)
+MALFORMED_ATTRIBUTED_BODY_HEX = (
+    "040B73747265616D747970656481E803840141848484194E534D757461626C6541747472"
+    "696275746564537472696E67008484124E5341747472696275746564537472696E670084"
+    "84084E534F626A6563740085928484840F4E534D757461626C65537472696E6701848408"
+    "4E53537472696E67019584012B17417474726962757465642072756E74696D6520746578"
+    "7486840269490117928484840C4E5344696374696F6E6172790095840169008686"
 )
 
 
@@ -27,7 +42,8 @@ def _make_messages_db(path: Path) -> None:
                 date INTEGER,
                 is_from_me INTEGER,
                 handle_id INTEGER,
-                service TEXT
+                service TEXT,
+                attributedBody BLOB
             );
             CREATE TABLE chat_message_join (
                 chat_id INTEGER,
@@ -48,8 +64,8 @@ def _make_messages_db(path: Path) -> None:
               (7, '+15550100', 'iMessage');
             INSERT INTO chat_handle_join VALUES (1, 7);
             INSERT INTO message VALUES
-              (10, 'First synthetic message', 802310400, 0, 7, 'iMessage'),
-              (11, 'Second synthetic reply', 802310500, 1, 0, 'iMessage');
+              (10, 'First synthetic message', 802310400, 0, 7, 'iMessage', NULL),
+              (11, 'Second synthetic reply', 802310500, 1, 0, 'iMessage', NULL);
             INSERT INTO chat_message_join VALUES
               (1, 10),
               (1, 11);
@@ -144,6 +160,66 @@ def test_get_message_chat_returns_exact_bounded_transcript(tmp_path: Path) -> No
     assert result["warnings"][0]["code"] == "content_truncated"
     assert "+15550100" not in str(result)
     assert "chat-guid-1" not in str(result)
+
+
+def test_get_message_chat_uses_attributed_body_fallback(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    attributed_body = base64.b64decode(ATTRIBUTED_BODY_B64)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (12, None, 802310600, 0, 7, "iMessage", attributed_body),
+        )
+        connection.execute("INSERT INTO chat_message_join VALUES (?, ?)", (1, 12))
+    search = search_message_chats("Planning", db_path=db_path)
+    handle = search["results"][0]["handle"]
+
+    result = get_message_chat(handle, db_path=db_path, max_messages=10, max_chars=200)
+
+    assert result["status"] == "ok"
+    assert result["warnings"] == []
+    assert result["result"]["messages_returned"] == 3
+    message = result["result"]["messages"][2]
+    assert message["text"] == "Attributed runtime text"
+    assert message["text_source"] == "attributed_body"
+
+
+def test_get_message_chat_preserves_valid_attributed_body_when_one_blob_fails(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    attributed_body = base64.b64decode(ATTRIBUTED_BODY_B64)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (12, None, 802310600, 0, 7, "iMessage", attributed_body),
+        )
+        connection.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (
+                13,
+                None,
+                802310700,
+                0,
+                7,
+                "iMessage",
+                bytes.fromhex(MALFORMED_ATTRIBUTED_BODY_HEX),
+            ),
+        )
+        connection.execute("INSERT INTO chat_message_join VALUES (?, ?)", (1, 12))
+        connection.execute("INSERT INTO chat_message_join VALUES (?, ?)", (1, 13))
+    search = search_message_chats("Planning", db_path=db_path)
+    handle = search["results"][0]["handle"]
+
+    result = get_message_chat(handle, db_path=db_path, max_messages=10, max_chars=200)
+
+    assert result["status"] == "ok"
+    assert result["warnings"][0]["code"] == "messages_attributed_body_unavailable"
+    assert result["result"]["messages_returned"] == 3
+    assert result["result"]["messages"][2]["text"] == "Attributed runtime text"
+    assert result["result"]["messages"][2]["text_source"] == "attributed_body"
 
 
 def test_get_message_chat_rejects_invalid_handle() -> None:

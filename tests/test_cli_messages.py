@@ -18,7 +18,8 @@ def _make_messages_db(path: Path) -> None:
                 date INTEGER,
                 is_from_me INTEGER,
                 handle_id INTEGER,
-                service TEXT
+                service TEXT,
+                attributedBody BLOB
             );
             CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER);
             CREATE TABLE chat_handle_join (chat_id INTEGER, handle_id INTEGER);
@@ -42,7 +43,7 @@ def _make_messages_db(path: Path) -> None:
             INSERT INTO chat VALUES (1, 'chat-guid-1', 'Synthetic CLI Chat', 'iMessage');
             INSERT INTO handle VALUES (7, '+15550100', 'iMessage');
             INSERT INTO chat_handle_join VALUES (1, 7);
-            INSERT INTO message VALUES (10, 'Synthetic CLI message', 802310400, 0, 7, 'iMessage');
+            INSERT INTO message VALUES (10, 'Synthetic CLI message', 802310400, 0, 7, 'iMessage', NULL);
             INSERT INTO chat_message_join VALUES (1, 10);
             INSERT INTO attachment VALUES
               (20, 'attachment-guid-1', 802310300, 802310350,

@@ -207,13 +207,15 @@ The v1.7 PhotoKit phase keeps the same synthetic-first test posture:
 The v1.8 Messages phase keeps the same synthetic-first test posture:
 
 - Exact `messages_get_chat` succeeds from a synthetic opaque `messages:chat:v1:` handle.
+- Exact `messages_get_chat` decodes a synthetic modern `attributedBody` row when `message.text` is empty and reports `text_source:"attributed_body"`.
+- A malformed attributed-body blob returns a stable warning while preserving normal text rows and individually decodable fallback rows.
 - Invalid raw row IDs, raw chat GUIDs, and fabricated handles fail closed.
 - Empty and wildcard-only chat display-name searches fail before opening `chat.db`.
 - Search output returns chat metadata without message text, phone numbers, email addresses, chat GUIDs, raw row IDs, or participant identifiers.
-- Exact chat transcript returns bounded message text, direction, date, and service only.
+- Exact chat transcript returns bounded message text, text source, direction, date, and service only.
 - Transcript text is capped by `max_messages` and `max_chars`, and truncation reports `content_truncated`.
-- Broad attachment export, inline attachment bytes, source media paths, attributed bodies, tapbacks/reactions, send-state metadata, broad message-text search, and mutation are out of scope.
-- Runtime verification covers synthetic transcript success, attachment list/export success, and invalid-handle rejection without touching real Messages content.
+- Broad attachment export, inline attachment bytes, source media paths, raw attributed-body blobs, attributed-string attributes, tapbacks/reactions, send-state metadata, broad message-text search, and mutation are out of scope.
+- Runtime verification covers synthetic transcript success, attributed-body plaintext fallback, attachment list/export success, and invalid-handle rejection without touching real Messages content.
 
 ## v1.9 Acceptance Criteria
 

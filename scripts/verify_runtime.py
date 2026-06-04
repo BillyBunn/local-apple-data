@@ -223,7 +223,8 @@ def _make_messages_db(path: Path) -> None:
                 date INTEGER,
                 is_from_me INTEGER,
                 handle_id INTEGER,
-                service TEXT
+                service TEXT,
+                attributedBody BLOB
             );
             CREATE TABLE chat_message_join (
                 chat_id INTEGER,
@@ -261,11 +262,14 @@ def _make_messages_db(path: Path) -> None:
             INSERT INTO handle VALUES (7, '+15550100', 'iMessage');
             INSERT INTO chat_handle_join VALUES (1, 7);
             INSERT INTO message VALUES
-              (10, 'Synthetic runtime message.', 802310400, 0, 7, 'iMessage'),
-              (11, 'Synthetic runtime reply.', 802310500, 1, 0, 'iMessage');
+              (10, 'Synthetic runtime message.', 802310400, 0, 7, 'iMessage', NULL),
+              (11, 'Synthetic runtime reply.', 802310500, 1, 0, 'iMessage', NULL),
+              (12, NULL, 802310600, 0, 7, 'iMessage',
+               X'040B73747265616D747970656481E803840140848484194E534D757461626C6541747472696275746564537472696E67008484124E5341747472696275746564537472696E67008484084E534F626A6563740085928484840F4E534D757461626C65537472696E67018484084E53537472696E67019584012B17417474726962757465642072756E74696D65207465787486840269490117928484840C4E5344696374696F6E6172790095840169008686');
             INSERT INTO chat_message_join VALUES
               (1, 10),
-              (1, 11);
+              (1, 11),
+              (1, 12);
             INSERT INTO attachment VALUES
               (20, 'runtime-attachment-guid', 802310300, 802310350,
                'Attachments/aa/bb/runtime-message-packet.pdf', 'com.adobe.pdf',
@@ -740,12 +744,18 @@ def _messages_content_smoke(tmp_path: Path) -> dict[str, Any]:
     search = search_message_chats("runtime", db_path=db_path)
     handle = search["results"][0]["handle"]
     content = get_message_chat(handle, db_path=db_path)
+    messages = content["result"]["messages"]
     legacy_content = get_message_chat("messages:chat:1", db_path=db_path)
     return {
         "messages_opaque_handle": handle.startswith("messages:chat:v1:"),
         "messages_content_status": content["status"],
         "messages_returned": content["result"]["messages_returned"],
         "messages_transcript_chars": content["result"]["transcript_chars"],
+        "messages_attributed_body_present": any(
+            message["text"] == "Attributed runtime text"
+            and message["text_source"] == "attributed_body"
+            for message in messages
+        ),
         "messages_legacy_content_status": legacy_content["status"],
         "messages_legacy_content_warning": legacy_content["warnings"][0]["code"],
     }
@@ -1629,8 +1639,9 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "mail_attachment_legacy_export_warning": "invalid_handle",
         "messages_opaque_handle": True,
         "messages_content_status": "ok",
-        "messages_returned": 2,
-        "messages_transcript_chars": 50,
+        "messages_returned": 3,
+        "messages_transcript_chars": 73,
+        "messages_attributed_body_present": True,
         "messages_legacy_content_status": "error",
         "messages_legacy_content_warning": "invalid_handle",
         "messages_attachment_list_status": "ok",

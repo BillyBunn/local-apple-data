@@ -80,6 +80,7 @@ Current public-facing docs:
 - `docs/V1_20_NOTES_ATTACHMENT_EXPORT.md`
 - `docs/V1_21_MAIL_ATTACHMENT_EXPORT.md`
 - `docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md`
+- `docs/V1_23_MESSAGES_ATTRIBUTED_BODY.md`
 - `docs/PRIVACY_MODEL.md`
 - `docs/THREAT_MODEL.md`
 - `docs/TESTING.md`

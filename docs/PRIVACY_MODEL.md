@@ -448,8 +448,8 @@ The v1.8 implementation:
 - Searches local Messages chats by chat display name only, with empty and broad queries rejected before opening `chat.db`.
 - Opens `~/Library/Messages/chat.db` read-only and query-only.
 - Returns chat display name, service name, participant count, message count, last message date, and opaque handle during search.
-- Reads recent message text only for exact selected chat handles, with `max_messages` and `max_chars` caps.
-- Does not return participant phone numbers, email addresses, chat GUIDs, raw message IDs, attachments, attributed bodies, tapbacks/reactions, or send-state metadata.
+- Reads recent message text only for exact selected chat handles, with `max_messages` and `max_chars` caps. When modern Messages rows leave `message.text` empty, it may decode bounded plaintext from the local `message.attributedBody` typedstream value.
+- Does not return participant phone numbers, email addresses, chat GUIDs, raw message IDs, attachments, raw attributed-body blobs, attributed-string attributes, tapbacks/reactions, or send-state metadata.
 - Rejects raw row IDs, raw chat GUIDs, fabricated handles, broad message-text search, mutations, background indexing, and durable content caches.
 - Keeps automated tests synthetic-only.
 

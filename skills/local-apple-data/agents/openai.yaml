@@ -2,7 +2,7 @@ interface:
   display_name: "Local Apple Data"
   short_description: "Local Apple data"
   brand_color: "#2F7D68"
-  default_prompt: "Use $local-apple-data to search local Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive; retrieve/export exact content/detail only by opaque handle, including selected Mail, Messages, and Notes attachments; and apply only approved Reminders, iCloud Drive create/append-text, Calendar create-event, Contacts create-contact, Notes create/append-text, Mail create-draft, or Photos import changes after a matching plan approval token."
+  default_prompt: "Use $local-apple-data to search local Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive; retrieve/export exact content/detail only by opaque handle, including selected Mail, Messages transcripts/attachments, and Notes attachments; and apply only approved Reminders, iCloud Drive create/append-text, Calendar create-event, Contacts create-contact, Notes create/append-text, Mail create-draft, or Photos import changes after a matching plan approval token."
 
 dependencies:
   tools:

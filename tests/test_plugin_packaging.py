@@ -115,6 +115,7 @@ def test_public_release_docs_are_present() -> None:
         "docs/V1_20_NOTES_ATTACHMENT_EXPORT.md",
         "docs/V1_21_MAIL_ATTACHMENT_EXPORT.md",
         "docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md",
+        "docs/V1_23_MESSAGES_ATTRIBUTED_BODY.md",
         "docs/WRITE_TOOL_ROADMAP.md",
         "docs/PUBLISHING.md",
     ]
@@ -132,6 +133,15 @@ def test_public_release_builder_is_present() -> None:
     source = path.read_text(encoding="utf-8")
     assert "build_release_tree" in source
     assert "public_release_scan.scan_public_files" in source
+
+
+def test_messages_helper_is_present() -> None:
+    path = PROJECT_ROOT / "scripts" / "messages_helper.swift"
+
+    assert path.exists()
+    source = path.read_text(encoding="utf-8")
+    assert "decode_attributed_bodies" in source
+    assert "NSUnarchiver" in source
 
 
 def test_public_git_checkout_preparer_is_present() -> None:

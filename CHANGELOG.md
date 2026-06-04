@@ -2,6 +2,19 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604220000 - 2026-06-04
+
+### Added
+
+- Exact Messages transcript fallback for modern local `message.attributedBody` typedstream rows when `message.text` is empty.
+- Native Swift helper coverage for extracting bounded plaintext from exact selected Messages rows without returning raw attributed-body blobs or attributes.
+- Synthetic unit, runtime, helper presence, release-readiness, and cross-agent sync coverage for the attributed-body fallback path.
+
+### Security
+
+- Messages `attributedBody` decoding remains exact-chat only, bounded by existing `max_messages` and `max_chars` caps, and never exposes raw typedstream payloads, participant identifiers, reactions, source paths, or message database row IDs.
+- If one attributed-body value cannot be decoded safely, the adapter returns a stable warning and preserves any normal text rows plus any individually decodable fallback rows.
+
 ## 0.1.0+codex.20260604210000 - 2026-06-04
 
 ### Added

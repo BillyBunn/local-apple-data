@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
+import json
 import re
 import shutil
+import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -21,6 +24,8 @@ from .sqlite_store import (
 
 DEFAULT_MESSAGES_DB = Path.home() / "Library/Messages/chat.db"
 DEFAULT_MESSAGES_ROOT = Path.home() / "Library/Messages"
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+MESSAGES_HELPER = PROJECT_ROOT / "scripts/messages_helper.swift"
 MESSAGES_TABLES = ["chat", "message", "chat_message_join", "chat_handle_join", "handle"]
 MESSAGES_ATTACHMENT_TABLES = [*MESSAGES_TABLES, "attachment", "message_attachment_join"]
 APPLE_EPOCH = datetime(2001, 1, 1, tzinfo=UTC)
@@ -30,6 +35,7 @@ DEFAULT_ATTACHMENTS_LIMIT = 20
 DEFAULT_CONTENT_CHARS = 4000
 MAX_CONTENT_CHARS = 12000
 MESSAGE_TEXT_CHARS = 2000
+MESSAGES_HELPER_TIMEOUT = 5.0
 CHAT_HANDLE_PREFIX = "messages:chat"
 MESSAGE_ATTACHMENT_HANDLE_PREFIX = "messages:attachment"
 
@@ -255,7 +261,10 @@ def get_message_chat(
         return _store_degraded_result(exc, content=True)
 
     result = _chat_metadata(chat_row, fingerprint)
-    messages, transcript_chars, truncated = _message_payloads(message_rows, bounded_chars)
+    messages, transcript_chars, truncated, payload_warnings = _message_payloads(
+        message_rows,
+        bounded_chars,
+    )
     result.update(
         {
             "messages": messages,
@@ -265,7 +274,7 @@ def get_message_chat(
             "transcript_truncated": truncated,
         }
     )
-    warnings = []
+    warnings = [*payload_warnings]
     if truncated:
         warnings.append(
             _warning(
@@ -483,19 +492,24 @@ def _select_chat(connection, chat_id: int):
 
 
 def _select_messages(connection, chat_id: int, limit: int):
+    message_columns = table_columns(connection, "message")
+    attributed_body_expr = "m.attributedBody" if "attributedBody" in message_columns else "NULL"
     rows = connection.execute(
-        """
+        f"""
         SELECT
             m.ROWID AS message_id,
             m.text AS text,
+            {attributed_body_expr} AS attributed_body,
             m.date AS message_date,
             m.is_from_me AS is_from_me,
             m.service AS service
         FROM message m
         JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
         WHERE cmj.chat_id = ?
-          AND m.text IS NOT NULL
-          AND m.text != ''
+          AND (
+            (m.text IS NOT NULL AND m.text != '')
+            OR ({attributed_body_expr} IS NOT NULL AND length({attributed_body_expr}) > 0)
+          )
         ORDER BY m.date DESC
         LIMIT ?
         """,
@@ -580,17 +594,27 @@ def _chat_metadata(row, fingerprint: str) -> dict[str, Any]:
     }
 
 
-def _message_payloads(rows: list[Any], max_chars: int) -> tuple[list[dict[str, Any]], int, bool]:
+def _message_payloads(
+    rows: list[Any],
+    max_chars: int,
+) -> tuple[list[dict[str, Any]], int, bool, list[dict[str, str]]]:
     messages: list[dict[str, Any]] = []
     used = 0
     truncated = False
+    decoded, decode_warning = _decode_attributed_body_texts(rows)
     for row in rows:
         remaining = max_chars - used
         if remaining <= 0:
             truncated = True
             break
-        text = _bounded_string(row["text"], min(MESSAGE_TEXT_CHARS, remaining))
+        text_source = "text"
         original = _bounded_string(row["text"], MESSAGE_TEXT_CHARS)
+        if not original:
+            original = decoded.get(int(row["message_id"]), "")
+            text_source = "attributed_body" if original else "unavailable"
+        if not original:
+            continue
+        text = _bounded_string(original, min(MESSAGE_TEXT_CHARS, remaining))
         if len(original) > len(text):
             truncated = True
         used += len(text)
@@ -602,9 +626,89 @@ def _message_payloads(rows: list[Any], max_chars: int) -> tuple[list[dict[str, A
                 "text": text,
                 "text_chars": len(text),
                 "text_truncated": len(original) > len(text),
+                "text_source": text_source,
             }
         )
-    return messages, used, truncated
+    warnings = [decode_warning] if decode_warning is not None else []
+    return messages, used, truncated, warnings
+
+
+def _decode_attributed_body_texts(rows: list[Any]) -> tuple[dict[int, str], dict[str, str] | None]:
+    items: list[dict[str, str]] = []
+    for row in rows:
+        if _bounded_string(row["text"], MESSAGE_TEXT_CHARS):
+            continue
+        blob = row["attributed_body"]
+        if blob is None:
+            continue
+        raw = bytes(blob)
+        if not raw:
+            continue
+        items.append(
+            {
+                "id": str(int(row["message_id"])),
+                "base64": base64.b64encode(raw).decode("ascii"),
+            }
+        )
+    if not items:
+        return {}, None
+
+    try:
+        return _decode_attributed_body_batch(items), None
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        decoded: dict[int, str] = {}
+        for item in items:
+            try:
+                decoded.update(_decode_attributed_body_batch([item]))
+            except (OSError, subprocess.TimeoutExpired, ValueError):
+                continue
+        return decoded, _warning(
+            "messages_attributed_body_unavailable",
+            "One or more Messages attributedBody values could not be decoded safely.",
+        )
+
+
+def _decode_attributed_body_batch(items: list[dict[str, str]]) -> dict[int, str]:
+    payload = _run_messages_helper(
+        {
+            "items": items,
+            "maxChars": MESSAGE_TEXT_CHARS,
+            "mode": "decode_attributed_bodies",
+        },
+        timeout=MESSAGES_HELPER_TIMEOUT,
+    )
+
+    decoded: dict[int, str] = {}
+    for result in payload.get("results", []):
+        if not isinstance(result, dict):
+            continue
+        if result.get("status") != "ok":
+            continue
+        try:
+            message_id = int(result.get("id"))
+        except (TypeError, ValueError):
+            continue
+        text = _bounded_string(result.get("text"), MESSAGE_TEXT_CHARS)
+        if text:
+            decoded[message_id] = text
+    return decoded
+
+
+def _run_messages_helper(payload: dict[str, Any], timeout: float) -> dict[str, Any]:
+    completed = subprocess.run(
+        ["swift", str(MESSAGES_HELPER)],
+        input=json.dumps(payload),
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise ValueError("Messages helper failed.")
+    parsed = json.loads(completed.stdout)
+    if not isinstance(parsed, dict) or parsed.get("status") != "ok":
+        raise ValueError("Messages helper returned invalid JSON.")
+    return parsed
 
 
 def _message_attachment_metadata(

@@ -103,6 +103,42 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## Messages Transcript
+
+```json
+{
+  "status": "ok",
+  "source": "messages",
+  "result": {
+    "handle": "<opaque messages:chat:v1 handle>",
+    "messages_returned": 2,
+    "transcript_chars": 49,
+    "transcript_truncated": false,
+    "messages": [
+      {
+        "date": "2026-06-04T09:30:00Z",
+        "direction": "received",
+        "service": "iMessage",
+        "text": "Synthetic text-column message.",
+        "text_source": "text",
+        "text_chars": 30,
+        "text_truncated": false
+      },
+      {
+        "date": "2026-06-04T09:31:00Z",
+        "direction": "sent",
+        "service": "iMessage",
+        "text": "Synthetic fallback.",
+        "text_source": "attributed_body",
+        "text_chars": 19,
+        "text_truncated": false
+      }
+    ]
+  },
+  "warnings": []
+}
+```
+
 ## Messages Attachments
 
 ```json
