@@ -2,7 +2,7 @@
 
 The current release is read-only. This roadmap defines the sequence and engineering contract for future mutation support. It does not approve or expose any write tools by itself.
 
-Use this file with `docs/MUTATION_GATES.md`.
+Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 
 ## Principle
 
@@ -59,6 +59,7 @@ Each mutation tranche must add:
 - Partial-failure tests.
 - Runtime verifier coverage for tool annotations and refusal behavior.
 - Mutation-gate auditor coverage for approved tool names.
+- Write-design gate auditor coverage for the operation's design-only or approved-with-tests state.
 - Redaction scan coverage for logs and docs.
 
 ## Required Runtime Safeguards

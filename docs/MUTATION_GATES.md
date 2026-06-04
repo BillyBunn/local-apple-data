@@ -2,7 +2,7 @@
 
 The current plugin is read-only. Write tools are intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
 
-For sequencing and first-tranche candidates, see `docs/WRITE_TOOL_ROADMAP.md`.
+For sequencing and first-tranche candidates, see `docs/WRITE_TOOL_ROADMAP.md`. For the first Reminders write design gate, see `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 
 ## Global Requirements
 
@@ -51,6 +51,7 @@ A mutation tranche is not done until:
 - The read-only tools still pass all existing tests.
 - New preview/apply/read-back tests pass.
 - `uv run python scripts/audit_mutation_gates.py` is updated for the approved tool names and passes.
+- `uv run python scripts/audit_write_design_gates.py` is updated from design-only to approved-with-tests for the exact operation and passes.
 - Runtime smoke proves the tool list annotations and refusal behavior.
 - The skill, privacy model, threat model, testing doc, capability matrix, README, and plugin manifest all describe the new mutation state consistently.
 - Installed cache and cross-agent sync verification pass.

@@ -2,7 +2,7 @@
 
 This matrix describes the current public surface and the intended approval gates for future expansion. The plugin is local-only, metadata-first, and read-only in the current release.
 
-For install instructions, see `docs/INSTALL.md`. For macOS support and permission behavior, see `docs/MACOS_SUPPORT.md`. For future write sequencing, see `docs/WRITE_TOOL_ROADMAP.md`.
+For install instructions, see `docs/INSTALL.md`. For macOS support and permission behavior, see `docs/MACOS_SUPPORT.md`. For future write sequencing, see `docs/WRITE_TOOL_ROADMAP.md` and `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 
 | Surface | Local source | Search/list support | Exact detail support | Write support | Permissions | Current limits |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -33,4 +33,5 @@ Before a surface is described as supported in a public release:
 - Privacy/threat/testing docs describe returned fields, forbidden fields, permission behavior, and non-goals.
 - The MCP server, CLI, skill, manifest, and README agree on the surface.
 - `scripts/audit_surface_contract.py` passes for the MCP tools, CLI parser, health summary, access requirements, and this matrix.
+- `scripts/audit_write_design_gates.py` passes when a write design or write-support claim is present.
 - Redaction scan passes.

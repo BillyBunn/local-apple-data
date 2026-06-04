@@ -19,6 +19,7 @@ if str(SCRIPT_DIR) not in sys.path:
 from audit_mutation_gates import audit_mutation_gates
 from audit_release_readiness import audit_release_readiness
 from audit_surface_contract import audit_surface_contract
+from audit_write_design_gates import audit_write_design_gates
 from prepare_public_git_checkout import prepare_public_git_checkout
 
 
@@ -27,6 +28,7 @@ def generate_release_receipt(project_root: Path = PROJECT_ROOT) -> dict[str, Any
     release_readiness = audit_release_readiness(root)
     mutation_gate = audit_mutation_gates(root)
     surface_contract = audit_surface_contract(root)
+    write_design_gate = audit_write_design_gates(root)
     plugin = _load_json(root / ".codex-plugin/plugin.json")
 
     with tempfile.TemporaryDirectory(prefix="local-apple-data-receipt-") as tmp:
@@ -53,6 +55,7 @@ def generate_release_receipt(project_root: Path = PROJECT_ROOT) -> dict[str, Any
         "blockers": list(release_readiness["blockers"]),
         "release_readiness": release_readiness,
         "mutation_gate": mutation_gate,
+        "write_design_gate": write_design_gate,
         "surface_contract": surface_contract,
         "public_git_checkout": {
             "branch": public_git.branch,

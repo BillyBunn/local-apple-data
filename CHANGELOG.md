@@ -2,6 +2,18 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604080000 - 2026-06-04
+
+### Added
+
+- Public Reminders write design gate for future create/complete/due-date operations through EventKit, with preview/apply/read_back contract language and explicit approval requirements.
+- Write-design gate auditor that fails when required write design docs drift or preview/apply/read_back-style CLI/MCP tools appear before approval.
+- Release-readiness, CI, staged-public-tree, cross-agent sync, and path-redacted release receipt coverage for the write-design gate.
+
+### Security
+
+- The current release remains read-only. The new Reminders write document is design-only and exposes no mutating CLI or MCP tools.
+
 ## 0.1.0+codex.20260604074000 - 2026-06-04
 
 ### Added

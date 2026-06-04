@@ -22,6 +22,7 @@ This repo is close to publishable as a local-only Apple data MCP plugin, but pub
 - Public write-tool roadmap that keeps mutation support gated.
 - Public release scanner for local-path and operator-term leakage in public files.
 - Mutation-gate auditor that fails if write-like CLI/MCP surfaces appear before an approved mutation gate.
+- Write-design gate auditor that requires first-tranche write designs while keeping current CLI/MCP surfaces read-only.
 - Surface-contract auditor that fails if MCP tools, CLI commands, health surfaces, access requirements, or the capability matrix drift out of alignment.
 - Release-readiness auditor that separates local package readiness from GitHub publication readiness.
 - MCP client config renderer for generic stdio, Claude Code, Cursor, and OpenClaw config.
@@ -64,6 +65,7 @@ Current public-facing docs:
 - `docs/CAPABILITY_MATRIX.md`
 - `docs/MUTATION_GATES.md`
 - `docs/WRITE_TOOL_ROADMAP.md`
+- `docs/V1_11_REMINDERS_WRITE_DESIGN.md`
 - `docs/PRIVACY_MODEL.md`
 - `docs/THREAT_MODEL.md`
 - `docs/TESTING.md`
@@ -84,6 +86,7 @@ uv run python -m compileall src tests scripts
 uv run python scripts/redaction_scan.py .
 uv run python scripts/public_release_scan.py
 uv run python scripts/audit_mutation_gates.py
+uv run python scripts/audit_write_design_gates.py
 uv run python scripts/audit_surface_contract.py
 uv run python scripts/audit_release_readiness.py --json
 uv run python scripts/generate_release_receipt.py --json
@@ -110,6 +113,7 @@ uv run python -m compileall src tests scripts
 uv run python scripts/redaction_scan.py .
 uv run python scripts/public_release_scan.py
 uv run python scripts/audit_mutation_gates.py
+uv run python scripts/audit_write_design_gates.py
 uv run python scripts/audit_surface_contract.py
 uv run python scripts/generate_release_receipt.py --json
 uv run python scripts/verify_runtime.py

@@ -28,6 +28,7 @@ def test_current_project_release_receipt_is_path_redacted() -> None:
     else:
         assert "missing_git_remote" in payload["blockers"]
     assert payload["mutation_gate"]["status"] == "ok"
+    assert payload["write_design_gate"]["status"] == "ok"
     assert payload["surface_contract"]["status"] == "ok"
     assert payload["public_git_checkout"]["file_count"] == payload["public_git_checkout"]["staged_files"]
     assert payload["public_git_checkout"]["file_count"] > 0

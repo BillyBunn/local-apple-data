@@ -77,6 +77,7 @@ def test_public_release_docs_are_present() -> None:
         "docs/PUBLIC_RELEASE_MANIFEST.md",
         "docs/CAPABILITY_MATRIX.md",
         "docs/MUTATION_GATES.md",
+        "docs/V1_11_REMINDERS_WRITE_DESIGN.md",
         "docs/WRITE_TOOL_ROADMAP.md",
         "docs/PUBLISHING.md",
     ]
@@ -138,6 +139,16 @@ def test_mutation_gate_auditor_is_present() -> None:
     assert "audit_mutation_gates" in source
     assert "mutation_like_mcp_tool" in source
     assert "mcp_tool_not_read_only" in source
+
+
+def test_write_design_gate_auditor_is_present() -> None:
+    path = PROJECT_ROOT / "scripts" / "audit_write_design_gates.py"
+
+    assert path.exists()
+    source = path.read_text(encoding="utf-8")
+    assert "audit_write_design_gates" in source
+    assert "write_design_doc_contract_missing" in source
+    assert "write_phase_mcp_tool" in source
 
 
 def test_surface_contract_auditor_is_present() -> None:

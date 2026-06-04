@@ -15,6 +15,7 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 - Privacy scans: `scripts/redaction_scan.py` fails on high-confidence secrets and literal iCloud/private-relay email aliases without printing matched values.
 - Public release scan: `scripts/public_release_scan.py` fails when public files contain local operator paths, private note titles, or operator-specific terms outside explicit author metadata.
 - Mutation-gate audit: `scripts/audit_mutation_gates.py` fails if write-like CLI/MCP surfaces appear without an intentional mutation gate or if MCP tools are not annotated read-only.
+- Write-design gate audit: `scripts/audit_write_design_gates.py` fails if first-tranche write design docs are missing, required design-only safeguards drift, or preview/apply/read_back tool names appear before approval.
 - Surface-contract audit: `scripts/audit_surface_contract.py` fails if a supported Apple data surface is missing from the MCP tools, CLI parser, health summary, access requirements, or public capability matrix.
 
 ## Commands
@@ -27,6 +28,7 @@ uv run python -m compileall src tests scripts
 uv run python scripts/redaction_scan.py .
 uv run python scripts/public_release_scan.py
 uv run python scripts/audit_mutation_gates.py
+uv run python scripts/audit_write_design_gates.py
 uv run python scripts/audit_surface_contract.py
 swiftc -typecheck scripts/eventkit_helper.swift
 swiftc -typecheck scripts/contacts_helper.swift
@@ -44,6 +46,7 @@ After reinstalling, run the runtime verifier from the installed cache:
 cd /absolute/path/to/installed/local-apple-data/<version>
 uv run python scripts/verify_runtime.py
 uv run python scripts/audit_mutation_gates.py
+uv run python scripts/audit_write_design_gates.py
 uv run python scripts/audit_surface_contract.py
 ```
 
@@ -87,6 +90,7 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Health and doctor do not expose full local executable paths.
 - Health and doctor report broad local Apple data readiness without content reads, raw rows, credentials, prompt-triggering framework access, or raw absolute store paths.
 - Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, and other framework-backed surfaces.
+- Write-design gates require the first Reminders write design contract while the current CLI and MCP surfaces remain read-only.
 - No repo docs or tests persist real personal search terms or result metadata.
 
 ## v1.1 Acceptance Criteria

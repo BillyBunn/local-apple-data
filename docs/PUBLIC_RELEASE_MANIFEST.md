@@ -10,6 +10,7 @@ Run this before publishing:
 ```bash
 uv run python scripts/public_release_scan.py
 uv run python scripts/audit_mutation_gates.py
+uv run python scripts/audit_write_design_gates.py
 uv run python scripts/audit_surface_contract.py
 uv run python scripts/audit_release_readiness.py --json
 uv run python scripts/generate_release_receipt.py --json
@@ -63,12 +64,14 @@ Use `scripts/build_public_release_tree.py` to create the tree that should be pus
 
 Use `scripts/prepare_public_git_checkout.py` when you want a local git-ready public checkout. It builds the same sanitized tree, optionally runs `git init`, stages the files, can create an initial local commit with `--commit`, and can attach an `origin` remote when `--remote-url` is provided. It never pushes.
 
-Use `scripts/generate_release_receipt.py` when you want a path-redacted JSON receipt containing version metadata, readiness status, mutation gate status, surface-contract status, blockers, and committed public checkout proof.
+Use `scripts/generate_release_receipt.py` when you want a path-redacted JSON receipt containing version metadata, readiness status, mutation gate status, write-design gate status, surface-contract status, blockers, and committed public checkout proof.
 
 Use `docs/ECOSYSTEM_REVIEW.md` when you want the public rationale for the project architecture and the comparison against other local Apple-data MCP tools.
 
 Use `scripts/audit_mutation_gates.py` when you want to prove the public CLI and MCP surfaces remain read-only until a mutation gate is intentionally approved.
 
+Use `scripts/audit_write_design_gates.py` when you want to prove first-tranche write design docs are present and current CLI/MCP surfaces still expose no preview/apply/read_back mutation tools.
+
 Use `scripts/audit_surface_contract.py` when you want to prove the supported Apple data surfaces are aligned across MCP tools, CLI commands, health output, access requirements, and `docs/CAPABILITY_MATRIX.md`.
 
-Use `scripts/audit_release_readiness.py` when you want one machine-readable gate. It runs the public scan, mutation-gate audit, surface-contract audit, and staged checkout check, then reports `local_package_ready` separately from `github_publication_ready` so a missing remote cannot be mistaken for a completed public release.
+Use `scripts/audit_release_readiness.py` when you want one machine-readable gate. It runs the public scan, mutation-gate audit, write-design gate audit, surface-contract audit, and staged checkout check, then reports `local_package_ready` separately from `github_publication_ready` so a missing remote cannot be mistaken for a completed public release.

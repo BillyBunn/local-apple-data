@@ -20,6 +20,7 @@ if str(SCRIPT_DIR) not in sys.path:
 import public_release_scan
 from audit_mutation_gates import audit_mutation_gates
 from audit_surface_contract import audit_surface_contract
+from audit_write_design_gates import audit_write_design_gates
 from prepare_public_git_checkout import prepare_public_git_checkout
 
 
@@ -47,6 +48,7 @@ REQUIRED_FILES = (
     "docs/PUBLIC_RELEASE_MANIFEST.md",
     "docs/CAPABILITY_MATRIX.md",
     "docs/MUTATION_GATES.md",
+    "docs/V1_11_REMINDERS_WRITE_DESIGN.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "docs/PUBLISHING.md",
     "docs/PRIVACY_MODEL.md",
@@ -55,6 +57,7 @@ REQUIRED_FILES = (
     "scripts/audit_release_readiness.py",
     "scripts/audit_mutation_gates.py",
     "scripts/audit_surface_contract.py",
+    "scripts/audit_write_design_gates.py",
     "scripts/build_public_release_tree.py",
     "scripts/generate_release_receipt.py",
     "scripts/prepare_public_git_checkout.py",
@@ -69,6 +72,7 @@ REQUIRED_FILES = (
     "src/local_apple_data/health.py",
     "src/local_apple_data/mcp_server.py",
     "tests/test_mutation_gate_audit.py",
+    "tests/test_write_design_gate_audit.py",
     "tests/test_public_release_scan.py",
     "tests/test_release_readiness_audit.py",
     "tests/test_generate_release_receipt.py",
@@ -102,6 +106,7 @@ def audit_release_readiness(project_root: Path = PROJECT_ROOT) -> dict[str, Any]
     checks.append(_version_check(root))
     checks.append(_public_scan_check(root))
     checks.append(_mutation_gate_check(root))
+    checks.append(_write_design_gate_check(root))
     checks.append(_surface_contract_check(root))
     checks.append(_public_git_checkout_check(root))
     checks.append(_git_remote_check(root))
@@ -203,6 +208,26 @@ def _surface_contract_check(root: Path) -> Check:
             f"{payload['surfaces_checked']} surfaces, "
             f"{payload['mcp_tools_checked']} MCP tools, "
             f"{payload['cli_commands_expected']} CLI commands aligned"
+        ),
+    )
+
+
+def _write_design_gate_check(root: Path) -> Check:
+    payload = audit_write_design_gates(root)
+    if payload["status"] != "ok":
+        findings = payload["findings"]
+        first = findings[0] if findings else {"kind": "unknown", "path": "", "line": 0}
+        return Check(
+            "write_design_gate_audit",
+            "error",
+            f"{len(findings)} findings; first {first['path']}:{first['line']}:{first['kind']}",
+        )
+    return Check(
+        "write_design_gate_audit",
+        "ok",
+        (
+            f"{payload['design_docs_checked']} design docs, "
+            f"{len(payload['approved_write_tools'])} approved write tools"
         ),
     )
 

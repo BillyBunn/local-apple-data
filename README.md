@@ -71,6 +71,7 @@ Implemented now:
 - Repo-local redaction scanner under `scripts/redaction_scan.py`
 - Release-readiness auditor under `scripts/audit_release_readiness.py`
 - Mutation-gate auditor under `scripts/audit_mutation_gates.py` so write-like CLI/MCP surfaces cannot appear without explicit gates
+- Write-design gate auditor under `scripts/audit_write_design_gates.py` so first-tranche write plans stay machine-checkable while the shipped surface remains read-only
 - Surface-contract auditor under `scripts/audit_surface_contract.py` so MCP tools, CLI commands, health surfaces, access requirements, and the capability matrix stay aligned
 - MCP client config renderer for generic stdio, Claude Code, Cursor, and OpenClaw under `scripts/render_mcp_client_config.py`
 - Public release tree builder under `scripts/build_public_release_tree.py`
@@ -90,6 +91,7 @@ The public capability matrix is documented in `docs/CAPABILITY_MATRIX.md`.
 The ecosystem research and architecture comparison is documented in `docs/ECOSYSTEM_REVIEW.md`.
 The write/mutation approval gates are documented in `docs/MUTATION_GATES.md`.
 The future write-tool roadmap is documented in `docs/WRITE_TOOL_ROADMAP.md`.
+The first Reminders write design gate is documented in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.
@@ -103,10 +105,11 @@ Public release file boundaries are documented in `docs/PUBLIC_RELEASE_MANIFEST.m
 
 ```bash
 uv run pytest
-uv run python -m compileall src tests
+uv run python -m compileall src tests scripts
 uv run python scripts/redaction_scan.py .
 uv run python scripts/public_release_scan.py
 uv run python scripts/audit_mutation_gates.py
+uv run python scripts/audit_write_design_gates.py
 uv run python scripts/audit_surface_contract.py
 uv run python scripts/audit_release_readiness.py --json
 uv run python scripts/generate_release_receipt.py --json
@@ -171,6 +174,7 @@ For the capability matrix, see `docs/CAPABILITY_MATRIX.md`.
 For ecosystem research and architecture comparison, see `docs/ECOSYSTEM_REVIEW.md`.
 For future write gates, see `docs/MUTATION_GATES.md`.
 For the future write roadmap, see `docs/WRITE_TOOL_ROADMAP.md`.
+For the first Reminders write design gate, see `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 For public release readiness, see `docs/PUBLISHING.md`.
 For installation, see `docs/INSTALL.md`.
 For synthetic examples, see `docs/SAMPLE_OUTPUTS.md`.

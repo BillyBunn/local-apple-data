@@ -15,6 +15,7 @@ assert SPEC.loader is not None
 sys.modules["audit_release_readiness"] = audit_release_readiness
 SPEC.loader.exec_module(audit_release_readiness)
 surface_contract = sys.modules["audit_surface_contract"]
+write_design_gate = sys.modules["audit_write_design_gates"]
 
 
 def _make_minimal_project(tmp_path: Path) -> Path:
@@ -59,6 +60,10 @@ def _make_minimal_project(tmp_path: Path) -> Path:
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
         "The current release is read-only.\n",
+        encoding="utf-8",
+    )
+    (root / "docs/V1_11_REMINDERS_WRITE_DESIGN.md").write_text(
+        _write_design_doc_text(),
         encoding="utf-8",
     )
     _write_surface_contract_files(root)
@@ -147,6 +152,13 @@ def _surface_summary():
         "\n".join(matrix_lines) + "\n",
         encoding="utf-8",
     )
+
+
+def _write_design_doc_text() -> str:
+    phrases = []
+    for contract in write_design_gate.REQUIRED_DESIGN_DOCS.values():
+        phrases.extend(contract["phrases"])
+    return "\n".join(str(phrase) for phrase in phrases) + "\n"
 
 
 def test_audit_reports_local_ready_and_missing_remote(tmp_path: Path) -> None:
