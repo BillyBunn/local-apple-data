@@ -7,6 +7,7 @@ from pathlib import Path
 
 from local_apple_data.cli import main
 from local_apple_data.adapters.mail import search_mail_metadata
+from local_apple_data.handles import make_int_handle
 
 
 def _mail_db(path: Path) -> None:
@@ -348,6 +349,74 @@ def test_cli_notes_plan_and_apply_create(monkeypatch, capsys) -> None:
     assert parsed["status"] == "ok"
     assert parsed["mode"] == "apply"
     assert parsed["mutation_applied"] is True
+
+
+def test_cli_notes_plan_and_apply_append(monkeypatch, capsys) -> None:
+    handle = make_int_handle("notes:note", 20)
+    current_sha = hashlib.sha256("Current note body".encode("utf-8")).hexdigest()
+    plan_exit_code = main(
+        [
+            "notes",
+            "plan",
+            "--json",
+            "--operation",
+            "append-text",
+            "--handle",
+            handle,
+            "--expected-current-sha256",
+            current_sha,
+            "--body-text",
+            "Appended note body.",
+        ]
+    )
+    assert plan_exit_code == 0
+    plan = json.loads(capsys.readouterr().out)
+    token = "notes-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def fake_apply_notes_change(operation: str, **kwargs):
+        assert operation == "append-text"
+        assert kwargs["handle"] == handle
+        assert kwargs["expected_current_sha256"] == current_sha
+        assert kwargs["body_text"] == "Appended note body."
+        assert kwargs["approval_token"] == token
+        assert kwargs["confirm_apply"] is True
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "notes",
+            "privacy": {"content_inspected": True, "output_tier": "mutation"},
+            "mode": "apply",
+            "mutation_applied": True,
+            "read_back": {"content_text": "Current note body\nAppended note body."},
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("local_apple_data.cli.apply_notes_change", fake_apply_notes_change)
+
+    apply_exit_code = main(
+        [
+            "notes",
+            "apply",
+            "--json",
+            "--operation",
+            "append-text",
+            "--handle",
+            handle,
+            "--expected-current-sha256",
+            current_sha,
+            "--body-text",
+            "Appended note body.",
+            "--approval-token",
+            token,
+            "--confirm-apply",
+        ]
+    )
+
+    assert apply_exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "apply"
 
 
 def test_cli_icloud_drive_content_uses_exact_handle(

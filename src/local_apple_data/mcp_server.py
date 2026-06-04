@@ -70,7 +70,7 @@ INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
-    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation."
+    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
@@ -282,33 +282,45 @@ def notes_get_content(handle: str, max_chars: int = 4000, offset: int = 0) -> di
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def notes_plan_change(
     operation: str,
-    title: str,
+    title: str = "",
     body_text: str = "",
+    handle: str = "",
+    expected_current_sha256: str = "",
 ) -> dict[str, Any]:
-    """Preview an approved Notes create-note change without writing Notes data."""
+    """Preview an approved Notes create-note or append-text change without writing Notes data."""
 
     return _record(
         "notes_plan_change",
-        plan_notes_change(operation, title=title, body_text=body_text),
+        plan_notes_change(
+            operation,
+            title=title,
+            handle=handle,
+            body_text=body_text,
+            expected_current_sha256=expected_current_sha256,
+        ),
     )
 
 
 @mcp.tool(annotations=WRITE_ANNOTATIONS)
 def notes_apply_change(
     operation: str,
-    title: str,
-    body_text: str,
-    approval_token: str,
+    title: str = "",
+    body_text: str = "",
+    approval_token: str = "",
+    handle: str = "",
+    expected_current_sha256: str = "",
     confirm_apply: bool = False,
 ) -> dict[str, Any]:
-    """Apply an approved Notes create-note change after approval token and explicit confirmation."""
+    """Apply an approved Notes create-note or append-text change after approval token and explicit confirmation."""
 
     return _record(
         "notes_apply_change",
         apply_notes_change(
             operation,
             title=title,
+            handle=handle,
             body_text=body_text,
+            expected_current_sha256=expected_current_sha256,
             approval_token=approval_token,
             confirm_apply=confirm_apply,
         ),

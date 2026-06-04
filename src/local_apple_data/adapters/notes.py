@@ -31,8 +31,9 @@ NOTES_APPLESCRIPT_TIMEOUT_SECONDS = 10.0
 MAX_PREVIEW_TITLE_CHARS = 256
 MAX_CREATE_BODY_CHARS = 12000
 MAX_BODY_PREVIEW_CHARS = 240
-PLAN_OPERATIONS = {"create"}
+PLAN_OPERATIONS = {"create", "append_text"}
 APPROVAL_TOKEN_PREFIX = "notes-apply:v1:"
+AUTOMATION_ERROR_PREFIX = "__LOCAL_APPLE_DATA_ERROR__:"
 
 NOTES_TABLES = ["ZICCLOUDSYNCINGOBJECT"]
 ScriptRunner = Callable[[str, float], str]
@@ -422,8 +423,9 @@ def get_notes_content(
             ],
         }
 
+    full_text = _html_to_text(html)
     content_text, truncated, total_chars, next_offset = _bounded_text(
-        _html_to_text(html),
+        full_text,
         bounded_chars,
         offset=bounded_offset,
     )
@@ -431,6 +433,7 @@ def get_notes_content(
         {
             "content_text": content_text,
             "content_chars": len(content_text),
+            "content_sha256": hashlib.sha256(full_text.encode("utf-8")).hexdigest(),
             "content_offset": bounded_offset,
             "content_total_chars": total_chars,
             "next_offset": next_offset,
@@ -459,17 +462,53 @@ def plan_notes_change(
     operation: str,
     *,
     title: str = "",
+    handle: str = "",
     body_text: str = "",
+    expected_current_sha256: str = "",
 ) -> dict[str, Any]:
     normalized_operation = operation.strip().replace("-", "_")
     warnings: list[dict[str, str]] = []
     if normalized_operation not in PLAN_OPERATIONS:
-        warnings.append(_warning("invalid_operation", "Expected operation create."))
+        warnings.append(_warning("invalid_operation", "Expected operation create or append_text."))
 
-    normalized_title, title_warning = _normalize_create_title(title)
-    if title_warning is not None:
-        warnings.append(title_warning)
-    normalized_body, body_warning = _normalize_create_body(body_text)
+    normalized_title = ""
+    normalized_handle = handle.strip()
+    normalized_expected_sha = ""
+    if normalized_operation == "create":
+        normalized_title, title_warning = _normalize_create_title(title)
+        if title_warning is not None:
+            warnings.append(title_warning)
+        if normalized_handle or expected_current_sha256.strip():
+            warnings.append(
+                _warning(
+                    "unexpected_append_target",
+                    "Notes create planning requires a title, not a note handle or current-content hash.",
+                )
+            )
+    elif normalized_operation == "append_text":
+        if title.strip():
+            warnings.append(
+                _warning(
+                    "unexpected_title",
+                    "Notes append-text planning requires a note handle, not a new title.",
+                )
+            )
+        if not is_int_handle(normalized_handle, "notes:note"):
+            warnings.append(
+                _warning(
+                    "invalid_handle",
+                    "Expected notes:note:v2 opaque handle from search output.",
+                )
+            )
+        normalized_expected_sha, sha_warning = _normalize_sha256(expected_current_sha256)
+        if sha_warning is not None:
+            warnings.append(sha_warning)
+
+    normalized_body, body_warning = (
+        _normalize_append_body(body_text)
+        if normalized_operation == "append_text"
+        else _normalize_create_body(body_text)
+    )
     if body_warning is not None:
         warnings.append(body_warning)
 
@@ -481,23 +520,36 @@ def plan_notes_change(
         normalized_body,
         MAX_BODY_PREVIEW_CHARS,
     )
-    target = {"account": "default", "folder": "default"}
-    proposed = {
-        "kind": "note",
-        "format": "plaintext",
-        "title": normalized_title,
-        "body_chars": len(normalized_body),
-        "body_preview_text": body_preview,
-        "body_preview_chars": len(body_preview),
-        "body_preview_truncated": body_preview_truncated,
-    }
+    if normalized_operation == "create":
+        target = {"account": "default", "folder": "default"}
+        proposed = {
+            "kind": "note",
+            "format": "plaintext",
+            "title": normalized_title,
+            "body_chars": len(normalized_body),
+            "body_preview_text": body_preview,
+            "body_preview_chars": len(body_preview),
+            "body_preview_truncated": body_preview_truncated,
+        }
+    else:
+        target = {
+            "handle": normalized_handle,
+            "expected_current_sha256": normalized_expected_sha,
+        }
+        proposed = {
+            "kind": "note",
+            "format": "plaintext_append",
+            "append_chars": len(normalized_body),
+            "append_preview_text": body_preview,
+            "append_preview_chars": len(body_preview),
+            "append_preview_truncated": body_preview_truncated,
+            "overwrite": "blocked",
+            "delete": "blocked",
+        }
     fingerprint_payload = {
         "operation": normalized_operation,
         "target": target,
-        "proposed": {
-            **proposed,
-            "body_sha256": body_hash,
-        },
+        "proposed": _fingerprint_proposed(normalized_operation, proposed, body_hash),
     }
     idempotency_key = _plan_idempotency_key(fingerprint_payload)
     approval_fingerprint = _approval_fingerprint(
@@ -536,13 +588,21 @@ def apply_notes_change(
     operation: str,
     *,
     title: str = "",
+    handle: str = "",
     body_text: str = "",
+    expected_current_sha256: str = "",
     approval_token: str = "",
     confirm_apply: bool = False,
     db_path: Path = DEFAULT_NOTES_DB,
     script_runner: ScriptRunner | None = None,
 ) -> dict[str, Any]:
-    plan = plan_notes_change(operation, title=title, body_text=body_text)
+    plan = plan_notes_change(
+        operation,
+        title=title,
+        handle=handle,
+        body_text=body_text,
+        expected_current_sha256=expected_current_sha256,
+    )
     if plan.get("status") != "ok":
         return _apply_error(_safe_warnings(plan), plan=plan)
 
@@ -561,9 +621,20 @@ def apply_notes_change(
             plan=plan,
         )
 
+    runner = script_runner or _run_osascript
+    normalized_operation = str(preview["operation"])
+
+    if normalized_operation == "append_text":
+        return _apply_notes_append(
+            preview,
+            db_path=db_path,
+            script_runner=runner,
+            body_text=body_text,
+            approval_fingerprint=fingerprint,
+        )
+
     normalized_title, _ = _normalize_create_title(title)
     normalized_body, _ = _normalize_create_body(body_text)
-    runner = script_runner or _run_osascript
 
     already_applied = _find_matching_note_content(
         normalized_title,
@@ -753,6 +824,167 @@ def _normalize_create_body(value: str) -> tuple[str, dict[str, str] | None]:
     return normalized, None
 
 
+def _normalize_append_body(value: str) -> tuple[str, dict[str, str] | None]:
+    normalized = _normalize_text(value)
+    if not normalized:
+        return "", _warning("missing_body", "Notes append-text requires non-empty body text.")
+    if len(normalized) > MAX_CREATE_BODY_CHARS:
+        return (
+            normalized[:MAX_CREATE_BODY_CHARS],
+            _warning("body_too_long", "Notes append body exceeded the maximum length."),
+        )
+    return normalized, None
+
+
+def _normalize_sha256(value: str) -> tuple[str, dict[str, str] | None]:
+    normalized = value.strip().lower()
+    if not normalized:
+        return "", _warning("missing_required_field", "Missing required field: expected_current_sha256.")
+    if not re.fullmatch(r"[0-9a-f]{64}", normalized):
+        return "", _warning("invalid_expected_sha256", "expected_current_sha256 must be a 64-character SHA-256 hex digest.")
+    return normalized, None
+
+
+def _fingerprint_proposed(operation: str, proposed: dict[str, Any], body_hash: str) -> dict[str, Any]:
+    if operation == "create":
+        return {
+            **proposed,
+            "body_sha256": body_hash,
+        }
+    return {
+        **proposed,
+        "append_body_sha256": body_hash,
+    }
+
+
+def _apply_notes_append(
+    preview: dict[str, Any],
+    *,
+    db_path: Path,
+    script_runner: ScriptRunner,
+    body_text: str,
+    approval_fingerprint: str,
+) -> dict[str, Any]:
+    target = preview["target"]
+    handle = str(target["handle"])
+    expected_sha = str(target["expected_current_sha256"])
+    note_id = None
+    store_uuid = None
+    try:
+        with connect_readonly(db_path) as connection:
+            _check_schema(connection)
+            note_id = _resolve_notes_handle_note_id(connection, handle)
+            if note_id is not None:
+                row = _select_notes_row(connection, note_id)
+                store_uuid = _notes_store_uuid(connection)
+            else:
+                row = None
+    except StoreUnavailableError as exc:
+        return _apply_error(
+            [_warning("notes_store_unavailable", str(exc))],
+            plan={"preview": preview},
+            status="degraded",
+        )
+
+    if note_id is None or row is None:
+        return _apply_error(
+            [_warning("target_note_not_found", "Notes target note was not found.")],
+            plan={"preview": preview},
+            status="not_found",
+        )
+    if not store_uuid:
+        return _apply_error(
+            [_warning("content_unavailable", "Notes target could not be resolved from the local store mapping.")],
+            plan={"preview": preview},
+            status="content_unavailable",
+        )
+
+    try:
+        current_html = script_runner(
+            _notes_body_script(store_uuid, note_id),
+            NOTES_APPLESCRIPT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return _apply_error(
+            [_warning("automation_timeout", "Notes append read timed out through local automation.")],
+            plan={"preview": preview},
+            status="degraded",
+        )
+    except NotesAutomationError:
+        return _apply_error(
+            [_warning("read_error", "Notes target content could not be read before append.")],
+            plan={"preview": preview},
+        )
+
+    current_text = _html_to_text(current_html)
+    current_sha = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+    if current_sha != expected_sha:
+        return _apply_error(
+            [_warning("current_content_changed", "Notes target content hash did not match the approved plan.")],
+            plan={"preview": preview},
+        )
+
+    normalized_body, body_warning = _normalize_append_body(body_text)
+    if body_warning is not None:
+        return _apply_error([body_warning], plan={"preview": preview})
+
+    try:
+        output = script_runner(
+            _notes_append_script(
+                store_uuid,
+                note_id,
+                current_html,
+                _notes_append_body_html(normalized_body),
+            ),
+            NOTES_APPLESCRIPT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return _apply_error(
+            [_warning("automation_timeout", "Notes append timed out through local automation.")],
+            plan={"preview": preview},
+            status="degraded",
+        )
+    except NotesAutomationError:
+        return _apply_error(
+            [_warning("write_error", "Notes target could not be appended safely.")],
+            plan={"preview": preview},
+        )
+
+    automation_warning = _automation_warning_from_output(output)
+    if automation_warning is not None:
+        return _apply_error([automation_warning], plan={"preview": preview})
+
+    read_back = get_notes_content(
+        handle,
+        db_path=db_path,
+        max_chars=MAX_CONTENT_CHARS,
+        script_runner=script_runner,
+    )
+    if read_back.get("status") != "ok" or not isinstance(read_back.get("result"), dict):
+        return _apply_error(
+            [_warning("read_back_unavailable", "Notes append succeeded but read-back was unavailable.")],
+            plan={"preview": preview},
+            status="partial",
+            mutation_applied=True,
+        )
+    after_text = str(read_back["result"].get("content_text", ""))
+    if not after_text.endswith(normalized_body):
+        return _apply_error(
+            [_warning("read_back_mismatch", "Notes append read-back did not include the approved appended text.")],
+            plan={"preview": preview},
+            status="partial",
+            mutation_applied=True,
+        )
+
+    return _apply_success(
+        read_back["result"],
+        idempotency_key=preview["idempotency_key"],
+        approval_fingerprint=approval_fingerprint,
+        mutation_applied=True,
+        warnings=[],
+    )
+
+
 def _find_matching_note_content(
     title: str,
     body_text: str,
@@ -855,6 +1087,14 @@ def _notes_create_body_html(title: str, body_text: str) -> str:
     return f"<h1>{escaped_title}</h1>{''.join(paragraphs)}"
 
 
+def _notes_append_body_html(body_text: str) -> str:
+    paragraphs = []
+    for block in re.split(r"\n{2,}", body_text):
+        lines = [html_lib.escape(line) for line in block.split("\n")]
+        paragraphs.append(f"<p>{'<br>'.join(lines)}</p>")
+    return "".join(paragraphs)
+
+
 def _safe_warnings(payload: dict[str, Any]) -> list[dict[str, str]]:
     warnings = payload.get("warnings")
     if not isinstance(warnings, list):
@@ -932,6 +1172,44 @@ tell application "Notes"
     return body of targetNote
 end tell
 """
+
+
+def _notes_append_script(
+    store_uuid: str,
+    note_id: int,
+    expected_body_html: str,
+    append_body_html: str,
+) -> str:
+    note_ref = _applescript_string(f"x-coredata://{store_uuid}/ICNote/p{note_id}")
+    expected_ref = _applescript_string(expected_body_html)
+    append_ref = _applescript_string(append_body_html)
+    return f"""
+set targetId to {note_ref}
+set expectedBody to {expected_ref}
+set appendBody to {append_ref}
+tell application "Notes"
+    set targetNote to note id targetId
+    if password protected of targetNote is true then return "{AUTOMATION_ERROR_PREFIX}password_protected_note"
+    if shared of targetNote is true then return "{AUTOMATION_ERROR_PREFIX}shared_note"
+    if body of targetNote is not expectedBody then return "{AUTOMATION_ERROR_PREFIX}current_content_changed"
+    set body of targetNote to expectedBody & appendBody
+    return id of targetNote
+end tell
+"""
+
+
+def _automation_warning_from_output(output: str) -> dict[str, str] | None:
+    normalized = output.strip()
+    if not normalized.startswith(AUTOMATION_ERROR_PREFIX):
+        return None
+    code = normalized.removeprefix(AUTOMATION_ERROR_PREFIX)
+    if code == "password_protected_note":
+        return _warning("password_protected_note", "Notes append is blocked for password-protected notes.")
+    if code == "shared_note":
+        return _warning("shared_note_mutation_blocked", "Notes append is blocked for shared notes.")
+    if code == "current_content_changed":
+        return _warning("current_content_changed", "Notes target content changed before append could be applied.")
+    return _warning("automation_refused", "Notes automation refused the append operation.")
 
 
 def _applescript_string(value: str) -> str:

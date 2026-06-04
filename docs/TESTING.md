@@ -6,7 +6,7 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 
 ## Test Layers
 
-- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Mail create-draft plan/apply, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Calendar create-event plan/apply, synthetic Contacts helper responses and create-contact plan/apply, synthetic Photos helper responses and import plan/apply, synthetic iCloud Drive file retrieval and create/append-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
+- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Mail create-draft plan/apply, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval/pagination/create/append-text plan/apply, synthetic Calendar and Reminders EventKit helper responses, synthetic Calendar create-event plan/apply, synthetic Contacts helper responses and create-contact plan/apply, synthetic Photos helper responses and import plan/apply, synthetic iCloud Drive file retrieval and create/append-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
 - CLI tests: synthetic Mail/Messages/Hide My Email/Voice Memos/Notes/Calendar/Contacts/Photos/iCloud Drive/Reminders stores or mocked helpers with redacted logs.
 - MCP tests: tool listing plus read-only and approved write annotations.
 - Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows and synthetic apply flows for the approved write tools.
@@ -104,7 +104,7 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Health and doctor do not expose full local executable paths.
 - Health and doctor report broad local Apple data readiness without content reads, raw rows, credentials, prompt-triggering framework access, or raw absolute store paths.
 - Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, and other framework-backed surfaces.
-- Write-design gates require the first Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, and Photos import write design contracts and allow only `reminders apply` / `reminders_apply_change`, `icloud-drive apply` / `icloud_drive_apply_change`, `calendar apply` / `calendar_apply_change`, `contacts apply` / `contacts_apply_change`, `notes apply` / `notes_apply_change`, `mail apply` / `mail_apply_change`, and `photos apply` / `photos_apply_change` as approved write tools.
+- Write-design gates require the Reminders, iCloud Drive, Calendar, Contacts, Notes create/append, Mail draft, and Photos import write design contracts and allow only `reminders apply` / `reminders_apply_change`, `icloud-drive apply` / `icloud_drive_apply_change`, `calendar apply` / `calendar_apply_change`, `contacts apply` / `contacts_apply_change`, `notes apply` / `notes_apply_change`, `mail apply` / `mail_apply_change`, and `photos apply` / `photos_apply_change` as approved write tools.
 - No repo docs or tests persist real personal search terms or result metadata.
 
 ## v1.1 Acceptance Criteria
@@ -126,6 +126,7 @@ The v1.2 Notes content phase keeps the same synthetic-first test posture:
 - Invalid raw IDs, old handles, direct database IDs, and fabricated handles fail closed.
 - Deleted and password-protected notes do not return content.
 - Content is read through bounded local Notes automation, converted from HTML to plain text, capped by `max_chars`, supports zero-based `offset`, and reports `next_offset` for long notes.
+- Exact Notes content returns `content_sha256` over normalized plaintext.
 - Logs do not contain handles, titles, snippets, content, warning messages, raw paths, raw database rows, or raw automation errors.
 - Runtime verification covers synthetic content success and invalid-handle rejection without touching real note bodies.
 - Optional live smoke may be run only for a user-requested exact note and must report status/count/truncation only unless the user explicitly asks to view the content.
@@ -250,3 +251,14 @@ The v1.11 Reminders phase exposes planning plus one approved apply surface:
 - Logs do not contain planned titles, notes, list names, handles, or approval fingerprints.
 - Runtime verification covers synthetic planning and mocked apply without touching live Reminders.
 - MCP annotation tests prove `reminders_apply_change` is non-read-only while other tools remain read-only.
+
+## v1.19 Acceptance Criteria
+
+The v1.19 Notes append phase expands the existing Notes apply surface without adding new write tool names:
+
+- `notes plan --operation append-text` and `notes_plan_change(operation="append_text")` return `mode: "plan"`, `mutation_applied:false`, and `apply_available:true`.
+- Append planning requires an exact opaque `notes:note:v2:` handle, expected current SHA-256 from exact content retrieval, and non-empty bounded plaintext.
+- `notes apply --operation append-text` and `notes_apply_change(operation="append_text")` require the matching `notes-apply:v1:<approval_fingerprint>` token and explicit confirmation.
+- Apply refuses stale hashes with `current_content_changed`, refuses shared-note mutation, appends only escaped bounded plaintext through Notes.app body HTML, and verifies exact-content read-back plus `content_sha256`.
+- Logs do not contain planned titles, note content, handles, content hashes, raw Notes IDs, raw paths, approval fingerprints, or approval tokens.
+- Runtime verification covers synthetic append planning, mocked append apply, and stale-hash refusal without touching live Notes content.

@@ -361,9 +361,15 @@ def test_log_result_excludes_notes_apply_content(
             "credentials_inspected": False,
         },
         "preview": {
+            "target": {
+                "handle": "do-not-log-note-handle",
+                "expected_current_sha256": "do-not-log-content-hash",
+            },
             "proposed": {
                 "title": "do not log note title",
                 "body_preview_text": "do not log note body",
+                "append_preview_text": "do not log appended note body",
+                "append_body_sha256": "do-not-log-append-hash",
             },
             "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
         },
@@ -375,6 +381,7 @@ def test_log_result_excludes_notes_apply_content(
             "handle": "do-not-log-note-handle",
             "title": "do not log note title",
             "content_text": "do not log note body",
+            "content_sha256": "do-not-log-content-hash",
         },
         "warnings": [{"code": "already_applied", "message": "do not log warning"}],
     }
@@ -388,7 +395,10 @@ def test_log_result_excludes_notes_apply_content(
     assert event["warning_codes"] == ["already_applied"]
     assert "do not log note title" not in text
     assert "do not log note body" not in text
+    assert "do not log appended note body" not in text
     assert "do-not-log-note-handle" not in text
+    assert "do-not-log-content-hash" not in text
+    assert "do-not-log-append-hash" not in text
     assert "do-not-log-fingerprint" not in text
     assert "do not log warning" not in text
 

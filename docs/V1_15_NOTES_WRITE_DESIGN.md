@@ -153,4 +153,4 @@ Before exposure, the Notes write implementation must add:
 
 ## Current Release Gate
 
-The current release allows only this Notes create-note apply surface. Notes append, update, delete, move, folder creation, folder/account targeting, rich-text editing, checklist state, attachments, locked/shared-note mutation, Recently Deleted management, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+The v1.15 release allowed only this Notes create-note apply surface. Notes append-text is governed separately by `docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md`. Notes arbitrary update, delete, move, folder creation, folder/account targeting, rich-text editing, checklist state, attachments, locked/shared-note mutation, Recently Deleted management, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

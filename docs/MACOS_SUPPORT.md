@@ -15,7 +15,7 @@ The project is expected to need macOS because it depends on local Apple stores a
 | Messages | Messages local `chat.db` | Full Disk Access may be required |
 | Hide My Email | Inferred local Mail address metadata | Full Disk Access may be required |
 | Voice Memos | Voice Memos local database and embedded transcript atom | Full Disk Access may be required |
-| Notes | Local Notes SQLite plus bounded Notes.app automation for exact content and approved create-note apply | Full Disk Access and Automation may be required |
+| Notes | Local Notes SQLite plus bounded Notes.app automation for exact content and approved create/append-text apply | Full Disk Access and Automation may be required |
 | Calendar | EventKit helper | Calendar permission |
 | Reminders | EventKit helper plus legacy SQLite metadata | Reminders permission |
 | Contacts | Contacts.framework helper | Contacts permission |

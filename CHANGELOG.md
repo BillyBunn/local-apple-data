@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604180000 - 2026-06-04
+
+### Added
+
+- Approved Notes append-text apply through the existing `local-apple-data notes apply` and MCP `notes_apply_change` surfaces.
+- Non-mutating Notes append-text planning through `local-apple-data notes plan` and MCP `notes_plan_change`.
+- Exact-note-handle, expected-current-SHA-256, approval-token, explicit-confirmation, bounded plaintext append, drift-refusal, shared/locked-note refusal, and exact-content read-back verification checks for Notes append-text apply.
+- Synthetic adapter, CLI, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the expanded Notes apply surface.
+
+### Security
+
+- `notes_apply_change` remains non-destructive, idempotent, and closed-world at the MCP annotation level; append-text refuses to apply when the current note content hash no longer matches the approved plan.
+- Notes arbitrary update, delete, move, folder/account targeting, rich text, attachments, locked/shared-note mutation, Recently Deleted management, and bulk operations remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604170000 - 2026-06-04
 
 ### Added

@@ -66,10 +66,14 @@ These examples are synthetic. They are shape examples only and must not be repla
 ```json
 {
   "status": "ok",
-  "handle": "<opaque notes:note:v2 handle>",
-  "content": "Synthetic note body text.",
-  "content_chars": 25,
-  "truncated": false,
+  "source": "notes",
+  "result": {
+    "handle": "<opaque notes:note:v2 handle>",
+    "content_text": "Synthetic note body text.",
+    "content_chars": 25,
+    "content_sha256": "<sha256>",
+    "truncated": false
+  },
   "warnings": []
 }
 ```
@@ -133,6 +137,64 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## Notes Append Plan
+
+```json
+{
+  "status": "ok",
+  "source": "notes",
+  "mode": "plan",
+  "mutation_applied": false,
+  "apply_available": true,
+  "preview": {
+    "operation": "append_text",
+    "target": {
+      "handle": "<opaque notes:note:v2 handle>",
+      "expected_current_sha256": "<sha256>"
+    },
+    "proposed": {
+      "kind": "note",
+      "format": "plaintext_append",
+      "append_chars": 20,
+      "append_preview_text": "Synthetic append body.",
+      "overwrite": "blocked",
+      "delete": "blocked"
+    },
+    "idempotency_key": "notes-plan:v1:<hash>",
+    "approval": {
+      "required_for_apply": true,
+      "apply_tool_available": true,
+      "approval_fingerprint": "<hash>",
+      "approval_token_format": "notes-apply:v1:<approval_fingerprint>"
+    }
+  },
+  "warnings": []
+}
+```
+
+## Notes Append Apply
+
+```json
+{
+  "status": "ok",
+  "source": "notes",
+  "mode": "apply",
+  "mutation_applied": true,
+  "idempotency_key": "notes-plan:v1:<hash>",
+  "approval": {
+    "approval_fingerprint": "<hash>",
+    "approval_token_verified": true
+  },
+  "read_back": {
+    "handle": "<opaque notes:note:v2 handle>",
+    "content_chars": 62,
+    "content_sha256": "<sha256>",
+    "truncated": false
+  },
+  "warnings": []
+}
+```
+
 ## Hide My Email Search
 
 ```json
@@ -169,11 +231,16 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "mail_apply_status": "ok",
   "mail_apply_mutation_applied": true,
   "notes_content_status": "ok",
+  "notes_content_sha256_present": true,
   "notes_plan_status": "ok",
   "notes_plan_mutation_applied": false,
   "notes_plan_apply_available": true,
   "notes_apply_status": "ok",
   "notes_apply_mutation_applied": true,
+  "notes_append_plan_status": "ok",
+  "notes_append_apply_status": "ok",
+  "notes_append_apply_mutation_applied": true,
+  "notes_append_stale_warning": "current_content_changed",
   "icloud_drive_content_status": "ok",
   "icloud_content_sha256_present": true,
   "icloud_plan_status": "ok",

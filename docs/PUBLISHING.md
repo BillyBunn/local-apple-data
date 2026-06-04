@@ -47,7 +47,7 @@ The public README should explain:
 - What the plugin does.
 - What local permissions may be required.
 - That search is metadata-first and exact content/detail is handle-gated.
-- That only Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply are currently available, and only after plan approval-token and explicit-confirmation checks.
+- That only Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply are currently available, and only after plan approval-token and explicit-confirmation checks.
 - That Hide My Email support is inferred local Mail evidence, not iCloud account management.
 - That the plugin does not use Gmail API, IMAP, OAuth, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, telemetry, or network mail services.
 
@@ -73,6 +73,7 @@ Current public-facing docs:
 - `docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md`
 - `docs/V1_17_PHOTOS_IMPORT_WRITE_DESIGN.md`
 - `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`
+- `docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md`
 - `docs/PRIVACY_MODEL.md`
 - `docs/THREAT_MODEL.md`
 - `docs/TESTING.md`

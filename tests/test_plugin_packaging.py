@@ -24,7 +24,7 @@ def test_plugin_manifest_wires_skill_and_mcp() -> None:
     assert "iCloud Drive" in manifest["description"]
     assert "Calendar" in manifest["description"]
     assert (
-        "approved Reminders, iCloud Drive create/append text, Calendar, Contacts, Notes, Mail draft, and Photos import apply"
+        "approved Reminders, iCloud Drive create/append text, Calendar, Contacts, Notes create/append text, Mail draft, and Photos import apply"
         in manifest["description"]
     )
 
@@ -104,6 +104,7 @@ def test_public_release_docs_are_present() -> None:
         "docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md",
         "docs/V1_17_PHOTOS_IMPORT_WRITE_DESIGN.md",
         "docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md",
+        "docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md",
         "docs/WRITE_TOOL_ROADMAP.md",
         "docs/PUBLISHING.md",
     ]

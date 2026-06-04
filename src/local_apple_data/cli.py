@@ -302,8 +302,10 @@ def _notes_content_command(args: argparse.Namespace) -> int:
 def _notes_plan_command(args: argparse.Namespace) -> int:
     payload = plan_notes_change(
         args.operation,
-        title=args.title,
+        title=args.title or "",
+        handle=args.handle or "",
         body_text=args.body_text or "",
+        expected_current_sha256=args.expected_current_sha256 or "",
     )
     log_result("notes.plan", payload)
     _print_json(payload)
@@ -316,8 +318,10 @@ def _notes_apply_command(args: argparse.Namespace) -> int:
         kwargs["db_path"] = Path(args.db).expanduser()
     payload = apply_notes_change(
         args.operation,
-        title=args.title,
+        title=args.title or "",
+        handle=args.handle or "",
         body_text=args.body_text or "",
+        expected_current_sha256=args.expected_current_sha256 or "",
         approval_token=args.approval_token or "",
         confirm_apply=args.confirm_apply,
         **kwargs,
@@ -1045,39 +1049,59 @@ def build_parser() -> argparse.ArgumentParser:
 
     notes_plan = notes_subparsers.add_parser(
         "plan",
-        help="Preview an approved Notes create operation without writing.",
+        help="Preview an approved Notes create or append operation without writing.",
     )
     notes_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
     notes_plan.add_argument(
         "--operation",
         required=True,
-        choices=["create"],
+        choices=["create", "append-text", "append_text"],
         help="Notes operation to preview.",
     )
-    notes_plan.add_argument("--title", required=True, help="New note title.")
+    notes_plan.add_argument("--title", default="", help="New note title for create.")
+    notes_plan.add_argument(
+        "--handle",
+        default="",
+        help="Opaque Notes handle from search output for append-text.",
+    )
     notes_plan.add_argument(
         "--body-text",
         default="",
-        help="Plain-text body for the new note, capped at 12000 characters.",
+        help="Plain-text body for the new note or append, capped at 12000 characters.",
+    )
+    notes_plan.add_argument(
+        "--expected-current-sha256",
+        default="",
+        help="Current normalized content SHA-256 required for append-text.",
     )
     notes_plan.set_defaults(func=_notes_plan_command)
 
     notes_apply = notes_subparsers.add_parser(
         "apply",
-        help="Apply an approved Notes create operation after plan approval.",
+        help="Apply an approved Notes create or append operation after plan approval.",
     )
     notes_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
     notes_apply.add_argument(
         "--operation",
         required=True,
-        choices=["create"],
+        choices=["create", "append-text", "append_text"],
         help="Notes operation to apply.",
     )
-    notes_apply.add_argument("--title", required=True, help="New note title.")
+    notes_apply.add_argument("--title", default="", help="New note title for create.")
+    notes_apply.add_argument(
+        "--handle",
+        default="",
+        help="Opaque Notes handle from search output for append-text.",
+    )
     notes_apply.add_argument(
         "--body-text",
         default="",
-        help="Plain-text body for the new note, capped at 12000 characters.",
+        help="Plain-text body for the new note or append, capped at 12000 characters.",
+    )
+    notes_apply.add_argument(
+        "--expected-current-sha256",
+        default="",
+        help="Current normalized content SHA-256 required for append-text.",
     )
     notes_apply.add_argument(
         "--approval-token",

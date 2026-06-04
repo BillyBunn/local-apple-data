@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import sqlite3
 import subprocess
 from pathlib import Path
@@ -162,6 +163,9 @@ def test_get_notes_content_truncates(tmp_path: Path) -> None:
 
     assert result["status"] == "ok"
     assert result["result"]["content_text"] == "abcdefgh"
+    assert result["result"]["content_sha256"] == hashlib.sha256(
+        "abcdefghijklmnop".encode("utf-8")
+    ).hexdigest()
     assert result["result"]["content_offset"] == 0
     assert result["result"]["content_total_chars"] == 16
     assert result["result"]["next_offset"] == 8
@@ -214,11 +218,46 @@ def test_plan_notes_change_create_returns_preview_only() -> None:
     assert preview["approval"]["approval_token_format"].startswith("notes-apply:v1:")
 
 
+def test_plan_notes_change_append_text_returns_exact_handle_preview(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+    handle = search_notes_metadata("Alpha", db_path=db_path)["results"][0]["handle"]
+    current_sha = hashlib.sha256("Project Alpha note\nExisting body".encode("utf-8")).hexdigest()
+
+    result = plan_notes_change(
+        "append-text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        body_text="Appended line",
+    )
+
+    assert result["status"] == "ok"
+    preview = result["preview"]
+    assert preview["operation"] == "append_text"
+    assert preview["target"] == {
+        "handle": handle,
+        "expected_current_sha256": current_sha,
+    }
+    assert preview["proposed"]["append_chars"] == 13
+    assert preview["proposed"]["overwrite"] == "blocked"
+    assert preview["approval"]["approval_token_format"].startswith("notes-apply:v1:")
+
+
 def test_plan_notes_change_requires_title() -> None:
     result = plan_notes_change("create", title=" ", body_text="Body")
 
     assert result["status"] == "error"
     assert result["warnings"][0]["code"] == "missing_title"
+
+
+def test_plan_notes_change_append_text_requires_hash_and_handle() -> None:
+    result = plan_notes_change("append-text", body_text="Body")
+
+    assert result["status"] == "error"
+    assert {warning["code"] for warning in result["warnings"]} == {
+        "invalid_handle",
+        "missing_required_field",
+    }
 
 
 def test_apply_notes_change_requires_confirmation(tmp_path: Path) -> None:
@@ -340,6 +379,114 @@ def test_apply_notes_change_is_idempotent_for_matching_existing_note(tmp_path: P
     assert result["mutation_applied"] is False
     assert result["warnings"][0]["code"] == "already_applied"
     assert result["read_back"]["content_text"] == "Synthetic existing note\nExisting body"
+
+
+def test_apply_notes_change_appends_text_and_reads_back(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+    handle = search_notes_metadata("Alpha", db_path=db_path)["results"][0]["handle"]
+    current_text = "Project Alpha note\nExisting body"
+    current_sha = hashlib.sha256(current_text.encode("utf-8")).hexdigest()
+    plan = plan_notes_change(
+        "append-text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        body_text="Appended line",
+    )
+    body_html = "<h1>Project Alpha note</h1><p>Existing body</p>"
+
+    def runner(script: str, timeout: float) -> str:
+        nonlocal body_html
+        assert timeout == 10.0
+        assert "ICNote/p20" in script
+        if "set body of targetNote" in script:
+            assert "password protected of targetNote" in script
+            assert "shared of targetNote" in script
+            body_html = body_html + "<p>Appended line</p>"
+            return "x-coredata://11111111-2222-3333-4444-555555555555/ICNote/p20"
+        return body_html
+
+    result = apply_notes_change(
+        "append-text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        body_text="Appended line",
+        approval_token=_notes_token(plan),
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+    )
+
+    assert result["status"] == "ok"
+    assert result["mutation_applied"] is True
+    assert result["read_back"]["content_text"] == "Project Alpha note\nExisting body\nAppended line"
+
+
+def test_apply_notes_change_append_rejects_stale_hash(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+    handle = search_notes_metadata("Alpha", db_path=db_path)["results"][0]["handle"]
+    approved_sha = hashlib.sha256("Different content".encode("utf-8")).hexdigest()
+    plan = plan_notes_change(
+        "append-text",
+        handle=handle,
+        expected_current_sha256=approved_sha,
+        body_text="Appended line",
+    )
+
+    def runner(script: str, _timeout: float) -> str:
+        assert "set body of targetNote" not in script
+        return "<h1>Project Alpha note</h1><p>Existing body</p>"
+
+    result = apply_notes_change(
+        "append-text",
+        handle=handle,
+        expected_current_sha256=approved_sha,
+        body_text="Appended line",
+        approval_token=_notes_token(plan),
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "current_content_changed"
+
+
+def test_apply_notes_change_append_rejects_shared_note(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+    handle = search_notes_metadata("Alpha", db_path=db_path)["results"][0]["handle"]
+    current_sha = hashlib.sha256(
+        "Project Alpha note\nExisting body".encode("utf-8")
+    ).hexdigest()
+    plan = plan_notes_change(
+        "append-text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        body_text="Appended line",
+    )
+
+    def runner(script: str, _timeout: float) -> str:
+        if "set body of targetNote" in script:
+            return "__LOCAL_APPLE_DATA_ERROR__:shared_note"
+        return "<h1>Project Alpha note</h1><p>Existing body</p>"
+
+    result = apply_notes_change(
+        "append-text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        body_text="Appended line",
+        approval_token=_notes_token(plan),
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "shared_note_mutation_blocked"
 
 
 def test_get_notes_content_rejects_bad_handle(tmp_path: Path) -> None:

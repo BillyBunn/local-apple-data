@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import sqlite3
@@ -446,6 +447,7 @@ def _notes_content_smoke(tmp_path: Path) -> dict[str, Any]:
         "notes_opaque_handle": handle.startswith("notes:note:v2:"),
         "notes_content_status": content["status"],
         "notes_content_chars": content["result"]["content_chars"],
+        "notes_content_sha256_present": bool(content["result"].get("content_sha256")),
         "notes_paged_status": paged["status"],
         "notes_paged_next_offset": paged["result"]["next_offset"],
         "notes_legacy_content_status": legacy_content["status"],
@@ -494,6 +496,53 @@ def _notes_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
         db_path=db_path,
         script_runner=runner,
     )
+    append_handle = search_notes_metadata("runtime verification", db_path=db_path)["results"][0]["handle"]
+    append_html = "<h1>Synthetic runtime verification note</h1><p>Runtime existing note body.</p>"
+    append_sha = hashlib.sha256(
+        "Synthetic runtime verification note\nRuntime existing note body.".encode("utf-8")
+    ).hexdigest()
+    append_plan = plan_notes_change(
+        "append-text",
+        handle=append_handle,
+        expected_current_sha256=append_sha,
+        body_text="Runtime appended note body.",
+    )
+    append_token = "notes-apply:v1:" + append_plan["preview"]["approval"]["approval_fingerprint"]
+
+    def append_runner(script: str, _timeout: float) -> str:
+        nonlocal append_html
+        if "set body of targetNote" in script:
+            append_html = append_html + "<p>Runtime appended note body.</p>"
+            return "x-coredata://11111111-2222-3333-4444-555555555555/ICNote/p84"
+        return append_html
+
+    append_result = apply_notes_change(
+        "append-text",
+        handle=append_handle,
+        expected_current_sha256=append_sha,
+        body_text="Runtime appended note body.",
+        approval_token=append_token,
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=append_runner,
+    )
+    stale_sha = hashlib.sha256("Synthetic stale note body.".encode("utf-8")).hexdigest()
+    stale_plan = plan_notes_change(
+        "append-text",
+        handle=append_handle,
+        expected_current_sha256=stale_sha,
+        body_text="Runtime appended note body.",
+    )
+    stale_result = apply_notes_change(
+        "append-text",
+        handle=append_handle,
+        expected_current_sha256=stale_sha,
+        body_text="Runtime appended note body.",
+        approval_token="notes-apply:v1:" + stale_plan["preview"]["approval"]["approval_fingerprint"],
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=lambda _script, _timeout: append_html,
+    )
     return {
         "notes_plan_status": plan["status"],
         "notes_plan_mode": plan["mode"],
@@ -505,6 +554,14 @@ def _notes_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
         "notes_apply_mutation_applied": result["mutation_applied"],
         "notes_apply_read_back_title": result["read_back"]["title"],
         "notes_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
+        "notes_append_plan_status": append_plan["status"],
+        "notes_append_plan_mode": append_plan["mode"],
+        "notes_append_apply_status": append_result["status"],
+        "notes_append_apply_mutation_applied": append_result["mutation_applied"],
+        "notes_append_apply_sha_changed": (
+            append_result["read_back"]["content_sha256"] != append_sha
+        ),
+        "notes_append_stale_warning": stale_result["warnings"][0]["code"],
     }
 
 
@@ -1366,6 +1423,7 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "notes_opaque_handle": True,
         "notes_content_status": "ok",
         "notes_content_chars": 31,
+        "notes_content_sha256_present": True,
         "notes_paged_status": "ok",
         "notes_paged_next_offset": 10,
         "notes_legacy_content_status": "error",
@@ -1380,6 +1438,12 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "notes_apply_mutation_applied": True,
         "notes_apply_read_back_title": "Synthetic runtime planned note",
         "notes_apply_missing_confirmation": "missing_apply_confirmation",
+        "notes_append_plan_status": "ok",
+        "notes_append_plan_mode": "plan",
+        "notes_append_apply_status": "ok",
+        "notes_append_apply_mutation_applied": True,
+        "notes_append_apply_sha_changed": True,
+        "notes_append_stale_warning": "current_content_changed",
         "icloud_opaque_handle": True,
         "icloud_content_status": "ok",
         "icloud_content_chars": 33,
