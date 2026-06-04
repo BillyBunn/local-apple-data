@@ -1,0 +1,68 @@
+---
+name: local-apple-data
+description: Use when a user asks Codex to search or inspect locally synced Mail.app mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, or iCloud Drive files on this Mac without the Gmail connector. The skill uses the local read-only MCP server, stays metadata-first, and retrieves or exports Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive content/detail only by exact opaque handle.
+---
+
+# Local Apple Data
+
+Use the `local-apple-data` MCP server for the user's locally synced Mail.app mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive files. Do not use the Gmail connector, Gmail API, IMAP, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or network mail access for these workflows unless the user explicitly asks for those external paths.
+
+## Workflow
+
+1. Start with `apple_data_health` or `apple_data_doctor` if current local readiness has not been checked in this session.
+2. Use narrow, user-requested searches only. Do not run broad dumps or empty searches.
+3. Keep limits small unless the user asks for a larger result set.
+4. Treat search results as local metadata that may include subjects, Messages chat display names, inferred Hide My Email alias previews, Voice Memo titles, note titles/snippets, calendar event titles, contact names/organizations, Photos filenames, iCloud Drive filenames, or reminder titles. Summarize only the minimum useful facts in chat.
+5. Use exact opaque handles from search results for metadata fetches. Do not fabricate handles or retry old raw row-ID handles.
+6. If the user asks for Mail message content and you are selecting from search results, prefer a result whose `content_status` is `available`. Treat `unavailable` or `unknown` as a reason to skip that handle or report that local content may not be retrievable.
+7. Call `mail_get_content` only on an exact `mail:message:v2:` handle the user selected, provided, or approved from the metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, and never above 12000.
+8. Call `messages_get_chat` only on an exact `messages:chat:v1:` handle the user selected, provided, or approved from Messages chat display-name metadata results. Keep `max_messages` and `max_chars` bounded.
+9. Call `hide_my_email_get_alias` only on an exact `hide_my_email:alias:v1:` handle the user selected, provided, or approved from inferred Hide My Email metadata results. Treat it as inferred local Mail evidence, not authoritative iCloud inventory. Do not use iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or network services for Hide My Email.
+10. Call `voice_memos_get_recording` only on an exact `voice_memos:recording:v1:` handle the user selected, provided, or approved from Voice Memos title/filename metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, and never above 12000. This may return an existing Apple-generated transcript only; it does not return audio bytes or generate new transcription. Use `voice_memos_export_audio` only when the user asks to export the selected recording, and provide a caller-selected output directory.
+11. Call `notes_get_content` only on an exact `notes:note:v2:` handle the user selected, provided, or approved from the metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, never above 12000, and follow `next_offset` when the user asks for a full long/imported note.
+12. Call `icloud_drive_get_content` only on an exact `icloud:file:v1:` handle the user selected, provided, or approved from filename metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, and never above 12000.
+13. Call `calendar_get_event` only on an exact `calendar:event:v1:` handle the user selected, provided, or approved from event-title metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, and never above 12000.
+14. Call `contacts_get` only on an exact `contacts:contact:v1:` handle the user selected, provided, or approved from Contacts name/organization metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, and never above 12000.
+15. Call `photos_get_asset` only on an exact `photos:asset:v1:` handle the user selected, provided, or approved from Photos original-filename metadata results. This returns asset/resource metadata only. Use `photos_export_asset` only when the user asks to export the selected asset, and provide a caller-selected output directory.
+16. Call `reminders_get_content` only on an exact `reminders:reminder:eventkit:v1:` handle the user selected, provided, or approved from EventKit reminder-title metadata results. Keep `max_chars` bounded; use 4000 unless the user asks for a smaller limit, and never above 12000.
+17. If the user asks for attachments, broad content search, Gmail fallback, broad Calendar/Contacts/Photos/Reminder dumps, broad Messages text search, broad Voice Memos transcript search, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, Contact notes/image data, arbitrary document/binary extraction, unsupported UI automation, or mutation, stop and explain that those are outside this plugin's approved surface.
+
+## Tools
+
+- `apple_data_health`: redacted readiness and schema-only local checks.
+- `apple_data_doctor`: redacted diagnostics and remediation guidance.
+- `mail_search`: capped subject-metadata search across local Mail.app stores, with a metadata-only `content_status` hint.
+- `mail_get_metadata`: exact Mail metadata by opaque handle.
+- `mail_get_content`: exact Mail plain-text content by opaque `mail:message:v2:` handle, capped and read-only.
+- `messages_search`: capped Messages chat display-name metadata search.
+- `messages_get_chat`: exact Messages chat transcript by opaque `messages:chat:v1:` handle, capped and read-only.
+- `hide_my_email_search`: capped inferred Hide My Email alias search from local Mail address metadata; masked alias previews only.
+- `hide_my_email_get_alias`: exact inferred alias detail by opaque `hide_my_email:alias:v1:` handle, capped and read-only, with provenance and `authoritative_inventory:false`.
+- `voice_memos_search`: capped Voice Memos title/filename metadata search.
+- `voice_memos_get_recording`: exact Voice Memos metadata and existing embedded transcript by opaque `voice_memos:recording:v1:` handle, capped and read-only.
+- `voice_memos_export_audio`: exact Voice Memos `.m4a` export by opaque `voice_memos:recording:v1:` handle to a caller-selected output directory, read-only.
+- `notes_search`: capped Notes title/snippet metadata search.
+- `notes_get_metadata`: exact Notes metadata by opaque handle.
+- `notes_get_content`: exact Notes plain-text content by opaque `notes:note:v2:` handle, capped, paged, and read-only.
+- `icloud_drive_search`: capped iCloud Drive filename metadata search.
+- `icloud_drive_get_metadata`: exact iCloud Drive metadata by opaque handle.
+- `icloud_drive_get_content`: exact iCloud Drive text-file content by opaque `icloud:file:v1:` handle, capped and read-only.
+- `calendar_search`: capped Calendar event title metadata search through EventKit.
+- `calendar_get_event`: exact Calendar event details by opaque `calendar:event:v1:` handle, capped and read-only.
+- `contacts_search`: capped Contacts name/organization metadata search through Contacts.framework.
+- `contacts_get`: exact Contact details by opaque `contacts:contact:v1:` handle, capped and read-only.
+- `photos_search`: capped Photos original-filename metadata search through PhotoKit.
+- `photos_get_asset`: exact Photos asset/resource metadata by opaque `photos:asset:v1:` handle, capped and read-only.
+- `photos_export_asset`: exact Photos asset export by opaque `photos:asset:v1:` handle to a caller-selected output directory, read-only.
+- `reminders_search`: capped Reminders title metadata search.
+- `reminders_due`: bounded due-window Reminders metadata search.
+- `reminders_eventkit_search`: capped Reminders title metadata search through EventKit.
+- `reminders_get_content`: exact Reminder notes by opaque `reminders:reminder:eventkit:v1:` handle, capped and read-only.
+
+## Boundaries
+
+- Never print or persist raw MIME, full headers, Messages transcript text outside exact selected responses, full Hide My Email aliases outside exact selected responses, Voice Memos transcript text outside exact selected responses, exported Voice Memos audio outside the caller-selected export path, contact details outside exact selected responses, Photos asset/resource metadata outside exact selected responses, exported Photos assets outside the caller-selected export path, reminder notes outside exact selected responses, attachments, credentials, raw database rows, local Mail file paths, raw Voice Memos source paths, raw Photos identifiers, raw iCloud Drive file paths, raw Hide My Email identifiers, or full account identifiers.
+- Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail may be summarized or quoted only from the exact selected handle response, and should not be copied into durable docs or logs.
+- Do not mutate Mail, Notes, Reminders, Hide My Email, Gmail, iCloud, TCC, launchd, Codex config, or OpenClaw runtime state from this skill.
+- Do not retry by switching to Gmail plugin access unless the user explicitly asks for Gmail connector behavior.
+- Report warning codes and remediation from the tool output when a local store is degraded or unavailable.

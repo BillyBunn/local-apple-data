@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "local-apple-data": {
+      "command": "./scripts/run_mcp_server.sh",
+      "args": [],
+      "cwd": "."
+    }
+  }
+}

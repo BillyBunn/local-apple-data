@@ -1,0 +1,216 @@
+# Testing
+
+The test strategy is synthetic-first. Real local stores are used only for health/doctor schema checks and only when explicitly run as a local smoke.
+
+For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, `docs/MUTATION_GATES.md`, `docs/PUBLISHING.md`, `docs/INSTALL.md`, `docs/SAMPLE_OUTPUTS.md`, and `docs/MACOS_SUPPORT.md`.
+
+## Test Layers
+
+- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Contacts and Photos helper responses, synthetic iCloud Drive file retrieval, and reminder due-window caps.
+- CLI tests: synthetic Mail/Messages/Hide My Email/Voice Memos/Notes/Calendar/Contacts/Photos/iCloud Drive/Reminders stores or mocked helpers with redacted logs.
+- MCP tests: tool listing and read-only annotations.
+- Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows.
+- Cross-agent sync smoke: `scripts/verify_cross_agent_sync.py` confirms Codex, Claude Code, and OpenClaw are all pointed at the same project runner and installed plugin version, and verifies Cursor `mcp.json` when a local-apple-data Cursor entry is present or `--require-cursor` is used. Public checkouts can pass `--skip-codex --skip-file-sync --skip-claude --skip-openclaw --skip-cursor` for a source-only smoke.
+- Install consistency: compare source and installed-cache manifest, MCP config, skill, server, handle helper, doctor helper, and adapters.
+- Privacy scans: `scripts/redaction_scan.py` fails on high-confidence secrets and literal iCloud/private-relay email aliases without printing matched values.
+- Public release scan: `scripts/public_release_scan.py` fails when public files contain local operator paths, private note titles, or operator-specific terms outside explicit author metadata.
+- Mutation-gate audit: `scripts/audit_mutation_gates.py` fails if write-like CLI/MCP surfaces appear without an intentional mutation gate or if MCP tools are not annotated read-only.
+- Surface-contract audit: `scripts/audit_surface_contract.py` fails if a supported Apple data surface is missing from the MCP tools, CLI parser, health summary, access requirements, or public capability matrix.
+
+## Commands
+
+Run from the plugin root:
+
+```bash
+uv run pytest
+uv run python -m compileall src tests scripts
+uv run python scripts/redaction_scan.py .
+uv run python scripts/public_release_scan.py
+uv run python scripts/audit_mutation_gates.py
+uv run python scripts/audit_surface_contract.py
+swiftc -typecheck scripts/eventkit_helper.swift
+swiftc -typecheck scripts/contacts_helper.swift
+swiftc -typecheck scripts/photos_helper.swift
+cd /absolute/path/to/local-apple-data && uv run python scripts/verify_runtime.py
+cd /absolute/path/to/local-apple-data && uv run python scripts/verify_cross_agent_sync.py
+cd /absolute/path/to/local-apple-data && uv run python scripts/verify_cross_agent_sync.py --cursor-config .cursor/mcp.json --require-cursor
+```
+
+Also run the plugin and skill validator scripts when those local validator helpers are installed in the current Codex skills cache.
+
+After reinstalling, run the runtime verifier from the installed cache:
+
+```bash
+cd /absolute/path/to/installed/local-apple-data/<version>
+uv run python scripts/verify_runtime.py
+uv run python scripts/audit_mutation_gates.py
+uv run python scripts/audit_surface_contract.py
+```
+
+For a public source-only checkout without configured clients:
+
+```bash
+uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync --skip-claude --skip-openclaw --skip-cursor
+```
+
+## Current Acceptance Criteria
+
+- Tests pass.
+- Compile succeeds.
+- Plugin and skill validators pass when the local validator helpers are installed.
+- Runtime verifier prints JSON and exits zero.
+- Empty Mail search returns `empty_query`.
+- Wildcard-only Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, iCloud Drive, SQLite Reminders, and EventKit Reminders searches return `broad_query`.
+- Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive exact-get accept opaque handles from search output.
+- Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive exact-get reject legacy raw row-ID, raw framework identifier, raw alias identifier, recording identifier, or direct-path handles with `invalid_handle`.
+- Mail search returns a metadata-only `content_status` hint without reading message bodies.
+- Mail and Notes metadata handles use the `v2` fully opaque HMAC format.
+- Mail content accepts only `mail:message:v2:` handles, returns bounded plain text, and rejects raw IDs, old handles, mailbox refs, and paths.
+- Mail content truncation returns `content_truncated`.
+- Messages get accepts only `messages:chat:v1:` handles, returns bounded chat transcript text, rejects raw row IDs and fabricated handles, and does not return participant identifiers.
+- Messages transcript truncation returns `content_truncated`.
+- Hide My Email search rejects domain-only and generic queries, returns masked alias previews only, includes `authoritative_inventory:false`, and never returns full aliases during search.
+- Hide My Email get accepts only `hide_my_email:alias:v1:` handles, returns exact selected alias detail, rejects raw identifiers and fabricated handles, and reports local Mail metadata provenance.
+- Voice Memos get accepts only `voice_memos:recording:v1:` handles, returns bounded existing embedded transcript text when available, rejects raw recording IDs and fabricated handles, and does not return audio bytes, raw paths, or recording identifiers.
+- Voice Memos transcript truncation returns `content_truncated`.
+- Notes content accepts only `notes:note:v2:` handles, returns bounded plain text, and rejects raw IDs, old handles, direct database IDs, and fabricated handles.
+- Notes content truncation returns `content_truncated`, `content_total_chars`, and `next_offset` so long imported notes can be retrieved in bounded chunks.
+- Notes content automation failures return safe warning codes without raw AppleScript errors or database paths.
+- iCloud Drive content accepts only `icloud:file:v1:` handles, returns bounded text for supported text-like files, and rejects direct paths, fabricated handles, symlinks, hidden files, and unsupported binary/document types.
+- iCloud Drive content truncation returns `content_truncated`.
+- Calendar get accepts only `calendar:event:v1:` handles, returns bounded exact event location/notes details, and rejects raw EventKit identifiers and fabricated handles.
+- Calendar notes truncation returns `content_truncated`.
+- Contacts get accepts only `contacts:contact:v1:` handles, returns exact contact detail fields, rejects raw Contacts identifiers and fabricated handles, and reports contact notes as `requires_entitlement`.
+- Photos get/export accepts only `photos:asset:v1:` handles, returns exact asset/resource or destination metadata, rejects raw Photos identifiers and fabricated handles, and never returns inline asset bytes.
+- Reminders content accepts only `reminders:reminder:eventkit:v1:` handles, returns bounded exact reminder notes, and rejects raw EventKit identifiers, legacy SQLite reminder handles, and fabricated handles.
+- Reminder notes truncation returns `content_truncated`.
+- Health and doctor do not expose full local executable paths.
+- Health and doctor report broad local Apple data readiness without content reads, raw rows, credentials, prompt-triggering framework access, or raw absolute store paths.
+- Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, and other framework-backed surfaces.
+- No repo docs or tests persist real personal search terms or result metadata.
+
+## v1.1 Acceptance Criteria
+
+The v1.1 Mail content phase uses synthetic-only tests before any runtime install:
+
+- Exact `mail_get_content` succeeds from a synthetic opaque `mail:message:v2:` handle.
+- Invalid raw IDs, old handles, mailbox refs, and paths fail closed.
+- Deleted messages do not return content.
+- Content is bounded by `max_chars` and reports truncation.
+- Logs do not contain handles, subjects, content, warning messages, raw paths, or raw exceptions.
+- Runtime verification covers synthetic content success and invalid-handle rejection without touching real message bodies.
+
+## v1.2 Acceptance Criteria
+
+The v1.2 Notes content phase keeps the same synthetic-first test posture:
+
+- Exact `notes_get_content` succeeds from a synthetic opaque `notes:note:v2:` handle.
+- Invalid raw IDs, old handles, direct database IDs, and fabricated handles fail closed.
+- Deleted and password-protected notes do not return content.
+- Content is read through bounded local Notes automation, converted from HTML to plain text, capped by `max_chars`, supports zero-based `offset`, and reports `next_offset` for long notes.
+- Logs do not contain handles, titles, snippets, content, warning messages, raw paths, raw database rows, or raw automation errors.
+- Runtime verification covers synthetic content success and invalid-handle rejection without touching real note bodies.
+- Optional live smoke may be run only for a user-requested exact note and must report status/count/truncation only unless the user explicitly asks to view the content.
+
+## v1.3 Acceptance Criteria
+
+The v1.3 iCloud Drive content phase keeps the same synthetic-first test posture:
+
+- Exact `icloud_drive_get_content` succeeds from a synthetic opaque `icloud:file:v1:` handle.
+- Invalid direct paths, fabricated handles, hidden files, symlinks, and unsupported file types fail closed.
+- Empty and wildcard-only filename searches fail before scanning.
+- File search returns filenames and bounded metadata without raw local paths.
+- Content is capped by `max_chars` and reports truncation.
+- Logs do not contain handles, filenames, content, warning messages, raw paths, or raw exceptions.
+- Runtime verification covers synthetic content success and invalid-handle rejection without touching real iCloud Drive file content.
+
+## v1.4 Acceptance Criteria
+
+The v1.4 Calendar EventKit phase keeps the same synthetic-first test posture:
+
+- Exact `calendar_get_event` succeeds from a synthetic opaque `calendar:event:v1:` handle.
+- Invalid raw EventKit identifiers and fabricated handles fail closed.
+- Empty and wildcard-only title searches fail before EventKit access.
+- Search output returns event metadata without event identifiers, notes, locations, attendee identities, or URLs.
+- Exact event details return bounded notes/location text and report truncation.
+- EventKit helper access is non-prompting; unavailable permission returns `calendar_access_unavailable`.
+- Runtime verification covers synthetic content success and invalid-handle rejection without touching real Calendar content.
+
+## v1.5 Acceptance Criteria
+
+The v1.5 Reminders EventKit phase keeps the same synthetic-first test posture:
+
+- Exact `reminders_get_content` succeeds from a synthetic opaque `reminders:reminder:eventkit:v1:` handle.
+- Invalid raw EventKit identifiers, legacy SQLite reminder handles, and fabricated handles fail closed.
+- Empty and wildcard-only title searches fail before EventKit access.
+- Search output returns reminder metadata without EventKit identifiers or notes.
+- Exact reminder details return bounded notes text and report truncation.
+- EventKit helper access is non-prompting; unavailable permission returns `reminders_access_unavailable`.
+- Runtime verification covers synthetic content success and invalid-handle rejection without touching real Reminder content.
+
+## v1.6 Acceptance Criteria
+
+The v1.6 Contacts.framework phase keeps the same synthetic-first test posture:
+
+- Exact `contacts_get` succeeds from a synthetic opaque `contacts:contact:v1:` handle.
+- Invalid raw Contacts identifiers and fabricated handles fail closed.
+- Empty and wildcard-only name/organization searches fail before Contacts.framework access.
+- Search output returns contact metadata without Contacts identifiers, email addresses, phone numbers, postal addresses, notes, or image bytes.
+- Exact contact details return bounded email, phone, postal address, URL, date, relation, social profile, and instant-message fields.
+- Contact notes are not fetched and report `requires_entitlement`.
+- Contacts helper access is non-prompting; unavailable permission returns `contacts_access_unavailable`.
+- Runtime verification covers synthetic detail success and invalid-handle rejection without touching real Contacts content.
+
+## v1.7 Acceptance Criteria
+
+The v1.7 PhotoKit phase keeps the same synthetic-first test posture:
+
+- Exact `photos_get_asset` succeeds from a synthetic opaque `photos:asset:v1:` handle.
+- Invalid raw Photos identifiers and fabricated handles fail closed.
+- Empty and wildcard-only filename searches fail before PhotoKit access.
+- Search output returns Photos metadata without Photos identifiers or resource arrays.
+- Exact asset detail returns resource filenames, resource types, and uniform type identifiers only.
+- Exact asset export writes one selected asset resource to a caller-selected output directory and returns export metadata without inline image/video bytes.
+- No thumbnails, raw Photos identifiers, broad dumps, network iCloud fetches, or mutation are returned.
+- PhotoKit helper access is non-prompting; unavailable permission returns `photos_access_unavailable`.
+- Runtime verification covers synthetic asset detail/export success and invalid-handle rejection without touching real Photos content.
+
+## v1.8 Acceptance Criteria
+
+The v1.8 Messages phase keeps the same synthetic-first test posture:
+
+- Exact `messages_get_chat` succeeds from a synthetic opaque `messages:chat:v1:` handle.
+- Invalid raw row IDs, raw chat GUIDs, and fabricated handles fail closed.
+- Empty and wildcard-only chat display-name searches fail before opening `chat.db`.
+- Search output returns chat metadata without message text, phone numbers, email addresses, chat GUIDs, raw row IDs, or participant identifiers.
+- Exact chat transcript returns bounded message text, direction, date, and service only.
+- Transcript text is capped by `max_messages` and `max_chars`, and truncation reports `content_truncated`.
+- Attachments, attributed bodies, tapbacks/reactions, send-state metadata, broad message-text search, and mutation are out of scope.
+- Runtime verification covers synthetic transcript success and invalid-handle rejection without touching real Messages content.
+
+## v1.9 Acceptance Criteria
+
+The v1.9 Voice Memos phase keeps the same synthetic-first test posture:
+
+- Exact `voice_memos_get_recording` succeeds from a synthetic opaque `voice_memos:recording:v1:` handle.
+- Invalid raw recording IDs and fabricated handles fail closed.
+- Empty and wildcard-only title/filename searches fail before opening `CloudRecordings.db`.
+- Search output returns Voice Memo metadata without transcript text, audio bytes, raw local paths, raw recording identifiers, or filenames.
+- Exact recording retrieval returns bounded existing embedded transcript text, title, recorded date, duration, and audio availability only.
+- Exact audio export copies one selected `.m4a` to a caller-selected output directory and returns export metadata without inline audio bytes or source paths.
+- Transcript text is capped by `max_chars`, and truncation reports `content_truncated`.
+- Generated transcription, broad transcript search, and mutation are out of scope.
+- Runtime verification covers synthetic transcript/export success and invalid-handle rejection without touching real Voice Memos content.
+
+## v1.10 Acceptance Criteria
+
+The v1.10 Hide My Email phase keeps the same synthetic-first test posture:
+
+- Exact `hide_my_email_get_alias` succeeds from a synthetic opaque `hide_my_email:alias:v1:` handle.
+- Invalid raw alias identifiers and fabricated handles fail closed.
+- Empty, wildcard-only, domain-only, and generic Hide My Email queries fail before opening the Mail store.
+- Search output returns masked alias previews, domain, inference kind, confidence, count metadata, provenance, and `authoritative_inventory:false` without returning full aliases.
+- Exact alias retrieval returns the selected full alias only after the opaque handle is provided.
+- Private relay aliases are identified as high-confidence Sign in with Apple private relay evidence; iCloud-style aliases are medium-confidence local Mail evidence.
+- Authoritative iCloud inventory, alias creation/deactivation/deletion, private iCloud web/API access, browser sessions, keychain credential access, broad Mail address dumps, and mutation are out of scope.
+- Runtime verification covers synthetic alias success and invalid-handle rejection without touching real Mail address rows.

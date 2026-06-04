@@ -1,0 +1,56 @@
+{
+  "name": "local-apple-data",
+  "version": "0.1.0+codex.20260604074000",
+  "description": "Local-first read-only Apple Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients.",
+  "author": {
+    "name": "Billy Bunn"
+  },
+  "license": "MIT",
+  "keywords": [
+    "apple-data",
+    "apple-mail",
+    "apple-notes",
+    "apple-reminders",
+    "calendar",
+    "contacts",
+    "hide-my-email",
+    "icloud-drive",
+    "local-first",
+    "mcp",
+    "messages",
+    "photos",
+    "privacy"
+  ],
+  "mcpServers": "./.mcp.json",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Local Apple Data",
+    "shortDescription": "Search local Apple data",
+    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a read-only MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
+    "developerName": "Billy Bunn",
+    "category": "Productivity",
+    "capabilities": [
+      "Read",
+      "Search",
+      "MCP",
+      "Local"
+    ],
+    "brandColor": "#2F7D68",
+    "defaultPrompt": [
+      "Search local Mail metadata for this subject.",
+      "Search local Messages chat metadata for this display name.",
+      "Search inferred Hide My Email aliases for this specific alias substring.",
+      "Search local Voice Memos metadata for this title.",
+      "Export the selected local Voice Memo recording to this output directory.",
+      "Find local Notes metadata matching this phrase.",
+      "Retrieve exact Notes content from the selected opaque handle.",
+      "Search local iCloud Drive filenames for this phrase.",
+      "Search local Calendar events for this title.",
+      "Search local Contacts for this name or organization.",
+      "Search local Photos filenames for this phrase.",
+      "Export the selected local Photos asset to this output directory.",
+      "Search local Reminders for this title.",
+      "Retrieve exact Reminder notes from the selected opaque handle."
+    ]
+  }
+}

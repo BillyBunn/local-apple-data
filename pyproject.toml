@@ -1,0 +1,35 @@
+[project]
+name = "local-apple-data"
+version = "0.1.0"
+description = "Local-first Apple data CLI and MCP server"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "Billy Bunn" }]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Topic :: Communications :: Email",
+  "Topic :: Office/Business :: Scheduling",
+]
+dependencies = [
+  "mcp>=1.0",
+]
+
+[project.scripts]
+local-apple-data = "local_apple_data.cli:main"
+local-apple-data-mcp = "local_apple_data.mcp_server:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
