@@ -112,6 +112,17 @@ def _make_schema_stores(
                 id TEXT,
                 service TEXT
             );
+            CREATE TABLE attachment (
+                ROWID INTEGER PRIMARY KEY,
+                filename TEXT,
+                transfer_name TEXT,
+                mime_type TEXT,
+                uti TEXT,
+                total_bytes INTEGER,
+                created_date INTEGER,
+                start_date INTEGER
+            );
+            CREATE TABLE message_attachment_join (message_id INTEGER, attachment_id INTEGER);
             """
         )
 

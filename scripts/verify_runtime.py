@@ -45,7 +45,12 @@ from local_apple_data.adapters.mail import (
     plan_mail_change,
     search_mail_metadata,
 )
-from local_apple_data.adapters.messages import get_message_chat, search_message_chats
+from local_apple_data.adapters.messages import (
+    export_message_attachment,
+    get_message_chat,
+    list_message_attachments,
+    search_message_chats,
+)
 from local_apple_data.adapters.notes import (
     apply_notes_change,
     export_notes_attachment,
@@ -233,6 +238,25 @@ def _make_messages_db(path: Path) -> None:
                 id TEXT,
                 service TEXT
             );
+            CREATE TABLE attachment (
+                ROWID INTEGER PRIMARY KEY,
+                guid TEXT,
+                created_date INTEGER,
+                start_date INTEGER,
+                filename TEXT,
+                uti TEXT,
+                mime_type TEXT,
+                transfer_state INTEGER,
+                is_outgoing INTEGER,
+                user_info BLOB,
+                transfer_name TEXT,
+                total_bytes INTEGER,
+                is_sticker INTEGER
+            );
+            CREATE TABLE message_attachment_join (
+                message_id INTEGER,
+                attachment_id INTEGER
+            );
             INSERT INTO chat VALUES (1, 'runtime-chat-guid', 'Synthetic runtime chat', 'iMessage');
             INSERT INTO handle VALUES (7, '+15550100', 'iMessage');
             INSERT INTO chat_handle_join VALUES (1, 7);
@@ -242,6 +266,11 @@ def _make_messages_db(path: Path) -> None:
             INSERT INTO chat_message_join VALUES
               (1, 10),
               (1, 11);
+            INSERT INTO attachment VALUES
+              (20, 'runtime-attachment-guid', 802310300, 802310350,
+               'Attachments/aa/bb/runtime-message-packet.pdf', 'com.adobe.pdf',
+               'application/pdf', 0, 0, NULL, 'runtime-message-packet.pdf', 16, 0);
+            INSERT INTO message_attachment_join VALUES (10, 20);
             """
         )
 
@@ -719,6 +748,57 @@ def _messages_content_smoke(tmp_path: Path) -> dict[str, Any]:
         "messages_transcript_chars": content["result"]["transcript_chars"],
         "messages_legacy_content_status": legacy_content["status"],
         "messages_legacy_content_warning": legacy_content["warnings"][0]["code"],
+    }
+
+
+def _messages_attachment_smoke(tmp_path: Path) -> dict[str, Any]:
+    db_path = tmp_path / "messages-attachments.sqlite"
+    messages_root = tmp_path / "Messages"
+    output_dir = tmp_path / "messages-attachment-exports"
+    _make_messages_db(db_path)
+    media_path = messages_root / "Attachments/aa/bb/runtime-message-packet.pdf"
+    media_path.parent.mkdir(parents=True, exist_ok=True)
+    media_path.write_bytes(b"RUNTIME-MESSAGES")
+    search = search_message_chats("runtime", db_path=db_path)
+    chat_handle = search["results"][0]["handle"]
+    listing = list_message_attachments(
+        chat_handle,
+        db_path=db_path,
+        messages_root=messages_root,
+    )
+    attachment = listing["results"][0]
+    exported = export_message_attachment(
+        chat_handle,
+        attachment["handle"],
+        db_path=db_path,
+        messages_root=messages_root,
+        output_dir=output_dir,
+    )
+    legacy_export = export_message_attachment(
+        "messages:chat:1",
+        attachment["handle"],
+        db_path=db_path,
+        messages_root=messages_root,
+        output_dir=output_dir,
+    )
+    exported_path = Path(exported["result"]["exported_path"])
+    return {
+        "messages_attachment_list_status": listing["status"],
+        "messages_attachment_count": listing["result_count"],
+        "messages_attachment_opaque_handle": attachment["handle"].startswith(
+            "messages:attachment:v1:"
+        ),
+        "messages_attachment_media_status": attachment["media_status"],
+        "messages_attachment_export_status": exported["status"],
+        "messages_attachment_content_returned": exported["result"][
+            "attachment_content_returned"
+        ],
+        "messages_attachment_content_exported": exported["result"][
+            "attachment_content_exported"
+        ],
+        "messages_attachment_exported_bytes": exported_path.stat().st_size,
+        "messages_attachment_legacy_export_status": legacy_export["status"],
+        "messages_attachment_legacy_export_warning": legacy_export["warnings"][0]["code"],
     }
 
 
@@ -1503,7 +1583,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 47,
+        "tool_count": 49,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1553,6 +1633,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "messages_transcript_chars": 50,
         "messages_legacy_content_status": "error",
         "messages_legacy_content_warning": "invalid_handle",
+        "messages_attachment_list_status": "ok",
+        "messages_attachment_count": 1,
+        "messages_attachment_opaque_handle": True,
+        "messages_attachment_media_status": "available",
+        "messages_attachment_export_status": "ok",
+        "messages_attachment_content_returned": False,
+        "messages_attachment_content_exported": True,
+        "messages_attachment_exported_bytes": 16,
+        "messages_attachment_legacy_export_status": "error",
+        "messages_attachment_legacy_export_warning": "invalid_handle",
         "hide_my_email_opaque_handle": True,
         "hide_my_email_search_status": "ok",
         "hide_my_email_alias_preview": "ru***@icloud.com",
@@ -1707,6 +1797,7 @@ def main() -> None:
         summary.update(_mail_attachment_smoke(tmp_path))
         summary.update(_mail_plan_apply_smoke(tmp_path))
         summary.update(_messages_content_smoke(tmp_path))
+        summary.update(_messages_attachment_smoke(tmp_path))
         summary.update(_hide_my_email_smoke(tmp_path))
         summary.update(_voice_memos_content_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))

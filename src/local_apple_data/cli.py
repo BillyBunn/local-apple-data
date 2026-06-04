@@ -35,7 +35,12 @@ from .adapters.mail import (
     plan_mail_change,
     search_mail_metadata,
 )
-from .adapters.messages import get_message_chat, search_message_chats
+from .adapters.messages import (
+    export_message_attachment,
+    get_message_chat,
+    list_message_attachments,
+    search_message_chats,
+)
 from .adapters.notes import (
     apply_notes_change,
     export_notes_attachment,
@@ -223,6 +228,38 @@ def _messages_get_command(args: argparse.Namespace) -> int:
         )
     )
     log_result("messages.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _messages_attachments_command(args: argparse.Namespace) -> int:
+    payload = (
+        list_message_attachments(
+            args.handle,
+            db_path=Path(args.db).expanduser() if args.db else None,
+            messages_root=Path(args.messages_root).expanduser()
+            if args.messages_root
+            else None,
+            limit=args.limit,
+        )
+        if args.db or args.messages_root
+        else list_message_attachments(args.handle, limit=args.limit)
+    )
+    log_result("messages.attachments", payload)
+    _print_json(payload)
+    return 0
+
+
+def _messages_export_attachment_command(args: argparse.Namespace) -> int:
+    payload = export_message_attachment(
+        args.chat_handle,
+        args.handle,
+        output_dir=Path(args.output_dir).expanduser(),
+        filename=args.filename,
+        db_path=Path(args.db).expanduser() if args.db else None,
+        messages_root=Path(args.messages_root).expanduser() if args.messages_root else None,
+    )
+    log_result("messages.export_attachment", payload)
     _print_json(payload)
     return 0
 
@@ -990,6 +1027,55 @@ def build_parser() -> argparse.ArgumentParser:
     )
     messages_get.add_argument("--db", help=argparse.SUPPRESS)
     messages_get.set_defaults(func=_messages_get_command)
+
+    messages_attachments = messages_subparsers.add_parser(
+        "attachments",
+        help="List exact local Messages attachment metadata by chat handle.",
+    )
+    messages_attachments.add_argument("--json", action="store_true", help="Emit JSON output.")
+    messages_attachments.add_argument(
+        "--handle",
+        required=True,
+        help="Messages chat handle from search output.",
+    )
+    messages_attachments.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum attachment results, capped at 50.",
+    )
+    messages_attachments.add_argument("--db", help=argparse.SUPPRESS)
+    messages_attachments.add_argument("--messages-root", help=argparse.SUPPRESS)
+    messages_attachments.set_defaults(func=_messages_attachments_command)
+
+    messages_export_attachment = messages_subparsers.add_parser(
+        "export-attachment",
+        help="Export one exact local Messages attachment by chat and attachment handles.",
+    )
+    messages_export_attachment.add_argument("--json", action="store_true", help="Emit JSON output.")
+    messages_export_attachment.add_argument(
+        "--chat-handle",
+        required=True,
+        help="Messages chat handle from search output.",
+    )
+    messages_export_attachment.add_argument(
+        "--handle",
+        required=True,
+        help="Messages attachment handle from attachments output.",
+    )
+    messages_export_attachment.add_argument(
+        "--output-dir",
+        required=True,
+        help="Directory where the selected attachment should be written.",
+    )
+    messages_export_attachment.add_argument(
+        "--filename",
+        default=None,
+        help="Optional export filename; sanitized before writing.",
+    )
+    messages_export_attachment.add_argument("--db", help=argparse.SUPPRESS)
+    messages_export_attachment.add_argument("--messages-root", help=argparse.SUPPRESS)
+    messages_export_attachment.set_defaults(func=_messages_export_attachment_command)
 
     hide_my_email = subparsers.add_parser(
         "hide-my-email",

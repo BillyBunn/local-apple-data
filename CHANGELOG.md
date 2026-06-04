@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604210000 - 2026-06-04
+
+### Added
+
+- Exact-handle Messages attachment metadata listing through `local-apple-data messages attachments` and MCP `messages_list_attachments`.
+- Exact-handle local Messages attachment export through `local-apple-data messages export-attachment` and MCP `messages_export_attachment`.
+- Synthetic Messages `chat.db` attachment metadata/export, unavailable-media, CLI, MCP, runtime, surface-contract, and redacted-log coverage.
+
+### Security
+
+- Messages attachment bytes are never returned inline, source media paths are never returned, and export writes only to a caller-selected output directory.
+- Export requires both the selected `messages:chat:v1:` chat handle and selected `messages:attachment:v1:` attachment handle so a detached token cannot trigger a broad Messages media scan.
+- Messages send/edit/delete, broad attachment export, participant identifiers, reactions, source paths, remote/iCloud media fetch, and attachment mutation remain blocked.
+
 ## 0.1.0+codex.20260604200000 - 2026-06-04
 
 ### Added

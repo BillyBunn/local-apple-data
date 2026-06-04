@@ -22,7 +22,7 @@ def test_plugin_manifest_wires_skill_and_mcp() -> None:
     assert "Write" in manifest["interface"]["capabilities"]
     assert "MCP" in manifest["interface"]["capabilities"]
     assert "iCloud Drive" in manifest["description"]
-    assert "Mail/Notes attachment export" in manifest["description"]
+    assert "Mail/Messages/Notes attachment export" in manifest["description"]
     assert "Calendar" in manifest["description"]
     assert (
         "approved Reminders, iCloud Drive create/append text, Calendar, Contacts, Notes create/append text, Mail draft, and Photos import apply"
@@ -68,6 +68,8 @@ def test_skill_metadata_mentions_local_mcp_dependency() -> None:
     assert "mail_plan_change" in skill
     assert "mail_apply_change" in skill
     assert "messages_get_chat" in skill
+    assert "messages_list_attachments" in skill
+    assert "messages_export_attachment" in skill
     assert "notes_list_attachments" in skill
     assert "notes_export_attachment" in skill
     assert "notes_plan_change" in skill
@@ -112,6 +114,7 @@ def test_public_release_docs_are_present() -> None:
         "docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md",
         "docs/V1_20_NOTES_ATTACHMENT_EXPORT.md",
         "docs/V1_21_MAIL_ATTACHMENT_EXPORT.md",
+        "docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md",
         "docs/WRITE_TOOL_ROADMAP.md",
         "docs/PUBLISHING.md",
     ]

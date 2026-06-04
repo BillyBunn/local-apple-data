@@ -47,8 +47,13 @@ SURFACE_CONTRACTS = (
         label="Messages",
         cli_group="messages",
         cli_subparser="messages_subparsers",
-        cli_commands=("search", "get"),
-        mcp_tools=("messages_search", "messages_get_chat"),
+        cli_commands=("search", "get", "attachments", "export-attachment"),
+        mcp_tools=(
+            "messages_search",
+            "messages_get_chat",
+            "messages_list_attachments",
+            "messages_export_attachment",
+        ),
     ),
     SurfaceContract(
         name="hide_my_email",

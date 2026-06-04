@@ -22,8 +22,9 @@ Architecture implication: Notes content retrieval and selected attachment export
 
 - `anipotts/imessage-mcp` is a read-only local iMessage MCP server. Its README describes local database access, read-only tool annotations, no uploads, and support for Claude Code, Cursor, Codex CLI, and other clients. Source: https://github.com/anipotts/imessage-mcp
 - `carterlasalle/mac_messages_mcp` exposes querying and sending paths for Messages, including delivery logic and direct Messages database access. Source: https://github.com/carterlasalle/mac_messages_mcp
+- `ReagentX/imessage-exporter` and independent schema notes document that Messages attachment metadata lives in `chat.db` via `attachment` and `message_attachment_join`, while attachment files can be missing locally when they were not downloaded from iCloud. Sources: https://github.com/ReagentX/imessage-exporter and https://johnlarkin1.github.io/2022/message-parser/
 
-Architecture implication: Messages reads are common enough to be expected. Sending is also implemented elsewhere, but this plugin should keep Messages mutation out of the current release until identity, recipient confirmation, account selection, and AppleScript automation risks are explicitly solved.
+Architecture implication: Messages reads are common enough to be expected, and selected local attachment export is a reasonable read/export path. It should stay exact-chat and exact-attachment directed because broad attachment export can become a large media dump and unavailable iCloud media can tempt private network fetches. Sending is also implemented elsewhere, but this plugin should keep Messages mutation out of the current release until identity, recipient confirmation, account selection, and AppleScript automation risks are explicitly solved.
 
 ### Mail
 
@@ -74,5 +75,5 @@ This plugin should be broader than single-surface MCP servers and stricter than 
 
 - Whether to add a small privileged helper architecture for users who do not want their AI client process to hold Full Disk Access.
 - Whether future generated transcription belongs in this plugin or a separate transcription tool connected by handles.
-- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, and Notes attachment export tranches should prioritize Mail send, Messages send, Photos edit/delete/album support, arbitrary Notes update/delete/move, or richer framework-backed edits.
+- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, and Mail/Messages/Notes attachment export tranches should prioritize Mail send, Messages send, Photos edit/delete/album support, arbitrary Notes update/delete/move, or richer framework-backed edits.
 - Whether public registry packaging should target npm, PyPI, a Codex personal marketplace, Smithery-style registries, or only GitHub source installation first.

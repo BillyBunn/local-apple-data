@@ -57,7 +57,7 @@ Outside the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail dr
 
 - Sending mail or messages.
 - Mail reply, forward, archive, move, delete, mark read/unread, flag, mailbox/account management, sender-account selection, attachment mutation, broad attachment export, HTML/rich-text draft mutation, templates, or bulk mail mutation.
-- Deleting, archiving, moving, or marking Messages.
+- Deleting, archiving, moving, or marking Messages; broad Messages attachment export; Messages attachment mutation; inline Messages attachment bytes; source Messages media paths.
 - Creating, deleting, deactivating, or managing Hide My Email aliases.
 - Deleting Calendar events, Contacts, Photos, Notes, Reminders, Voice Memos, or iCloud Drive files.
 - Photos edit, album targeting, album create/update/delete, hidden/favorite mutation, metadata mutation, thumbnails, inline asset bytes, network iCloud fetch, importing from URLs, and bulk Photos operations.

@@ -35,7 +35,12 @@ from .adapters.mail import (
     plan_mail_change,
     search_mail_metadata,
 )
-from .adapters.messages import get_message_chat, search_message_chats
+from .adapters.messages import (
+    export_message_attachment,
+    get_message_chat,
+    list_message_attachments,
+    search_message_chats,
+)
 from .adapters.notes import (
     apply_notes_change,
     export_notes_attachment,
@@ -74,7 +79,7 @@ INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
-    "Mail and Notes attachment export are exact-handle only and never return attachment bytes inline. "
+    "Mail, Messages, and Notes attachment export are exact-handle only and never return attachment bytes inline. "
     "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
@@ -232,6 +237,33 @@ def messages_get_chat(
     return _record(
         "messages_get_chat",
         get_message_chat(handle, max_messages=max_messages, max_chars=max_chars),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def messages_list_attachments(handle: str, limit: int = 20) -> dict[str, Any]:
+    """List exact local Messages attachment metadata by selected chat handle, capped and read-only."""
+
+    return _record("messages_list_attachments", list_message_attachments(handle, limit=limit))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def messages_export_attachment(
+    chat_handle: str,
+    attachment_handle: str,
+    output_dir: str,
+    filename: str = "",
+) -> dict[str, Any]:
+    """Export one exact local Messages attachment to a caller-selected directory without inline bytes."""
+
+    return _record(
+        "messages_export_attachment",
+        export_message_attachment(
+            chat_handle,
+            attachment_handle,
+            output_dir=Path(output_dir).expanduser(),
+            filename=filename or None,
+        ),
     )
 
 

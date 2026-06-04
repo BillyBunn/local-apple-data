@@ -52,6 +52,7 @@ SYNC_FILES = [
     "docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md",
     "docs/V1_20_NOTES_ATTACHMENT_EXPORT.md",
     "docs/V1_21_MAIL_ATTACHMENT_EXPORT.md",
+    "docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "scripts/audit_release_readiness.py",
     "scripts/audit_mutation_gates.py",

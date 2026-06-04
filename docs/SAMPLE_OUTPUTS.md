@@ -103,6 +103,49 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## Messages Attachments
+
+```json
+{
+  "status": "ok",
+  "source": "messages",
+  "results": [
+    {
+      "handle": "<opaque messages:attachment:v1 handle>",
+      "chat_handle": "<opaque messages:chat:v1 handle>",
+      "filename": "image.jpeg",
+      "mime_type": "image/jpeg",
+      "uti": "public.jpeg",
+      "file_size": 123456,
+      "attachment_type": "image",
+      "media_status": "available",
+      "attachment_content_returned": false,
+      "attachment_content_exported": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Messages Attachment Export
+
+```json
+{
+  "status": "ok",
+  "source": "messages",
+  "result": {
+    "handle": "<opaque messages:attachment:v1 handle>",
+    "chat_handle": "<opaque messages:chat:v1 handle>",
+    "filename": "image.jpeg",
+    "attachment_content_returned": false,
+    "attachment_content_exported": true,
+    "exported_filename": "image.jpeg",
+    "exported_bytes": 123456
+  },
+  "warnings": []
+}
+```
+
 ## Notes Content
 
 ```json
@@ -307,7 +350,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 47,
+  "tool_count": 49,
   "mail_content_status": "ok",
   "mail_plan_status": "ok",
   "mail_plan_mutation_applied": false,
@@ -362,6 +405,9 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "photos_apply_status": "ok",
   "photos_apply_mutation_applied": true,
   "messages_transcript_status": "ok",
+  "messages_attachment_list_status": "ok",
+  "messages_attachment_export_status": "ok",
+  "messages_attachment_content_exported": true,
   "voice_memos_transcript_status": "ok",
   "voice_memos_export_status": "ok",
   "hide_my_email_detail_status": "ok",

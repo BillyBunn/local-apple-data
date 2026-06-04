@@ -29,7 +29,9 @@ from local_apple_data.mcp_server import (
     mail_get_metadata,
     mail_list_attachments,
     mail_plan_change,
+    messages_export_attachment,
     messages_get_chat,
+    messages_list_attachments,
     notes_apply_change,
     notes_export_attachment,
     notes_get_content,
@@ -94,6 +96,12 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
         confirm_apply=True,
     )
     messages_result = messages_get_chat("bad-handle")
+    messages_attachments_result = messages_list_attachments("bad-handle")
+    messages_export_result = messages_export_attachment(
+        "bad-handle",
+        "bad-attachment",
+        str(tmp_path / "exports"),
+    )
     hide_my_email_result = hide_my_email_get_alias("bad-handle")
     voice_memos_result = voice_memos_get_recording("bad-handle")
     voice_memos_export_result = voice_memos_export_audio("bad-handle", str(tmp_path / "exports"))
@@ -189,6 +197,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert mail_apply_result["warnings"][0]["code"] == "invalid_approval_token"
     assert messages_result["status"] == "error"
     assert messages_result["warnings"][0]["code"] == "invalid_handle"
+    assert messages_attachments_result["status"] == "error"
+    assert messages_attachments_result["warnings"][0]["code"] == "invalid_handle"
+    assert messages_export_result["status"] == "error"
+    assert messages_export_result["warnings"][0]["code"] == "invalid_handle"
     assert hide_my_email_result["status"] == "error"
     assert hide_my_email_result["warnings"][0]["code"] == "invalid_handle"
     assert voice_memos_result["status"] == "error"
@@ -270,6 +282,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "mail_apply_change",
                     "messages_search",
                     "messages_get_chat",
+                    "messages_list_attachments",
+                    "messages_export_attachment",
                     "hide_my_email_search",
                     "hide_my_email_get_alias",
                     "voice_memos_search",

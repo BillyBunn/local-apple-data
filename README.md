@@ -36,6 +36,8 @@ Implemented now:
 - `local-apple-data mail plan --json --operation create-draft --to <address> --subject <subject> --body-text <text>` for non-mutating future draft-create previews with idempotency and approval metadata
 - `local-apple-data mail apply --json --operation create-draft --to <address> --subject <subject> --body-text <text> --approval-token <token> --confirm-apply` for the approved Mail create-draft path, with save-only Mail.app automation and local read-back verification when the Drafts store exposes the saved draft
 - `local-apple-data messages search/get` commands for local Messages chat display-name metadata and exact bounded transcripts
+- `local-apple-data messages attachments --json --handle <messages:chat:v1:...>` for exact selected-chat attachment metadata with opaque `messages:attachment:v1:` handles
+- `local-apple-data messages export-attachment --json --chat-handle <messages:chat:v1:...> --handle <messages:attachment:v1:...> --output-dir <dir>` for exact local Messages attachment export without inline bytes or source media paths
 - `local-apple-data hide-my-email search/get` commands for inferred Hide My Email aliases observed in local Mail address metadata
 - `local-apple-data voice-memos search/get/export` commands for local Voice Memos title/filename metadata, exact existing embedded transcripts, and exact-handle `.m4a` export to a caller-selected output directory
 - `local-apple-data notes search/get` metadata commands
@@ -76,6 +78,7 @@ Implemented now:
 - Opaque signed handles for exact Mail/Messages/Voice Memos/Notes/Calendar/Contacts/Photos/Reminders/iCloud Drive metadata fetches
 - Exact Mail content retrieval through the same opaque `mail:message:v2:` handles
 - Exact Messages chat transcript retrieval through opaque `messages:chat:v1:` handles
+- Exact Messages attachment metadata/export through opaque `messages:chat:v1:` and `messages:attachment:v1:` handles
 - Exact inferred Hide My Email alias detail through opaque `hide_my_email:alias:v1:` handles
 - Exact Voice Memos transcript retrieval through opaque `voice_memos:recording:v1:` handles when Apple-generated local transcript data is embedded in the selected `.m4a`
 - Exact Voice Memos audio export through opaque `voice_memos:recording:v1:` handles to a caller-selected output directory without returning audio bytes inline
@@ -105,7 +108,7 @@ Implemented now:
 Deferred:
 
 - Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create/append-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, Notes create/append-text apply surface, Mail create-draft apply surface, and Photos import apply surface
-- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages/Voice Memos mutation or attachments, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
+- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages send/edit/delete/other mutation, broad Messages attachment export, Messages attachment mutation, Voice Memos mutation or attachments, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
 
 The v1.1 design gate for exact-handle Mail content retrieval is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`.
 The v1.2 Notes content and broader local Apple data expansion plan is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`.
@@ -124,6 +127,7 @@ The first iCloud Drive append-text write design gate is documented in `docs/V1_1
 The first Notes append-text write design gate is documented in `docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md`.
 The first Notes attachment export design gate is documented in `docs/V1_20_NOTES_ATTACHMENT_EXPORT.md`.
 The first Mail attachment export design gate is documented in `docs/V1_21_MAIL_ATTACHMENT_EXPORT.md`.
+The first Messages attachment export design gate is documented in `docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.
@@ -158,6 +162,8 @@ uv run local-apple-data mail attachments --json --handle '<mail:message:v2:...>'
 uv run local-apple-data mail export-attachment --json --message-handle '<mail:message:v2:...>' --handle '<mail:attachment:v1:...>' --output-dir /tmp/local-apple-data-exports
 uv run local-apple-data messages search --json --query '<chat display name text>'
 uv run local-apple-data messages get --json --handle '<messages:chat:v1:...>' --max-messages 25 --max-chars 4000
+uv run local-apple-data messages attachments --json --handle '<messages:chat:v1:...>'
+uv run local-apple-data messages export-attachment --json --chat-handle '<messages:chat:v1:...>' --handle '<messages:attachment:v1:...>' --output-dir /tmp/local-apple-data-exports
 uv run local-apple-data hide-my-email search --json --query '<specific alias substring>'
 uv run local-apple-data hide-my-email get --json --handle '<hide_my_email:alias:v1:...>'
 uv run local-apple-data voice-memos search --json --query '<recording title text>'
