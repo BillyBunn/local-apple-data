@@ -75,11 +75,13 @@ SURFACE_CONTRACTS = (
         label="iCloud Drive",
         cli_group="icloud-drive",
         cli_subparser="icloud_drive_subparsers",
-        cli_commands=("search", "get", "content"),
+        cli_commands=("search", "get", "content", "plan", "apply"),
         mcp_tools=(
             "icloud_drive_search",
             "icloud_drive_get_metadata",
             "icloud_drive_get_content",
+            "icloud_drive_plan_change",
+            "icloud_drive_apply_change",
         ),
     ),
     SurfaceContract(

@@ -1,7 +1,7 @@
 {
   "name": "local-apple-data",
-  "version": "0.1.0+codex.20260604100000",
-  "description": "Local-first Apple Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients, with approved Reminders apply.",
+  "version": "0.1.0+codex.20260604110000",
+  "description": "Local-first Apple Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients, with approved Reminders and iCloud Drive apply.",
   "author": {
     "name": "Billy Bunn"
   },
@@ -26,7 +26,7 @@
   "interface": {
     "displayName": "Local Apple Data",
     "shortDescription": "Search local Apple data",
-    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a bounded MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. The only apply-capable mutation surface is Reminders apply with a matching plan approval token and explicit confirmation. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
+    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a bounded MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply, each with a matching plan approval token and explicit confirmation. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
     "developerName": "Billy Bunn",
     "category": "Productivity",
     "capabilities": [
@@ -46,6 +46,8 @@
       "Find local Notes metadata matching this phrase.",
       "Retrieve exact Notes content from the selected opaque handle.",
       "Search local iCloud Drive filenames for this phrase.",
+      "Plan a future iCloud Drive text-file create without applying it.",
+      "Apply the approved iCloud Drive text-file create with the matching approval token.",
       "Search local Calendar events for this title.",
       "Search local Contacts for this name or organization.",
       "Search local Photos filenames for this phrase.",

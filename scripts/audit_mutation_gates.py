@@ -33,8 +33,8 @@ MUTATION_VERBS = {
     "update",
     "write",
 }
-APPROVED_WRITE_MCP_TOOLS = {"reminders_apply_change"}
-APPROVED_WRITE_CLI_HANDLERS = {"reminders_apply"}
+APPROVED_WRITE_MCP_TOOLS = {"icloud_drive_apply_change", "reminders_apply_change"}
+APPROVED_WRITE_CLI_HANDLERS = {"icloud_drive_apply", "reminders_apply"}
 MANIFEST_WRITE_CAPABILITIES = {
     "Create",
     "Delete",
@@ -46,10 +46,10 @@ MANIFEST_WRITE_CAPABILITIES = {
     "Write",
 }
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surface is Reminders apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply` and `reminders_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply is the only approved write surface",
-    "src/local_apple_data/mcp_server.py": "The only apply-capable mutation surface is Reminders apply",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, and `icloud_drive_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply and iCloud Drive create-text apply are the only approved write surfaces",
+    "src/local_apple_data/mcp_server.py": "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply",
 }
 
 

@@ -65,6 +65,7 @@ def _notes_db(path: Path) -> None:
 
 def _icloud_root(path: Path) -> None:
     path.mkdir(parents=True)
+    (path / "Packets").mkdir()
     (path / "synthetic-packet.md").write_text("Synthetic iCloud content.", encoding="utf-8")
 
 
@@ -225,13 +226,13 @@ def test_cli_icloud_drive_content_uses_exact_handle(
     search_exit_code = main(
         [
             "icloud-drive",
-            "search",
-            "--json",
-            "--query",
-            "packet",
-            "--root",
-            str(root),
-        ]
+                "search",
+                "--json",
+                "--query",
+                "synthetic-packet",
+                "--root",
+                str(root),
+            ]
     )
     assert search_exit_code == 0
     parsed_search = json.loads(capsys.readouterr().out)
@@ -255,6 +256,80 @@ def test_cli_icloud_drive_content_uses_exact_handle(
     assert parsed["source"] == "icloud_drive"
     assert parsed["status"] == "ok"
     assert parsed["result"]["content_text"] == "Synthetic iCloud content."
+
+
+def test_cli_icloud_drive_plan_and_apply_create_text(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    root = tmp_path / "CloudDocs"
+    _icloud_root(root)
+
+    search_exit_code = main(
+        [
+            "icloud-drive",
+            "search",
+            "--json",
+            "--query",
+            "Packets",
+            "--root",
+            str(root),
+        ]
+    )
+    assert search_exit_code == 0
+    parent_handle = json.loads(capsys.readouterr().out)["results"][0]["handle"]
+
+    plan_exit_code = main(
+        [
+            "icloud-drive",
+            "plan",
+            "--json",
+            "--operation",
+            "create-text",
+            "--parent-handle",
+            parent_handle,
+            "--filename",
+            "new-note.md",
+            "--content-text",
+            "Synthetic CLI iCloud text.",
+        ]
+    )
+    assert plan_exit_code == 0
+    plan = json.loads(capsys.readouterr().out)
+    token = "icloud-drive-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    apply_exit_code = main(
+        [
+            "icloud-drive",
+            "apply",
+            "--json",
+            "--operation",
+            "create-text",
+            "--parent-handle",
+            parent_handle,
+            "--filename",
+            "new-note.md",
+            "--content-text",
+            "Synthetic CLI iCloud text.",
+            "--approval-token",
+            token,
+            "--confirm-apply",
+            "--root",
+            str(root),
+        ]
+    )
+
+    assert apply_exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "apply"
+    assert parsed["mutation_applied"] is True
+    assert parsed["read_back"]["name"] == "new-note.md"
+    assert (root / "Packets" / "new-note.md").read_text(encoding="utf-8") == (
+        "Synthetic CLI iCloud text."
+    )
 
 
 def test_cli_calendar_search_and_get_use_exact_handle(

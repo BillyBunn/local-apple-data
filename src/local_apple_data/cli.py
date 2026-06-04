@@ -9,8 +9,10 @@ from typing import Any
 from .adapters.calendar import get_calendar_event, search_calendar_events
 from .adapters.contacts import get_contact, search_contacts
 from .adapters.icloud_drive import (
+    apply_icloud_drive_change,
     get_icloud_drive_content,
     get_icloud_drive_metadata,
+    plan_icloud_drive_change,
     search_icloud_drive_metadata,
 )
 from .adapters.hide_my_email import get_hide_my_email_alias, search_hide_my_email_aliases
@@ -274,6 +276,44 @@ def _icloud_drive_content_command(args: argparse.Namespace) -> int:
         else get_icloud_drive_content(args.handle, max_chars=args.max_chars)
     )
     log_result("icloud_drive.content", payload)
+    _print_json(payload)
+    return 0
+
+
+def _icloud_drive_plan_command(args: argparse.Namespace) -> int:
+    payload = plan_icloud_drive_change(
+        args.operation,
+        parent_handle=args.parent_handle or "",
+        filename=args.filename or "",
+        content_text=args.content_text or "",
+    )
+    log_result("icloud_drive.plan", payload)
+    _print_json(payload)
+    return 0
+
+
+def _icloud_drive_apply_command(args: argparse.Namespace) -> int:
+    payload = (
+        apply_icloud_drive_change(
+            args.operation,
+            parent_handle=args.parent_handle or "",
+            filename=args.filename or "",
+            content_text=args.content_text or "",
+            approval_token=args.approval_token or "",
+            confirm_apply=args.confirm_apply,
+            root=Path(args.root).expanduser(),
+        )
+        if args.root
+        else apply_icloud_drive_change(
+            args.operation,
+            parent_handle=args.parent_handle or "",
+            filename=args.filename or "",
+            content_text=args.content_text or "",
+            approval_token=args.approval_token or "",
+            confirm_apply=args.confirm_apply,
+        )
+    )
+    log_result("icloud_drive.apply", payload)
     _print_json(payload)
     return 0
 
@@ -776,6 +816,73 @@ def build_parser() -> argparse.ArgumentParser:
     )
     icloud_drive_content.add_argument("--root", help=argparse.SUPPRESS)
     icloud_drive_content.set_defaults(func=_icloud_drive_content_command)
+
+    icloud_drive_plan = icloud_drive_subparsers.add_parser(
+        "plan",
+        help="Plan a future iCloud Drive text-file creation without applying it.",
+    )
+    icloud_drive_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
+    icloud_drive_plan.add_argument(
+        "--operation",
+        required=True,
+        choices=["create-text", "create_text"],
+        help="Future iCloud Drive operation to plan. No mutation is applied.",
+    )
+    icloud_drive_plan.add_argument(
+        "--parent-handle",
+        required=True,
+        help="Opaque iCloud Drive directory handle from search output.",
+    )
+    icloud_drive_plan.add_argument(
+        "--filename",
+        required=True,
+        help="New text filename to create inside the selected directory.",
+    )
+    icloud_drive_plan.add_argument(
+        "--content-text",
+        required=True,
+        help="Text content for the new file, capped at 12000 characters.",
+    )
+    icloud_drive_plan.set_defaults(func=_icloud_drive_plan_command)
+
+    icloud_drive_apply = icloud_drive_subparsers.add_parser(
+        "apply",
+        help="Apply an approved iCloud Drive text-file creation and read back metadata.",
+    )
+    icloud_drive_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
+    icloud_drive_apply.add_argument(
+        "--operation",
+        required=True,
+        choices=["create-text", "create_text"],
+        help="Approved iCloud Drive operation to apply.",
+    )
+    icloud_drive_apply.add_argument(
+        "--parent-handle",
+        required=True,
+        help="Opaque iCloud Drive directory handle from search output.",
+    )
+    icloud_drive_apply.add_argument(
+        "--filename",
+        required=True,
+        help="New text filename to create inside the selected directory.",
+    )
+    icloud_drive_apply.add_argument(
+        "--content-text",
+        required=True,
+        help="Text content for the new file, capped at 12000 characters.",
+    )
+    icloud_drive_apply.add_argument(
+        "--approval-token",
+        required=True,
+        help="Approval token bound to the matching plan fingerprint.",
+    )
+    icloud_drive_apply.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required explicit confirmation flag for the approved apply operation.",
+    )
+    icloud_drive_apply.add_argument("--root", help=argparse.SUPPRESS)
+    icloud_drive_apply.set_defaults(func=_icloud_drive_apply_command)
 
     calendar = subparsers.add_parser("calendar", help="Apple Calendar commands.")
     calendar_subparsers = calendar.add_subparsers(dest="calendar_command", required=True)

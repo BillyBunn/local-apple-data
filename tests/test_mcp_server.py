@@ -14,9 +14,11 @@ from local_apple_data.mcp_server import (
     WRITE_ANNOTATIONS,
     calendar_get_event,
     contacts_get,
+    icloud_drive_apply_change,
     hide_my_email_get_alias,
     icloud_drive_get_content,
     icloud_drive_get_metadata,
+    icloud_drive_plan_change,
     mail_get_content,
     mail_get_metadata,
     messages_get_chat,
@@ -64,6 +66,20 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     notes_content_result = notes_get_content("bad-handle")
     icloud_result = icloud_drive_get_metadata("bad-handle")
     icloud_content_result = icloud_drive_get_content("bad-handle")
+    icloud_plan_result = icloud_drive_plan_change(
+        "create_text",
+        parent_handle="bad-handle",
+        filename="new-note.md",
+        content_text="Synthetic text.",
+    )
+    icloud_apply_result = icloud_drive_apply_change(
+        "create_text",
+        parent_handle="bad-handle",
+        filename="new-note.md",
+        content_text="Synthetic text.",
+        approval_token="icloud-drive-apply:v1:bad",
+        confirm_apply=True,
+    )
     calendar_result = calendar_get_event("bad-handle")
     contact_result = contacts_get("bad-handle")
     photo_result = photos_get_asset("bad-handle")
@@ -100,6 +116,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert icloud_result["warnings"][0]["code"] == "invalid_handle"
     assert icloud_content_result["status"] == "error"
     assert icloud_content_result["warnings"][0]["code"] == "invalid_handle"
+    assert icloud_plan_result["status"] == "error"
+    assert icloud_plan_result["warnings"][0]["code"] == "invalid_parent_handle"
+    assert icloud_apply_result["status"] == "error"
+    assert icloud_apply_result["warnings"][0]["code"] == "invalid_parent_handle"
     assert calendar_result["status"] == "error"
     assert calendar_result["warnings"][0]["code"] == "invalid_handle"
     assert contact_result["status"] == "error"
@@ -151,6 +171,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "icloud_drive_search",
                     "icloud_drive_get_metadata",
                     "icloud_drive_get_content",
+                    "icloud_drive_plan_change",
+                    "icloud_drive_apply_change",
                     "calendar_search",
                     "calendar_get_event",
                     "contacts_search",
@@ -168,7 +190,10 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                 for tool in tools.tools:
                     if tool.name in names:
                         assert tool.annotations is not None
-                        if tool.name == "reminders_apply_change":
+                        if tool.name in {
+                            "reminders_apply_change",
+                            "icloud_drive_apply_change",
+                        }:
                             assert tool.annotations.readOnlyHint is False
                         else:
                             assert tool.annotations.readOnlyHint is True

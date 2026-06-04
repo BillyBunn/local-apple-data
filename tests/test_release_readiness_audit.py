@@ -51,21 +51,22 @@ def _make_minimal_project(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (root / "README.md").write_text(
-        "The only apply-capable mutation surface is Reminders apply.\n",
+        "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "Approved write tools: `reminders apply` and `reminders_apply_change`.\n",
+        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, and `icloud_drive_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "Reminders apply is the only approved write surface.\n",
+        "Reminders apply and iCloud Drive create-text apply are the only approved write surfaces.\n",
         encoding="utf-8",
     )
-    (root / "docs/V1_11_REMINDERS_WRITE_DESIGN.md").write_text(
-        _write_design_doc_text(),
-        encoding="utf-8",
-    )
+    for contract in write_design_gate.REQUIRED_DESIGN_DOCS.values():
+        (root / str(contract["path"])).write_text(
+            _write_design_doc_text(),
+            encoding="utf-8",
+        )
     _write_surface_contract_files(root)
     return root
 
@@ -78,11 +79,15 @@ def _write_surface_contract_files(root: Path) -> None:
         "from mcp.server.fastmcp import FastMCP",
         "READ_ONLY_ANNOTATIONS = object()",
         "WRITE_ANNOTATIONS = object()",
-        'INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."',
+        'INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply."',
         'mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)',
     ]
     for tool in tools:
-        annotation = "WRITE_ANNOTATIONS" if tool == "reminders_apply_change" else "READ_ONLY_ANNOTATIONS"
+        annotation = (
+            "WRITE_ANNOTATIONS"
+            if tool in {"icloud_drive_apply_change", "reminders_apply_change"}
+            else "READ_ONLY_ANNOTATIONS"
+        )
         mcp_lines.extend(
             [
                 f"@mcp.tool(annotations={annotation})",

@@ -2,7 +2,7 @@
 
 This repo is a local Codex plugin root.
 
-For the public support matrix, see `docs/CAPABILITY_MATRIX.md`. For installation, see `docs/INSTALL.md`. For future write/mutation gates, see `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`. For release readiness, see `docs/PUBLISHING.md`.
+For the public support matrix, see `docs/CAPABILITY_MATRIX.md`. For installation, see `docs/INSTALL.md`. For future write/mutation gates, see `docs/MUTATION_GATES.md`, `docs/WRITE_TOOL_ROADMAP.md`, `docs/V1_11_REMINDERS_WRITE_DESIGN.md`, and `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`. For release readiness, see `docs/PUBLISHING.md`.
 
 Plugin components:
 
@@ -35,11 +35,15 @@ Search, exact metadata, and exact Mail/Messages/inferred Hide My Email/Voice Mem
 
 Reminders planning is non-mutating. `local-apple-data reminders plan` and MCP `reminders_plan_change` return `mutation_applied:false`, `apply_available:true`, idempotency metadata, and an approval fingerprint for the approved apply gate. They do not call EventKit, read Reminders, or modify Reminders.
 
-Reminders apply is the only approved mutation surface. `local-apple-data reminders apply` and MCP `reminders_apply_change` require the matching `reminders-apply:v1:<approval_fingerprint>` token, explicit confirmation, operation-specific expected state, EventKit apply, and read-back verification.
+Reminders apply is one approved mutation surface. `local-apple-data reminders apply` and MCP `reminders_apply_change` require the matching `reminders-apply:v1:<approval_fingerprint>` token, explicit confirmation, operation-specific expected state, EventKit apply, and read-back verification.
+
+iCloud Drive create-text planning is non-mutating. `local-apple-data icloud-drive plan` and MCP `icloud_drive_plan_change` return `mutation_applied:false`, `apply_available:true`, idempotency metadata, and an approval fingerprint for the approved apply gate. They do not resolve the parent handle or write iCloud Drive files.
+
+iCloud Drive create-text apply is one approved mutation surface. `local-apple-data icloud-drive apply` and MCP `icloud_drive_apply_change` require the matching `icloud-drive-apply:v1:<approval_fingerprint>` token, explicit confirmation, an exact opaque parent folder handle, exclusive create, and read-back verification.
 
 ## Current Boundaries
 
-- This package is local-only and metadata-first. The only apply-capable mutation surface is Reminders apply.
+- This package is local-only and metadata-first. The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply.
 - It provides Mail content retrieval only for one exact `mail:message:v2:` handle selected from metadata output.
 - It provides Messages chat transcript retrieval only for one exact `messages:chat:v1:` handle selected from chat display-name metadata output.
 - It provides inferred Hide My Email alias detail only for one exact `hide_my_email:alias:v1:` handle selected from masked local Mail address metadata output.
@@ -51,8 +55,9 @@ Reminders apply is the only approved mutation surface. `local-apple-data reminde
 - It provides Reminder note retrieval only for one exact `reminders:reminder:eventkit:v1:` handle selected from EventKit metadata output.
 - It provides Reminders future-change planning as a non-mutating preview and Reminders create/complete/due-date apply only after matching approval-token and explicit-confirmation checks.
 - It provides iCloud Drive text-file content retrieval only for one exact `icloud:file:v1:` handle selected from filename metadata output.
+- It provides iCloud Drive create-text planning as a non-mutating preview and iCloud Drive create-text apply only after matching approval-token, exact opaque parent folder handle, exclusive-create, and explicit-confirmation checks.
 - It does not provide attachment retrieval, broad content search, arbitrary document/binary extraction, Contact note/image retrieval, generated Voice Memos transcription, broad Messages text search, broad Voice Memos transcript search, broad Reminder content search, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, or durable content caches.
-- It does not mutate Mail, Notes, Hide My Email, Gmail, iCloud, TCC, launchd, Codex config, or OpenClaw runtime state. Reminders mutation is limited to the approved create/complete/due-date apply surface.
+- It does not mutate Mail, Notes, Hide My Email, Gmail, iCloud, TCC, launchd, Codex config, or OpenClaw runtime state outside the approved apply gates. Reminders mutation is limited to the approved create/complete/due-date apply surface. iCloud Drive mutation is limited to approved create-text apply under an exact opaque parent folder handle.
 - It does not use the Gmail connector, Gmail API, IMAP, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
 
-The v1.1 Mail content gate is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`. The v1.2/v1.3/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9/v1.10 Messages, inferred Hide My Email, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, Reminders, and broader Apple data expansion gate is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`. The v1.11 Reminders apply gate is documented in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`. Any future attachment, indexing, connector fallback, broad content search, Contact note/image retrieval, generated transcription, Messages send/mutation, authoritative Hide My Email inventory, private iCloud web/API path, or additional mutation feature requires a separate design and approval gate.
+The v1.1 Mail content gate is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`. The v1.2/v1.3/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9/v1.10 Messages, inferred Hide My Email, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, Reminders, and broader Apple data expansion gate is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`. The v1.11 Reminders apply gate is documented in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`. The v1.12 iCloud Drive create-text apply gate is documented in `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`. Any future attachment, indexing, connector fallback, broad content search, Contact note/image retrieval, generated transcription, Messages send/mutation, authoritative Hide My Email inventory, private iCloud web/API path, or additional mutation feature requires a separate design and approval gate.

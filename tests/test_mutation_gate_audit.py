@@ -22,9 +22,12 @@ def test_current_project_mutation_gate_audit_passes() -> None:
 
     assert payload["status"] == "ok"
     assert payload["read_only"] is False
-    assert payload["approved_write_tools"] == ["reminders_apply_change"]
-    assert payload["mcp_tools_checked"] >= 31
-    assert payload["cli_handlers_checked"] >= 31
+    assert payload["approved_write_tools"] == [
+        "icloud_drive_apply_change",
+        "reminders_apply_change",
+    ]
+    assert payload["mcp_tools_checked"] >= 33
+    assert payload["cli_handlers_checked"] >= 33
     assert payload["findings"] == []
 
 
@@ -34,7 +37,7 @@ def test_mutation_gate_audit_flags_mcp_write_tool(tmp_path: Path) -> None:
         """
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def reminders_create() -> dict:
@@ -57,7 +60,7 @@ def test_mutation_gate_audit_flags_non_readonly_mcp_annotation(tmp_path: Path) -
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
 WRITE_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=WRITE_ANNOTATIONS)
 def reminders_search() -> dict:
@@ -96,15 +99,15 @@ def _minimal_project(tmp_path: Path) -> Path:
     root.joinpath("docs").mkdir()
 
     (root / "README.md").write_text(
-        "The only apply-capable mutation surface is Reminders apply.\n",
+        "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "Approved write tools: `reminders apply` and `reminders_apply_change`.\n",
+        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, and `icloud_drive_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "Reminders apply is the only approved write surface.\n",
+        "Reminders apply and iCloud Drive create-text apply are the only approved write surfaces.\n",
         encoding="utf-8",
     )
     (root / ".codex-plugin/plugin.json").write_text(
@@ -115,7 +118,7 @@ def _minimal_project(tmp_path: Path) -> Path:
         """
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def reminders_search() -> dict:

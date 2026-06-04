@@ -102,10 +102,15 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 31,
+  "tool_count": 33,
   "mail_content_status": "ok",
   "notes_content_status": "ok",
   "icloud_drive_content_status": "ok",
+  "icloud_plan_status": "ok",
+  "icloud_plan_mutation_applied": false,
+  "icloud_plan_apply_available": true,
+  "icloud_apply_status": "ok",
+  "icloud_apply_mutation_applied": true,
   "calendar_detail_status": "ok",
   "contacts_detail_status": "ok",
   "photos_detail_status": "ok",
@@ -120,6 +125,65 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "reminders_plan_apply_available": true,
   "reminders_apply_status": "ok",
   "reminders_apply_mutation_applied": true
+}
+```
+
+## iCloud Drive Plan
+
+```json
+{
+  "status": "ok",
+  "source": "icloud_drive",
+  "mode": "plan",
+  "mutation_applied": false,
+  "apply_available": true,
+  "preview": {
+    "operation": "create_text",
+    "target": {
+      "parent_handle": "<opaque icloud:file:v1 folder handle>",
+      "filename": "synthetic-note.md"
+    },
+    "proposed": {
+      "kind": "file",
+      "content_type": "text",
+      "content_chars": 27,
+      "extension": ".md"
+    },
+    "idempotency_key": "icloud-drive-plan:v1:<hash>",
+    "approval": {
+      "required_for_apply": true,
+      "apply_tool_available": true,
+      "approval_fingerprint": "<hash>",
+      "approval_token_format": "icloud-drive-apply:v1:<approval_fingerprint>"
+    }
+  },
+  "warnings": []
+}
+```
+
+## iCloud Drive Apply
+
+```json
+{
+  "status": "ok",
+  "source": "icloud_drive",
+  "mode": "apply",
+  "operation": "create_text",
+  "mutation_applied": true,
+  "apply_available": true,
+  "idempotency_key": "icloud-drive-plan:v1:<hash>",
+  "approval": {
+    "approval_fingerprint": "<hash>",
+    "approval_token_verified": true
+  },
+  "read_back": {
+    "handle": "<opaque icloud:file:v1 handle>",
+    "name": "synthetic-note.md",
+    "kind": "file",
+    "content_chars": 27,
+    "content_sha256": "<sha256>"
+  },
+  "warnings": []
 }
 ```
 

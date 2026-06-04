@@ -1,10 +1,10 @@
 # Write Tool Roadmap
 
-The current release is read-mostly. Reminders apply is the only approved write surface; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
+The current release is read-mostly. Reminders apply and iCloud Drive create-text apply are the only approved write surfaces; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
 
-Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
+Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`; the first iCloud Drive write design gate is `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`.
 
-Current progress: `reminders plan` / `reminders_plan_change` implement non-mutating previews, and `reminders apply` / `reminders_apply_change` implement approved Reminder create, complete, and due-date update with approval-token checks and read-back verification.
+Current progress: `reminders plan` / `reminders_plan_change` and `icloud-drive plan` / `icloud_drive_plan_change` implement non-mutating previews. `reminders apply` / `reminders_apply_change` implement approved Reminder create, complete, and due-date update with approval-token checks and read-back verification. `icloud-drive apply` / `icloud_drive_apply_change` implement approved iCloud Drive create-text with approval-token checks, exclusive create, and read-back verification.
 
 ## Principle
 
@@ -29,9 +29,9 @@ Start with low-risk local writes through public Apple APIs or user-visible app a
 | 1 | Reminders | Create reminder | Swift EventKit helper | Implemented; EventKit read-back |
 | 2 | Reminders | Complete reminder | Swift EventKit helper | Implemented; EventKit read-back |
 | 3 | Reminders | Update due date | Swift EventKit helper | Implemented; EventKit read-back |
-| 4 | Calendar | Create event | Swift EventKit helper | EventKit search by event title/time |
-| 5 | Notes | Create note | Notes.app automation | Notes metadata search and exact content |
-| 6 | iCloud Drive | Create text file | Local filesystem with parent handle | iCloud Drive metadata and text content |
+| 4 | iCloud Drive | Create text file | Implemented; local filesystem with parent handle | Implemented; iCloud Drive metadata, content hash, and text content |
+| 5 | Calendar | Create event | Swift EventKit helper | EventKit search by event title/time |
+| 6 | Notes | Create note | Notes.app automation | Notes metadata search and exact content |
 | 7 | Mail | Create draft only | Mail.app automation | Mail metadata search for draft |
 
 No first-tranche tool should delete, send, archive, move, overwrite, bulk edit, or manage account state.
@@ -44,7 +44,7 @@ These need separate design documents:
 - Calendar update/delete.
 - Reminder delete, uncomplete, list/account management, attachments, URLs, and rich-content mutation.
 - Note append/update with rich-text conversion.
-- iCloud Drive append/overwrite/delete.
+- iCloud Drive append/overwrite/rename/move/copy/delete and binary/document writes.
 - Mail send.
 - Messages send/edit/delete.
 - Photos asset edits/import/delete.

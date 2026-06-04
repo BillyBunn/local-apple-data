@@ -159,4 +159,4 @@ Before exposure, the Reminders write implementation must add:
 
 ## Current Release Gate
 
-The current release allows only this Reminders apply surface. All other mutation surfaces remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+This document allows only this Reminders apply surface. All other Reminders mutation surfaces remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

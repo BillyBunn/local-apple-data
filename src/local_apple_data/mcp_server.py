@@ -9,8 +9,10 @@ from mcp.types import ToolAnnotations
 from .adapters.calendar import get_calendar_event, search_calendar_events
 from .adapters.contacts import get_contact, search_contacts
 from .adapters.icloud_drive import (
+    apply_icloud_drive_change,
     get_icloud_drive_content,
     get_icloud_drive_metadata,
+    plan_icloud_drive_change,
     search_icloud_drive_metadata,
 )
 from .adapters.hide_my_email import get_hide_my_email_alias, search_hide_my_email_aliases
@@ -40,7 +42,7 @@ INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
-    "The only apply-capable mutation surface is Reminders apply, and it requires a matching plan approval token plus explicit confirmation."
+    "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
@@ -221,6 +223,50 @@ def icloud_drive_get_content(handle: str, max_chars: int = 4000) -> dict[str, An
     return _record(
         "icloud_drive_get_content",
         get_icloud_drive_content(handle, max_chars=max_chars),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def icloud_drive_plan_change(
+    operation: str,
+    parent_handle: str,
+    filename: str,
+    content_text: str,
+) -> dict[str, Any]:
+    """Plan a future iCloud Drive text-file creation without mutating local files."""
+
+    return _record(
+        "icloud_drive_plan_change",
+        plan_icloud_drive_change(
+            operation,
+            parent_handle=parent_handle,
+            filename=filename,
+            content_text=content_text,
+        ),
+    )
+
+
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
+def icloud_drive_apply_change(
+    operation: str,
+    parent_handle: str,
+    filename: str,
+    content_text: str,
+    approval_token: str,
+    confirm_apply: bool = False,
+) -> dict[str, Any]:
+    """Apply an approved iCloud Drive text-file creation and read back metadata."""
+
+    return _record(
+        "icloud_drive_apply_change",
+        apply_icloud_drive_change(
+            operation,
+            parent_handle=parent_handle,
+            filename=filename,
+            content_text=content_text,
+            approval_token=approval_token,
+            confirm_apply=confirm_apply,
+        ),
     )
 
 

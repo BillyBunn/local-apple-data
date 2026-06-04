@@ -6,7 +6,7 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 
 ## Test Layers
 
-- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Contacts and Photos helper responses, synthetic iCloud Drive file retrieval, reminder due-window caps, and non-mutating Reminders plan previews.
+- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Contacts and Photos helper responses, synthetic iCloud Drive file retrieval and create-text plan/apply, reminder due-window caps, and non-mutating Reminders plan previews.
 - CLI tests: synthetic Mail/Messages/Hide My Email/Voice Memos/Notes/Calendar/Contacts/Photos/iCloud Drive/Reminders stores or mocked helpers with redacted logs.
 - MCP tests: tool listing plus read-only and approved write annotations.
 - Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows.
@@ -15,7 +15,7 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 - Privacy scans: `scripts/redaction_scan.py` fails on high-confidence secrets and literal iCloud/private-relay email aliases without printing matched values.
 - Public release scan: `scripts/public_release_scan.py` fails when public files contain local operator paths, private note titles, or operator-specific terms outside explicit author metadata.
 - Mutation-gate audit: `scripts/audit_mutation_gates.py` fails if write-like CLI/MCP surfaces appear without an intentional mutation gate, if approved write tools lack write annotations, or if unapproved MCP tools are not annotated read-only.
-- Write-design gate audit: `scripts/audit_write_design_gates.py` fails if first-tranche write design docs are missing, required design-only safeguards drift, or preview/apply/read_back tool names appear before approval.
+- Write-design gate audit: `scripts/audit_write_design_gates.py` fails if first-tranche write design docs are missing, required safeguards drift, or preview/apply/read_back tool names appear before approval.
 - Surface-contract audit: `scripts/audit_surface_contract.py` fails if a supported Apple data surface is missing from the MCP tools, CLI parser, health summary, access requirements, or public capability matrix.
 
 ## Commands
@@ -81,6 +81,8 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Notes content automation failures return safe warning codes without raw AppleScript errors or database paths.
 - iCloud Drive content accepts only `icloud:file:v1:` handles, returns bounded text for supported text-like files, and rejects direct paths, fabricated handles, symlinks, hidden files, and unsupported binary/document types.
 - iCloud Drive content truncation returns `content_truncated`.
+- iCloud Drive planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:true`, deterministic idempotency metadata, and requires exact opaque parent folder handles.
+- iCloud Drive apply requires a matching approval token, explicit confirmation, exact parent folder handle, exclusive create, and read-back verification.
 - Calendar get accepts only `calendar:event:v1:` handles, returns bounded exact event location/notes details, and rejects raw EventKit identifiers and fabricated handles.
 - Calendar notes truncation returns `content_truncated`.
 - Contacts get accepts only `contacts:contact:v1:` handles, returns exact contact detail fields, rejects raw Contacts identifiers and fabricated handles, and reports contact notes as `requires_entitlement`.
@@ -92,7 +94,7 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Health and doctor do not expose full local executable paths.
 - Health and doctor report broad local Apple data readiness without content reads, raw rows, credentials, prompt-triggering framework access, or raw absolute store paths.
 - Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, and other framework-backed surfaces.
-- Write-design gates require the first Reminders write design contract and allow only `reminders apply` / `reminders_apply_change` as approved write tools.
+- Write-design gates require the first Reminders and iCloud Drive write design contracts and allow only `reminders apply` / `reminders_apply_change` and `icloud-drive apply` / `icloud_drive_apply_change` as approved write tools.
 - No repo docs or tests persist real personal search terms or result metadata.
 
 ## v1.1 Acceptance Criteria

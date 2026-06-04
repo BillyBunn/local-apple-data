@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604110000 - 2026-06-04
+
+### Added
+
+- Approved iCloud Drive create-text apply through `local-apple-data icloud-drive apply` and MCP `icloud_drive_apply_change`.
+- Non-mutating iCloud Drive create-text planning through `local-apple-data icloud-drive plan` and MCP `icloud_drive_plan_change`.
+- Approval-token, explicit-confirmation, exact-parent-handle, exclusive-create, idempotency, and read-back verification checks for iCloud Drive create-text apply.
+- Synthetic adapter, CLI, MCP annotation, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the approved apply surface.
+
+### Security
+
+- `reminders_apply_change` and `icloud_drive_apply_change` are the only non-read-only MCP tools and are annotated non-destructive, idempotent, and closed-world.
+- iCloud Drive append, overwrite, rename, move, copy, delete, binary/document writes, broad folder writes, and raw path writes remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604100000 - 2026-06-04
 
 ### Added

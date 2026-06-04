@@ -1,8 +1,8 @@
 # Mutation Gates
 
-The current plugin is local-only and read-mostly. Approved write tools: `reminders apply` and `reminders_apply_change`.
+The current plugin is local-only and read-mostly. Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, and `icloud_drive_apply_change`.
 
-Those tools are limited to Reminders create, complete, and due-date update through the plan/apply/read-back contract in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`. All other write tools remain intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
+Those tools are limited to Reminders create, complete, and due-date update through the plan/apply/read-back contract in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`, plus iCloud Drive create-text through the plan/apply/read-back contract in `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`. All other write tools remain intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
 
 For sequencing and later candidates, see `docs/WRITE_TOOL_ROADMAP.md`.
 
@@ -21,9 +21,11 @@ Every mutating tool must satisfy all of these before exposure through CLI or MCP
 - Tests using synthetic fixtures or mocked Apple framework helpers only.
 - Redaction scan and runtime smoke passing before install.
 
-The current `reminders plan` CLI command and `reminders_plan_change` MCP tool are not mutating tools. They return `mutation_applied:false`, `apply_available:true`, and approval metadata only.
+The current `reminders plan` / `icloud-drive plan` CLI commands and `reminders_plan_change` / `icloud_drive_plan_change` MCP tools are not mutating tools. They return `mutation_applied:false`, `apply_available:true`, and approval metadata only.
 
 The current `reminders apply` CLI command and `reminders_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, operation-specific expected state, EventKit apply, and read-back verification. MCP annotations mark `reminders_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
+
+The current `icloud-drive apply` CLI command and `icloud_drive_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, exact opaque parent folder handle, exclusive create, and read-back verification. MCP annotations mark `icloud_drive_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
 
 ## First Candidate Write Surfaces
 
@@ -37,17 +39,18 @@ The current `reminders apply` CLI command and `reminders_apply_change` MCP tool 
 | Photos | None in first write phase | PhotoKit change requests later | Exact read-only asset export is implemented; edits/import/delete need a separate mutation design |
 | Messages | None in first write phase | Messages.app automation later | Sending/editing must remain outside the plugin until identity/account confirmation is solved |
 | Hide My Email | None | No approved local public API | Authoritative inventory or mutation requires a new source review and explicit approval |
-| iCloud Drive | Create text file, append text file | Local filesystem | Confirm exact path by opaque parent handle; no overwrite/delete in first write phase |
+| iCloud Drive | Create text file | Local filesystem | Approved. Confirm exact parent folder by opaque handle, filename, content hash, approval token, and explicit confirmation before apply; no append/overwrite/delete |
 
 ## Default Refusals
 
-Outside the approved Reminders apply gate, the plugin must refuse:
+Outside the approved Reminders and iCloud Drive apply gates, the plugin must refuse:
 
 - Sending mail or messages.
 - Deleting, archiving, moving, or marking Mail/Messages.
 - Creating, deleting, deactivating, or managing Hide My Email aliases.
 - Deleting Calendar events, Contacts, Photos, Notes, Reminders, Voice Memos, or iCloud Drive files.
 - Reminders bulk mutation, list/account management, attachment mutation, URL/rich-content mutation, delete, or uncomplete.
+- iCloud Drive append, overwrite, rename, move, copy, delete, binary/document writes, raw path writes, hidden-file writes, symlink/package traversal, or broad folder writes.
 - Bulk mutation.
 - Mutation through iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, OAuth, IMAP, or connector fallbacks.
 

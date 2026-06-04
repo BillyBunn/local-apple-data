@@ -49,6 +49,7 @@ REQUIRED_FILES = (
     "docs/CAPABILITY_MATRIX.md",
     "docs/MUTATION_GATES.md",
     "docs/V1_11_REMINDERS_WRITE_DESIGN.md",
+    "docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "docs/PUBLISHING.md",
     "docs/PRIVACY_MODEL.md",

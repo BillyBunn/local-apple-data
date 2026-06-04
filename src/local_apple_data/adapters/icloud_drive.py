@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +16,10 @@ DEFAULT_ICLOUD_DRIVE_ROOT = (
 )
 DEFAULT_CONTENT_CHARS = 4000
 MAX_CONTENT_CHARS = 12000
+MAX_PREVIEW_FILENAME_CHARS = 255
 MAX_SCAN_ENTRIES = 20000
+PLAN_OPERATIONS = {"create_text"}
+APPROVAL_TOKEN_PREFIX = "icloud-drive-apply:v1:"
 TEXT_SUFFIXES = {
     ".css",
     ".csv",
@@ -51,6 +57,24 @@ def _content_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "content",
+    }
+
+
+def _preview_privacy() -> dict[str, bool | str]:
+    return {
+        "content_inspected": False,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "preview",
+    }
+
+
+def _mutation_privacy(*, content_inspected: bool = False) -> dict[str, bool | str]:
+    return {
+        "content_inspected": content_inspected,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "mutation",
     }
 
 
@@ -253,6 +277,183 @@ def get_icloud_drive_content(
     }
 
 
+def plan_icloud_drive_change(
+    operation: str,
+    *,
+    parent_handle: str = "",
+    filename: str = "",
+    content_text: str = "",
+) -> dict[str, Any]:
+    normalized_operation = operation.strip().replace("-", "_")
+    warnings: list[dict[str, str]] = []
+    if normalized_operation not in PLAN_OPERATIONS:
+        warnings.append(_warning("invalid_operation", "Expected operation create_text."))
+    if not is_opaque_handle(parent_handle.strip(), "icloud:file"):
+        warnings.append(
+            _warning(
+                "invalid_parent_handle",
+                "Expected icloud:file:v1 opaque directory handle from iCloud Drive search output.",
+            )
+        )
+
+    normalized_filename, filename_warning = _normalize_create_filename(filename)
+    if filename_warning is not None:
+        warnings.append(filename_warning)
+
+    normalized_content, content_warning = _normalize_create_text(content_text)
+    if content_warning is not None:
+        warnings.append(content_warning)
+
+    if warnings:
+        return _plan_error(warnings)
+
+    target = {
+        "parent_handle": parent_handle.strip(),
+        "filename": normalized_filename,
+    }
+    proposed = {
+        "kind": "file",
+        "content_type": "text",
+        "content_chars": len(normalized_content),
+        "extension": Path(normalized_filename).suffix.lower() or None,
+    }
+    fingerprint_payload = {
+        "operation": normalized_operation,
+        "target": target,
+        "proposed": {
+            **proposed,
+            "content_sha256": hashlib.sha256(normalized_content.encode("utf-8")).hexdigest(),
+        },
+    }
+    idempotency_key = _plan_idempotency_key(fingerprint_payload)
+    approval_fingerprint = _approval_fingerprint(
+        {
+            **fingerprint_payload,
+            "idempotency_key": idempotency_key,
+        }
+    )
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "icloud_drive",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": True,
+        "preview": {
+            "operation": normalized_operation,
+            "target": target,
+            "proposed": proposed,
+            "idempotency_key": idempotency_key,
+            "approval": {
+                "required_for_apply": True,
+                "apply_tool_available": True,
+                "approval_fingerprint": approval_fingerprint,
+                "approval_token_format": f"{APPROVAL_TOKEN_PREFIX}<approval_fingerprint>",
+            },
+            "read_back_required_after_apply": True,
+        },
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
+def apply_icloud_drive_change(
+    operation: str,
+    *,
+    parent_handle: str = "",
+    filename: str = "",
+    content_text: str = "",
+    approval_token: str = "",
+    confirm_apply: bool = False,
+    root: Path = DEFAULT_ICLOUD_DRIVE_ROOT,
+    max_scan_entries: int = MAX_SCAN_ENTRIES,
+) -> dict[str, Any]:
+    plan = plan_icloud_drive_change(
+        operation,
+        parent_handle=parent_handle,
+        filename=filename,
+        content_text=content_text,
+    )
+    if plan.get("status") != "ok":
+        return _apply_error(_safe_warnings(plan), plan=plan)
+    preview = plan["preview"]
+    approval = preview["approval"]
+    expected_token = _approval_token(str(approval["approval_fingerprint"]))
+    if not confirm_apply:
+        return _apply_error(
+            [_warning("missing_apply_confirmation", "iCloud Drive apply requires confirm_apply=true.")],
+            plan=plan,
+        )
+    if approval_token.strip() != expected_token:
+        return _apply_error(
+            [_warning("invalid_approval_token", "iCloud Drive apply approval token did not match the plan.")],
+            plan=plan,
+        )
+    if not _root_writable(root):
+        return _apply_error(
+            [_warning("icloud_drive_unavailable", "iCloud Drive root is missing or not writable.")],
+            plan=plan,
+            status="degraded",
+        )
+
+    parent = _resolve_handle(parent_handle.strip(), root, max_scan_entries=max_scan_entries)
+    if parent is None or not parent.is_dir():
+        return _apply_error(
+            [_warning("target_parent_not_found", "iCloud Drive parent directory was not found.")],
+            plan=plan,
+            status="not_found",
+        )
+    target = parent / preview["target"]["filename"]
+    try:
+        target.relative_to(root.expanduser())
+    except ValueError:
+        return _apply_error(
+            [_warning("target_outside_root", "iCloud Drive target escaped the configured root.")],
+            plan=plan,
+        )
+    normalized_content, _ = _normalize_create_text(content_text)
+    if target.exists():
+        try:
+            existing = target.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
+        except OSError:
+            existing = None
+        if existing == normalized_content:
+            return _apply_success(
+                target,
+                root=root,
+                idempotency_key=preview["idempotency_key"],
+                approval_fingerprint=approval["approval_fingerprint"],
+                mutation_applied=False,
+                warnings=[_warning("already_applied", "iCloud Drive file already exists with matching content.")],
+            )
+        return _apply_error(
+            [_warning("target_exists", "iCloud Drive target file already exists and will not be overwritten.")],
+            plan=plan,
+        )
+    try:
+        with target.open("x", encoding="utf-8", newline="\n") as handle:
+            handle.write(normalized_content)
+    except FileExistsError:
+        return _apply_error(
+            [_warning("target_exists", "iCloud Drive target file already exists and will not be overwritten.")],
+            plan=plan,
+        )
+    except OSError:
+        return _apply_error(
+            [_warning("write_error", "iCloud Drive file could not be created safely.")],
+            plan=plan,
+        )
+    return _apply_success(
+        target,
+        root=root,
+        idempotency_key=preview["idempotency_key"],
+        approval_fingerprint=approval["approval_fingerprint"],
+        mutation_applied=True,
+        warnings=[],
+    )
+
+
 def _invalid_handle_result(*, content: bool) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -287,6 +488,14 @@ def _content_unavailable(result: dict[str, Any], code: str) -> dict[str, Any]:
 def _root_available(root: Path) -> bool:
     try:
         return root.expanduser().is_dir() and os.access(root.expanduser(), os.R_OK)
+    except OSError:
+        return False
+
+
+def _root_writable(root: Path) -> bool:
+    try:
+        expanded = root.expanduser()
+        return expanded.is_dir() and os.access(expanded, os.R_OK | os.W_OK | os.X_OK)
     except OSError:
         return False
 
@@ -345,3 +554,141 @@ def _resolve_handle(handle: str, root: Path, *, max_scan_entries: int) -> Path |
 
 def _relative_path(path: Path, root: Path) -> str:
     return path.relative_to(root.expanduser()).as_posix()
+
+
+def _normalize_create_filename(value: str) -> tuple[str, dict[str, str] | None]:
+    normalized = value.strip()
+    if not normalized:
+        return "", _warning("missing_required_field", "Missing required field: filename.")
+    if len(normalized) > MAX_PREVIEW_FILENAME_CHARS:
+        return "", _warning("input_too_large", "Filename exceeds maximum length.")
+    if normalized.startswith("."):
+        return "", _warning("invalid_filename", "Hidden filenames are not supported.")
+    if "/" in normalized or "\\" in normalized or normalized in {".", ".."}:
+        return "", _warning("invalid_filename", "Filename must not contain path separators.")
+    if Path(normalized).suffix.lower() not in TEXT_SUFFIXES:
+        return "", _warning("unsupported_file_type", "iCloud Drive create supports text-like file extensions only.")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._ -]*", normalized):
+        return "", _warning("invalid_filename", "Filename contains unsupported characters.")
+    return normalized, None
+
+
+def _normalize_create_text(value: str) -> tuple[str, dict[str, str] | None]:
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n")
+    if not normalized:
+        return "", _warning("missing_required_field", "Missing required field: content_text.")
+    if len(normalized) > MAX_CONTENT_CHARS:
+        return "", _warning("input_too_large", "content_text exceeds maximum length.")
+    if "\x00" in normalized:
+        return "", _warning("unsupported_file_type", "Binary content is not supported.")
+    return normalized, None
+
+
+def _plan_error(warnings: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "icloud_drive",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": True,
+        "preview": None,
+        "result_count": 0,
+        "warnings": warnings,
+    }
+
+
+def _apply_error(
+    warnings: list[dict[str, str]],
+    *,
+    plan: dict[str, Any] | None,
+    status: str = "error",
+    mutation_applied: bool = False,
+) -> dict[str, Any]:
+    preview = plan.get("preview") if isinstance(plan, dict) else None
+    return {
+        "schema_version": 1,
+        "status": status,
+        "source": "icloud_drive",
+        "privacy": _mutation_privacy(content_inspected=False),
+        "mode": "apply",
+        "mutation_applied": mutation_applied,
+        "apply_available": True,
+        "preview": preview if isinstance(preview, dict) else None,
+        "read_back": None,
+        "result_count": 0,
+        "warnings": warnings,
+    }
+
+
+def _apply_success(
+    target: Path,
+    *,
+    root: Path,
+    idempotency_key: str,
+    approval_fingerprint: str,
+    mutation_applied: bool,
+    warnings: list[dict[str, str]],
+) -> dict[str, Any]:
+    metadata = _path_metadata(target, root)
+    try:
+        content_text = target.read_text(encoding="utf-8").replace("\r\n", "\n").replace("\r", "\n")
+    except OSError:
+        content_text = ""
+        warnings = warnings + [_warning("read_back_unavailable", "iCloud Drive read-back could not read created content.")]
+    read_back = {
+        **metadata,
+        "content_chars": len(content_text),
+        "content_sha256": hashlib.sha256(content_text.encode("utf-8")).hexdigest(),
+    }
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "icloud_drive",
+        "privacy": _mutation_privacy(content_inspected=True),
+        "mode": "apply",
+        "operation": "create_text",
+        "mutation_applied": mutation_applied,
+        "apply_available": True,
+        "idempotency_key": idempotency_key,
+        "approval": {
+            "approval_fingerprint": approval_fingerprint,
+            "approval_token_verified": True,
+        },
+        "read_back": read_back,
+        "result_count": 1,
+        "warnings": warnings,
+    }
+
+
+def _safe_warnings(payload: dict[str, Any]) -> list[dict[str, str]]:
+    warnings = payload.get("warnings")
+    if not isinstance(warnings, list):
+        return []
+    safe: list[dict[str, str]] = []
+    for warning in warnings:
+        if not isinstance(warning, dict):
+            continue
+        code = warning.get("code")
+        message = warning.get("message")
+        if isinstance(code, str) and isinstance(message, str):
+            safe.append(_warning(code, message))
+    return safe
+
+
+def _plan_idempotency_key(payload: dict[str, Any]) -> str:
+    digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+    return f"icloud-drive-plan:v1:{digest}"
+
+
+def _approval_fingerprint(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+
+
+def _approval_token(fingerprint: str) -> str:
+    return f"{APPROVAL_TOKEN_PREFIX}{fingerprint}"
+
+
+def _canonical_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))

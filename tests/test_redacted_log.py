@@ -120,3 +120,59 @@ def test_log_result_excludes_reminder_apply_content(
     assert "do-not-log-handle" not in text
     assert "do-not-log-fingerprint" not in text
     assert "do not log warning" not in text
+
+
+def test_log_result_excludes_icloud_drive_apply_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "icloud_drive",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "apply",
+        "privacy": {
+            "output_tier": "mutation",
+            "content_inspected": True,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "preview": {
+            "target": {
+                "parent_handle": "do-not-log-parent-handle",
+                "filename": "do-not-log-filename.md",
+            },
+            "proposed": {
+                "content_sha256": "do-not-log-content-hash",
+                "content_text": "do not log file content",
+            },
+            "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
+        },
+        "approval": {
+            "approval_fingerprint": "do-not-log-fingerprint",
+            "approval_token_verified": True,
+        },
+        "read_back": {
+            "handle": "do-not-log-created-handle",
+            "name": "do-not-log-filename.md",
+            "content_sha256": "do-not-log-content-hash",
+        },
+        "warnings": [{"code": "already_applied", "message": "do not log warning"}],
+    }
+
+    log_result("icloud-drive.apply", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "icloud-drive.apply"
+    assert event["privacy"]["output_tier"] == "mutation"
+    assert event["warning_codes"] == ["already_applied"]
+    assert "do-not-log-parent-handle" not in text
+    assert "do-not-log-created-handle" not in text
+    assert "do-not-log-filename.md" not in text
+    assert "do-not-log-content-hash" not in text
+    assert "do not log file content" not in text
+    assert "do-not-log-fingerprint" not in text
+    assert "do not log warning" not in text

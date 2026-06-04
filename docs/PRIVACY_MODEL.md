@@ -1,6 +1,6 @@
 # Privacy Model
 
-This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surface is Reminders create/complete/due-date apply through the plan/apply/read-back gate.
+This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply and iCloud Drive create-text apply through plan/apply/read-back gates.
 
 ## Data Tiers
 
@@ -8,8 +8,8 @@ This project handles local personal-data surfaces. The default is metadata-first
 2. Metadata: bounded subjects/titles/snippets and Mail content-availability hints only when the user asks for the workflow.
 3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
 4. Attachments: metadata only until a later approved phase.
-5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows.
-6. Mutation: deferred until a separate design and approval phase.
+5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows and non-mutating iCloud Drive create-text planning for exact requested parent folder handles.
+6. Mutation: approved only for Reminders create/complete/due-date apply and iCloud Drive create-text apply; all other mutation requires a separate design and approval phase.
 
 ## Never Persist
 
@@ -28,6 +28,7 @@ Do not persist any of the following in logs, docs, prompts, fixtures, tests, com
 - Reminder titles or notes
 - Reminder planning titles or notes outside transient preview responses
 - iCloud Drive file contents or raw local paths
+- iCloud Drive planned filenames, content, handles, content hashes, or approval fingerprints outside transient preview/apply responses
 - Attachment content
 - Full email addresses
 - Raw Hide My Email identifiers
@@ -80,7 +81,7 @@ Ask the local operator before:
 - Editing Codex config
 - Editing launchd jobs
 - Editing OpenClaw runtime state
-- Mutating Mail, Notes, Reminders, Gmail, or iCloud state
+- Mutating Mail, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders and iCloud Drive apply gates
 - Adding direct network mail access
 - Adding authoritative Hide My Email inventory or Hide My Email creation/deactivation/deletion
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
@@ -109,6 +110,30 @@ The v1.11 apply implementation:
 - Resolves exact opaque Reminder handles internally before existing-reminder updates.
 - Calls EventKit only after approval checks pass.
 - Returns read-back metadata and never logs titles, notes, handles, raw EventKit identifiers, list names, or approval tokens.
+
+## v1.12 iCloud Drive Planning And Apply
+
+The implemented v1.12 phase adds non-mutating iCloud Drive create-text planning and the approved apply-capable mutation surface for creating one supported text-like file under an exact opaque parent folder handle. It is not permission to append, overwrite, rename, move, copy, delete, generate binary/documents, use raw paths, or run broad folder writes.
+
+The v1.12 planning implementation:
+
+- Exposes `local-apple-data icloud-drive plan` and MCP `icloud_drive_plan_change`.
+- Returns `mode: "plan"`, `mutation_applied:false`, and `apply_available:true`.
+- Validates requested create-text operations without resolving the parent handle or writing iCloud Drive files.
+- Requires exact opaque `icloud:file:v1:` parent folder handles.
+- Returns deterministic idempotency keys and approval fingerprints for the apply gate.
+- Keeps automated tests synthetic-only.
+- Keeps redacted event logs free of planned filenames, content, handles, content hashes, and approval fingerprints.
+
+The v1.12 apply implementation:
+
+- Exposes `local-apple-data icloud-drive apply` and MCP `icloud_drive_apply_change`.
+- Requires the matching `icloud-drive-apply:v1:<approval_fingerprint>` token.
+- Requires explicit confirmation.
+- Recomputes the plan before applying.
+- Resolves exact opaque parent folder handles internally before writing.
+- Uses exclusive create so existing files are never overwritten.
+- Returns read-back metadata and never logs filenames, content, handles, raw paths, content hashes, approval fingerprints, or approval tokens.
 
 ## v1.1 Mail Content Retrieval
 

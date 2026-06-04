@@ -19,12 +19,21 @@ if str(SCRIPT_DIR) not in sys.path:
 from audit_mutation_gates import audit_mutation_gates
 
 
-APPROVED_WRITE_TOOLS: tuple[str, ...] = ("reminders_apply", "reminders_apply_change")
-APPROVED_PREVIEW_TOOLS: tuple[str, ...] = ("reminders_plan_change",)
+APPROVED_WRITE_TOOLS: tuple[str, ...] = (
+    "icloud_drive_apply",
+    "icloud_drive_apply_change",
+    "reminders_apply",
+    "reminders_apply_change",
+)
+APPROVED_PREVIEW_TOOLS: tuple[str, ...] = (
+    "icloud_drive_plan",
+    "icloud_drive_plan_change",
+    "reminders_plan_change",
+)
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surface is Reminders apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply` and `reminders_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply is the only approved write surface",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, and `icloud_drive_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply and iCloud Drive create-text apply are the only approved write surfaces",
 }
 REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
@@ -44,7 +53,27 @@ REQUIRED_DESIGN_DOCS = {
             "idempotency",
             "redaction",
             "Synthetic Tests Required",
-            "The current release allows only this Reminders apply surface.",
+            "This document allows only this Reminders apply surface.",
+        ),
+    },
+    "icloud_drive_write_v1": {
+        "path": "docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md",
+        "phrases": (
+            "Status: Apply-capable implementation.",
+            "Approved write tools: `local-apple-data icloud-drive apply` and `icloud_drive_apply_change`.",
+            "`local-apple-data icloud-drive plan` and `icloud_drive_plan_change`",
+            "No other mutating CLI or MCP tools are approved or exposed by this document.",
+            "preview",
+            "apply",
+            "read_back",
+            "mutation_applied:false",
+            "approval token",
+            "exact opaque `icloud:file:v1:` parent folder handle",
+            "exclusive create",
+            "idempotency",
+            "redaction",
+            "Synthetic Tests Required",
+            "The current release allows only this iCloud Drive create-text apply surface.",
         ),
     },
 }

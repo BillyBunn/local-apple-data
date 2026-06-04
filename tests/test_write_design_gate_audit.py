@@ -22,9 +22,18 @@ def test_current_project_write_design_gate_audit_passes() -> None:
 
     assert payload["status"] == "ok"
     assert payload["write_design_gate"] is True
-    assert payload["design_docs_checked"] >= 1
-    assert payload["approved_preview_tools"] == ["reminders_plan_change"]
-    assert payload["approved_write_tools"] == ["reminders_apply", "reminders_apply_change"]
+    assert payload["design_docs_checked"] >= 2
+    assert payload["approved_preview_tools"] == [
+        "icloud_drive_plan",
+        "icloud_drive_plan_change",
+        "reminders_plan_change",
+    ]
+    assert payload["approved_write_tools"] == [
+        "icloud_drive_apply",
+        "icloud_drive_apply_change",
+        "reminders_apply",
+        "reminders_apply_change",
+    ]
     assert payload["findings"] == []
 
 
@@ -102,21 +111,20 @@ def _minimal_project(
     root.joinpath("docs").mkdir()
 
     (root / "README.md").write_text(
-        "The only apply-capable mutation surface is Reminders apply.\n",
+        "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "Approved write tools: `reminders apply` and `reminders_apply_change`.\n",
+        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, and `icloud_drive_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "Reminders apply is the only approved write surface.\n",
+        "Reminders apply and iCloud Drive create-text apply are the only approved write surfaces.\n",
         encoding="utf-8",
     )
-    (root / "docs/V1_11_REMINDERS_WRITE_DESIGN.md").write_text(
-        _design_doc_text(),
-        encoding="utf-8",
-    )
+    for contract in audit_write_design_gates.REQUIRED_DESIGN_DOCS.values():
+        path = root / str(contract["path"])
+        path.write_text(_design_doc_text(), encoding="utf-8")
     (root / ".codex-plugin/plugin.json").write_text(
         json.dumps({"interface": {"capabilities": ["Read", "Search", "MCP", "Local"]}}),
         encoding="utf-8",
@@ -125,7 +133,7 @@ def _minimal_project(
         f"""
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surface is Reminders apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply and iCloud Drive create-text apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def {mcp_tool_name}() -> dict:

@@ -16,7 +16,9 @@ from mcp.client.stdio import stdio_client
 from local_apple_data.adapters.calendar import get_calendar_event, search_calendar_events
 from local_apple_data.adapters.contacts import get_contact, search_contacts
 from local_apple_data.adapters.icloud_drive import (
+    apply_icloud_drive_change,
     get_icloud_drive_content,
+    plan_icloud_drive_change,
     search_icloud_drive_metadata,
 )
 from local_apple_data.adapters.hide_my_email import (
@@ -213,6 +215,7 @@ def _make_voice_memos_db(path: Path, recordings_dir: Path) -> None:
 
 def _make_icloud_drive_root(path: Path) -> None:
     path.mkdir(parents=True)
+    (path / "Runtime Packets").mkdir()
     (path / "synthetic-runtime-file.md").write_text(
         "Synthetic iCloud runtime content.",
         encoding="utf-8",
@@ -408,7 +411,7 @@ def _voice_memos_content_smoke(tmp_path: Path) -> dict[str, Any]:
 def _icloud_drive_content_smoke(tmp_path: Path) -> dict[str, Any]:
     root = tmp_path / "CloudDocs"
     _make_icloud_drive_root(root)
-    search = search_icloud_drive_metadata("runtime", root=root)
+    search = search_icloud_drive_metadata("synthetic-runtime-file", root=root)
     handle = search["results"][0]["handle"]
     content = get_icloud_drive_content(handle, root=root, max_chars=4000)
     legacy_content = get_icloud_drive_content("icloud:file:synthetic-runtime-file.md", root=root)
@@ -418,6 +421,52 @@ def _icloud_drive_content_smoke(tmp_path: Path) -> dict[str, Any]:
         "icloud_content_chars": content["result"]["content_chars"],
         "icloud_legacy_content_status": legacy_content["status"],
         "icloud_legacy_content_warning": legacy_content["warnings"][0]["code"],
+    }
+
+
+def _icloud_drive_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
+    root = tmp_path / "CloudDocs"
+    if not root.exists():
+        _make_icloud_drive_root(root)
+    search = search_icloud_drive_metadata("Runtime Packets", root=root)
+    parent_handle = search["results"][0]["handle"]
+    plan = plan_icloud_drive_change(
+        "create_text",
+        parent_handle=parent_handle,
+        filename="runtime-created-note.md",
+        content_text="Synthetic iCloud Drive apply content.",
+    )
+    token = "icloud-drive-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    result = apply_icloud_drive_change(
+        "create_text",
+        parent_handle=parent_handle,
+        filename="runtime-created-note.md",
+        content_text="Synthetic iCloud Drive apply content.",
+        approval_token=token,
+        confirm_apply=True,
+        root=root,
+    )
+    missing_confirmation = apply_icloud_drive_change(
+        "create_text",
+        parent_handle=parent_handle,
+        filename="runtime-created-note.md",
+        content_text="Synthetic iCloud Drive apply content.",
+        approval_token=token,
+        root=root,
+    )
+    return {
+        "icloud_plan_status": plan["status"],
+        "icloud_plan_mode": plan["mode"],
+        "icloud_plan_mutation_applied": plan["mutation_applied"],
+        "icloud_plan_apply_available": plan["apply_available"],
+        "icloud_plan_idempotency_key": plan["preview"]["idempotency_key"].startswith(
+            "icloud-drive-plan:v1:"
+        ),
+        "icloud_apply_status": result["status"],
+        "icloud_apply_mode": result["mode"],
+        "icloud_apply_mutation_applied": result["mutation_applied"],
+        "icloud_apply_read_back_name": result["read_back"]["name"],
+        "icloud_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
     }
 
 
@@ -835,7 +884,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 31,
+        "tool_count": 33,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -894,6 +943,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "icloud_content_chars": 33,
         "icloud_legacy_content_status": "error",
         "icloud_legacy_content_warning": "invalid_handle",
+        "icloud_plan_status": "ok",
+        "icloud_plan_mode": "plan",
+        "icloud_plan_mutation_applied": False,
+        "icloud_plan_apply_available": True,
+        "icloud_plan_idempotency_key": True,
+        "icloud_apply_status": "ok",
+        "icloud_apply_mode": "apply",
+        "icloud_apply_mutation_applied": True,
+        "icloud_apply_read_back_name": "runtime-created-note.md",
+        "icloud_apply_missing_confirmation": "missing_apply_confirmation",
         "calendar_opaque_handle": True,
         "calendar_content_status": "ok",
         "calendar_notes_chars": 25,
@@ -954,6 +1013,7 @@ def main() -> None:
         summary.update(_voice_memos_content_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))
         summary.update(_icloud_drive_content_smoke(tmp_path))
+        summary.update(_icloud_drive_plan_apply_smoke(tmp_path))
         summary.update(_calendar_content_smoke())
         summary.update(_contacts_content_smoke())
         summary.update(_photos_content_smoke(tmp_path))
