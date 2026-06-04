@@ -168,6 +168,57 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## TV Search
+
+```json
+{
+  "status": "ok",
+  "source": "tv",
+  "results": [
+    {
+      "handle": "<opaque tv:item:v1 handle>",
+      "title": "Synthetic Episode",
+      "show": "Synthetic Show",
+      "artist": "Synthetic Studio",
+      "genre": "Reference",
+      "video_kind": "TV show",
+      "duration_seconds": 1800.0,
+      "season_number": 1,
+      "episode_number": 2,
+      "video_content_returned": false,
+      "file_path_returned": false,
+      "artwork_returned": false,
+      "description_returned": false,
+      "playback_state_returned": false,
+      "watched_state_returned": false,
+      "raw_identifier_returned": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## TV Playlists
+
+```json
+{
+  "status": "ok",
+  "source": "tv_playlists",
+  "results": [
+    {
+      "handle": "<opaque tv:playlist:v1 handle>",
+      "title": "Synthetic TV Playlist",
+      "kind": "user",
+      "item_count": 4,
+      "duration_seconds": 7200.0,
+      "playlist_items_returned": false,
+      "raw_identifier_returned": false
+    }
+  ],
+  "warnings": []
+}
+```
+
 ## Books Search
 
 ```json
@@ -717,7 +768,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 51,
+  "tool_count": 70,
   "mail_content_status": "ok",
   "mail_plan_status": "ok",
   "mail_plan_mutation_applied": false,

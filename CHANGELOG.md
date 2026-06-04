@@ -2,6 +2,22 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260605040000 - 2026-06-04
+
+### Added
+
+- Read-only Apple TV item metadata search through `local-apple-data tv search` and MCP `tv_search`.
+- Exact selected Apple TV item metadata retrieval through `local-apple-data tv get` and MCP `tv_get_item`.
+- Read-only Apple TV playlist metadata search through `local-apple-data tv playlists` and MCP `tv_search_playlists`.
+- Exact selected Apple TV playlist metadata retrieval through `local-apple-data tv playlist` and MCP `tv_get_playlist`.
+- Synthetic TV.app automation runner, adapter, CLI, MCP, health, runtime, surface-contract, and redaction coverage for the TV metadata surface.
+
+### Security
+
+- TV search returns item/playlist metadata and opaque handles only; raw TV identifiers, file paths, video bytes, artwork, descriptions, playback state, watched state, ratings, and playlist item dumps are not returned.
+- The first TV tranche uses bounded read-only TV.app automation because the local `Library.tvdb` format is proprietary and not SQLite.
+- TV playback, queue changes, playlist mutation, rating/favorite mutation, library import/delete, video export, file-path export, raw TV library parsing, iCloud media fetch, and broad library dumps remain blocked.
+
 ## 0.1.0+codex.20260605030000 - 2026-06-04
 
 ### Added

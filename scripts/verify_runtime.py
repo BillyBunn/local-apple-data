@@ -98,6 +98,15 @@ from local_apple_data.adapters.shortcuts import (
     get_shortcuts_item,
     search_shortcuts_items,
 )
+from local_apple_data.adapters.tv import (
+    FIELD_SEPARATOR as TV_FIELD_SEPARATOR,
+    RECORD_SEPARATOR as TV_RECORD_SEPARATOR,
+    TVCommandResult,
+    get_tv_item,
+    get_tv_playlist,
+    search_tv_items,
+    search_tv_playlists,
+)
 from local_apple_data.adapters.voice_memos import (
     export_voice_memo_audio,
     get_voice_memo_recording,
@@ -441,6 +450,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
                     {"query": "Podcasts"},
                 )
                 wildcard_music = await session.call_tool("music_search", {"query": "Music"})
+                wildcard_tv = await session.call_tool("tv_search", {"query": "TV"})
                 wildcard_notes = await session.call_tool("notes_search", {"query": "%"})
                 wildcard_icloud = await session.call_tool("icloud_drive_search", {"query": "%"})
                 wildcard_calendar = await session.call_tool("calendar_search", {"query": "%"})
@@ -467,6 +477,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
         "wildcard_books": _payload(wildcard_books)["warnings"][0]["code"],
         "wildcard_podcasts": _payload(wildcard_podcasts)["warnings"][0]["code"],
         "wildcard_music": _payload(wildcard_music)["warnings"][0]["code"],
+        "wildcard_tv": _payload(wildcard_tv)["warnings"][0]["code"],
         "wildcard_notes": _payload(wildcard_notes)["warnings"][0]["code"],
         "wildcard_icloud": _payload(wildcard_icloud)["warnings"][0]["code"],
         "wildcard_calendar": _payload(wildcard_calendar)["warnings"][0]["code"],
@@ -759,6 +770,78 @@ def _music_smoke() -> dict[str, Any]:
         in str(playlist_search),
         "music_legacy_track_status": legacy_track["status"],
         "music_legacy_track_warning": legacy_track["warnings"][0]["code"],
+    }
+
+
+def _tv_item_record(
+    persistent_id: str = "RUNTIME-TV-ITEM-ID",
+    database_id: str = "123",
+    title: str = "Runtime Episode",
+    show: str = "Runtime Show",
+    artist: str = "Runtime Studio",
+    genre: str = "Runtime Genre",
+    video_kind: str = "TV show",
+) -> str:
+    return TV_FIELD_SEPARATOR.join(
+        [
+            persistent_id,
+            database_id,
+            title,
+            show,
+            artist,
+            genre,
+            video_kind,
+            "1234.5",
+            "2",
+            "7",
+            "2026",
+        ]
+    )
+
+
+def _tv_playlist_record(
+    persistent_id: str = "RUNTIME-TV-PLAYLIST-ID",
+    database_id: str = "456",
+    title: str = "Runtime TV Playlist",
+) -> str:
+    return TV_FIELD_SEPARATOR.join([persistent_id, database_id, title, "user", "3", "4567.8"])
+
+
+def _tv_runner(command: list[str], _timeout: float) -> TVCommandResult:
+    if command[0] in {"search_items", "list_items"}:
+        return TVCommandResult(0, TV_RECORD_SEPARATOR.join([_tv_item_record()]))
+    if command[0] in {"search_playlists", "list_playlists"}:
+        return TVCommandResult(0, TV_RECORD_SEPARATOR.join([_tv_playlist_record()]))
+    return TVCommandResult(1, "", "unexpected command")
+
+
+def _tv_smoke() -> dict[str, Any]:
+    search = search_tv_items("Runtime Episode", runner=_tv_runner)
+    handle = search["results"][0]["handle"]
+    detail = get_tv_item(handle, runner=_tv_runner)
+    playlist_search = search_tv_playlists("Runtime TV Playlist", runner=_tv_runner)
+    playlist_handle = playlist_search["results"][0]["handle"]
+    playlist_detail = get_tv_playlist(playlist_handle, runner=_tv_runner)
+    legacy_item = get_tv_item("tv:item:1", runner=_tv_runner)
+    return {
+        "tv_opaque_item_handle": handle.startswith("tv:item:v1:"),
+        "tv_opaque_playlist_handle": playlist_handle.startswith("tv:playlist:v1:"),
+        "tv_search_status": search["status"],
+        "tv_item_detail_status": detail["status"],
+        "tv_item_raw_identifier_returned": "RUNTIME-TV-ITEM-ID" in str(search),
+        "tv_item_file_path_returned": search["results"][0]["file_path_returned"],
+        "tv_item_video_returned": search["results"][0]["video_content_returned"],
+        "tv_item_artwork_returned": search["results"][0]["artwork_returned"],
+        "tv_item_description_returned": search["results"][0]["description_returned"],
+        "tv_item_playback_state_returned": search["results"][0]["playback_state_returned"],
+        "tv_item_watched_state_returned": search["results"][0]["watched_state_returned"],
+        "tv_playlist_search_status": playlist_search["status"],
+        "tv_playlist_detail_status": playlist_detail["status"],
+        "tv_playlist_items_returned": playlist_search["results"][0]["playlist_items_returned"],
+        "tv_playlist_raw_identifier_returned": "RUNTIME-TV-PLAYLIST-ID"
+        in str(playlist_search),
+        "tv_legacy_item_status": legacy_item["status"],
+        "tv_legacy_item_warning": legacy_item["warnings"][0]["code"],
     }
 
 
@@ -2101,7 +2184,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 66,
+        "tool_count": 70,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -2114,6 +2197,7 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "wildcard_books": "broad_query",
         "wildcard_podcasts": "broad_query",
         "wildcard_music": "broad_query",
+        "wildcard_tv": "broad_query",
         "wildcard_notes": "broad_query",
         "wildcard_icloud": "broad_query",
         "wildcard_calendar": "broad_query",
@@ -2265,6 +2349,23 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "music_playlist_raw_identifier_returned": False,
         "music_legacy_track_status": "error",
         "music_legacy_track_warning": "invalid_handle",
+        "tv_opaque_item_handle": True,
+        "tv_opaque_playlist_handle": True,
+        "tv_search_status": "ok",
+        "tv_item_detail_status": "ok",
+        "tv_item_raw_identifier_returned": False,
+        "tv_item_file_path_returned": False,
+        "tv_item_video_returned": False,
+        "tv_item_artwork_returned": False,
+        "tv_item_description_returned": False,
+        "tv_item_playback_state_returned": False,
+        "tv_item_watched_state_returned": False,
+        "tv_playlist_search_status": "ok",
+        "tv_playlist_detail_status": "ok",
+        "tv_playlist_items_returned": False,
+        "tv_playlist_raw_identifier_returned": False,
+        "tv_legacy_item_status": "error",
+        "tv_legacy_item_warning": "invalid_handle",
         "notes_opaque_handle": True,
         "notes_content_status": "ok",
         "notes_content_chars": 31,
@@ -2411,6 +2512,7 @@ def main() -> None:
         summary.update(_books_smoke(tmp_path))
         summary.update(_podcasts_smoke(tmp_path))
         summary.update(_music_smoke())
+        summary.update(_tv_smoke())
         summary.update(_notes_content_smoke(tmp_path))
         summary.update(_notes_attachment_smoke(tmp_path))
         summary.update(_notes_plan_apply_smoke(tmp_path))

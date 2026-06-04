@@ -54,6 +54,8 @@ from local_apple_data.mcp_server import (
     reminders_plan_change,
     safari_get_item,
     shortcuts_get_item,
+    tv_get_item,
+    tv_get_playlist,
     voice_memos_export_audio,
     voice_memos_get_recording,
 )
@@ -133,6 +135,8 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     podcasts_episode_result = podcasts_get_episode("bad-handle")
     music_track_result = music_get_track("bad-handle")
     music_playlist_result = music_get_playlist("bad-handle")
+    tv_item_result = tv_get_item("bad-handle")
+    tv_playlist_result = tv_get_playlist("bad-handle")
     notes_result = notes_get_metadata("bad-handle")
     notes_content_result = notes_get_content("bad-handle")
     notes_attachments_result = notes_list_attachments("bad-handle")
@@ -253,6 +257,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert music_track_result["warnings"][0]["code"] == "invalid_handle"
     assert music_playlist_result["status"] == "error"
     assert music_playlist_result["warnings"][0]["code"] == "invalid_handle"
+    assert tv_item_result["status"] == "error"
+    assert tv_item_result["warnings"][0]["code"] == "invalid_handle"
+    assert tv_playlist_result["status"] == "error"
+    assert tv_playlist_result["warnings"][0]["code"] == "invalid_handle"
     assert notes_result["status"] == "error"
     assert notes_content_result["status"] == "error"
     assert notes_content_result["warnings"][0]["code"] == "invalid_handle"
@@ -352,6 +360,10 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "music_get_track",
                     "music_search_playlists",
                     "music_get_playlist",
+                    "tv_search",
+                    "tv_get_item",
+                    "tv_search_playlists",
+                    "tv_get_playlist",
                     "notes_search",
                     "notes_get_metadata",
                     "notes_get_content",

@@ -87,6 +87,12 @@ from .adapters.voice_memos import (
 )
 from .adapters.safari import get_safari_item, search_safari_items
 from .adapters.shortcuts import get_shortcuts_item, search_shortcuts_items
+from .adapters.tv import (
+    get_tv_item,
+    get_tv_playlist,
+    search_tv_items,
+    search_tv_playlists,
+)
 from .doctor import build_doctor
 from .health import build_health
 from .redacted_log import log_result
@@ -522,6 +528,42 @@ def _music_playlists_command(args: argparse.Namespace) -> int:
 def _music_playlist_command(args: argparse.Namespace) -> int:
     payload = get_music_playlist(args.handle, max_scan_items=args.max_scan_items)
     log_result("music.playlist", payload)
+    _print_json(payload)
+    return 0
+
+
+def _tv_search_command(args: argparse.Namespace) -> int:
+    payload = search_tv_items(
+        args.query,
+        limit=args.limit,
+        max_scan_items=args.max_scan_items,
+    )
+    log_result("tv.search", payload)
+    _print_json(payload)
+    return 0
+
+
+def _tv_get_command(args: argparse.Namespace) -> int:
+    payload = get_tv_item(args.handle, max_scan_items=args.max_scan_items)
+    log_result("tv.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _tv_playlists_command(args: argparse.Namespace) -> int:
+    payload = search_tv_playlists(
+        args.query,
+        limit=args.limit,
+        max_scan_items=args.max_scan_items,
+    )
+    log_result("tv.playlists", payload)
+    _print_json(payload)
+    return 0
+
+
+def _tv_playlist_command(args: argparse.Namespace) -> int:
+    payload = get_tv_playlist(args.handle, max_scan_items=args.max_scan_items)
+    log_result("tv.playlist", payload)
     _print_json(payload)
     return 0
 
@@ -1698,6 +1740,74 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum Music.app playlists to scan, capped by the adapter.",
     )
     music_playlist.set_defaults(func=_music_playlist_command)
+
+    tv = subparsers.add_parser(
+        "tv",
+        help="Apple TV item and playlist metadata commands.",
+    )
+    tv_subparsers = tv.add_subparsers(dest="tv_command", required=True)
+
+    tv_search = tv_subparsers.add_parser(
+        "search",
+        help="Search Apple TV item metadata by title, show, artist, genre, or kind.",
+    )
+    tv_search.add_argument("--json", action="store_true", help="Emit JSON output.")
+    tv_search.add_argument(
+        "--query",
+        required=True,
+        help="Item title, show, artist, genre, or kind query text.",
+    )
+    tv_search.add_argument("--limit", type=int, default=20, help="Maximum results, capped at 50.")
+    tv_search.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum TV.app items to scan, capped by the adapter.",
+    )
+    tv_search.set_defaults(func=_tv_search_command)
+
+    tv_get = tv_subparsers.add_parser(
+        "get",
+        help="Get exact Apple TV item metadata by handle.",
+    )
+    tv_get.add_argument("--json", action="store_true", help="Emit JSON output.")
+    tv_get.add_argument("--handle", required=True, help="Item handle from search output.")
+    tv_get.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum TV.app items to scan, capped by the adapter.",
+    )
+    tv_get.set_defaults(func=_tv_get_command)
+
+    tv_playlists = tv_subparsers.add_parser(
+        "playlists",
+        help="Search Apple TV playlist metadata by playlist name.",
+    )
+    tv_playlists.add_argument("--json", action="store_true", help="Emit JSON output.")
+    tv_playlists.add_argument("--query", required=True, help="Playlist name query text.")
+    tv_playlists.add_argument("--limit", type=int, default=20, help="Maximum results, capped at 50.")
+    tv_playlists.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum TV.app playlists to scan, capped by the adapter.",
+    )
+    tv_playlists.set_defaults(func=_tv_playlists_command)
+
+    tv_playlist = tv_subparsers.add_parser(
+        "playlist",
+        help="Get exact Apple TV playlist metadata by handle.",
+    )
+    tv_playlist.add_argument("--json", action="store_true", help="Emit JSON output.")
+    tv_playlist.add_argument("--handle", required=True, help="Playlist handle from search output.")
+    tv_playlist.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum TV.app playlists to scan, capped by the adapter.",
+    )
+    tv_playlist.set_defaults(func=_tv_playlist_command)
 
     notes = subparsers.add_parser("notes", help="Apple Notes metadata commands.")
     notes_subparsers = notes.add_subparsers(dest="notes_command", required=True)

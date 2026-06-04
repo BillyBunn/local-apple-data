@@ -253,6 +253,10 @@ def _make_schema_stores(
     music.parent.mkdir(parents=True, exist_ok=True)
     music.write_bytes(b"synthetic musicdb placeholder")
 
+    tv = tmp_path / DEFAULT_STORE_PATHS["tv_library_store"]
+    tv.parent.mkdir(parents=True, exist_ok=True)
+    tv.write_bytes(b"synthetic tvdb placeholder")
+
     icloud_drive = tmp_path / DEFAULT_STORE_PATHS["icloud_drive_root"]
     icloud_drive.mkdir(parents=True, exist_ok=True)
 
@@ -289,6 +293,10 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["surfaces"]["music"]["store_status"] == "ok"
     assert health["surfaces"]["music"]["schema_check"] == "not_applicable"
     assert health["surfaces"]["music"]["tool_check"] == "osascript"
+    assert health["surfaces"]["tv"]["status"] == "available"
+    assert health["surfaces"]["tv"]["store_status"] == "ok"
+    assert health["surfaces"]["tv"]["schema_check"] == "not_applicable"
+    assert health["surfaces"]["tv"]["tool_check"] == "osascript"
     assert health["surfaces"]["icloud_drive"]["status"] == "ok"
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
     assert health["surfaces"]["calendar"]["prompts"] is False
@@ -331,6 +339,12 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     )
     assert any(
         requirement["surface"] == "music"
+        and requirement["check_mode"] == "app_and_osascript_availability_without_automation_probe"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert any(
+        requirement["surface"] == "tv"
         and requirement["check_mode"] == "app_and_osascript_availability_without_automation_probe"
         and requirement["prompts"] is False
         for requirement in health["access_requirements"]

@@ -128,6 +128,19 @@ SURFACE_CONTRACTS = (
         ),
     ),
     SurfaceContract(
+        name="tv",
+        label="TV",
+        cli_group="tv",
+        cli_subparser="tv_subparsers",
+        cli_commands=("search", "get", "playlists", "playlist"),
+        mcp_tools=(
+            "tv_search",
+            "tv_get_item",
+            "tv_search_playlists",
+            "tv_get_playlist",
+        ),
+    ),
+    SurfaceContract(
         name="notes",
         label="Notes",
         cli_group="notes",
