@@ -29,6 +29,12 @@ from local_apple_data.adapters.contacts import (
     plan_contact_change,
     search_contacts,
 )
+from local_apple_data.adapters.freeform import (
+    get_freeform_board,
+    get_freeform_folder,
+    list_freeform_boards,
+    search_freeform_folders,
+)
 from local_apple_data.adapters.icloud_drive import (
     apply_icloud_drive_change,
     get_icloud_drive_content,
@@ -451,6 +457,10 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
                 )
                 wildcard_music = await session.call_tool("music_search", {"query": "Music"})
                 wildcard_tv = await session.call_tool("tv_search", {"query": "TV"})
+                wildcard_freeform = await session.call_tool(
+                    "freeform_search_folders",
+                    {"query": "Freeform"},
+                )
                 wildcard_notes = await session.call_tool("notes_search", {"query": "%"})
                 wildcard_icloud = await session.call_tool("icloud_drive_search", {"query": "%"})
                 wildcard_calendar = await session.call_tool("calendar_search", {"query": "%"})
@@ -478,6 +488,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
         "wildcard_podcasts": _payload(wildcard_podcasts)["warnings"][0]["code"],
         "wildcard_music": _payload(wildcard_music)["warnings"][0]["code"],
         "wildcard_tv": _payload(wildcard_tv)["warnings"][0]["code"],
+        "wildcard_freeform": _payload(wildcard_freeform)["warnings"][0]["code"],
         "wildcard_notes": _payload(wildcard_notes)["warnings"][0]["code"],
         "wildcard_icloud": _payload(wildcard_icloud)["warnings"][0]["code"],
         "wildcard_calendar": _payload(wildcard_calendar)["warnings"][0]["code"],
@@ -842,6 +853,192 @@ def _tv_smoke() -> dict[str, Any]:
         in str(playlist_search),
         "tv_legacy_item_status": legacy_item["status"],
         "tv_legacy_item_warning": legacy_item["warnings"][0]["code"],
+    }
+
+
+def _make_freeform_db(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    board_id = sqlite3.Binary(bytes.fromhex("11" * 16))
+    folder_id = sqlite3.Binary(bytes.fromhex("22" * 16))
+    item_id = sqlite3.Binary(bytes.fromhex("33" * 16))
+    asset_id = sqlite3.Binary(bytes.fromhex("44" * 16))
+    with sqlite3.connect(path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE boards (
+                board_identifier BLOB PRIMARY KEY NOT NULL,
+                owner_name TEXT NOT NULL,
+                container_uuid BLOB NOT NULL,
+                alternate_container_uuid BLOB NOT NULL,
+                data BLOB,
+                last_activity_time REAL,
+                tombstoned INTEGER NOT NULL,
+                unsynced_changes UNSIGNED BIG INT DEFAULT 0,
+                ckshare_unsynced_changes INTEGER DEFAULT 0,
+                sync_data BLOB,
+                tombstone_date REAL,
+                hide_from_recently_deleted INTEGER NOT NULL,
+                ckshare_data BLOB,
+                min_required_version UNSIGNED BIG INT DEFAULT 0,
+                is_discardable INTEGER NOT NULL,
+                min_required_version_for_good_enough_fidelity UNSIGNED BIG INT DEFAULT 0,
+                min_required_version_for_full_fidelity UNSIGNED BIG INT DEFAULT 0,
+                last_upgraded_version UNSIGNED BIG INT DEFAULT 0,
+                last_cloudkit_fetch_version UNSIGNED BIG INT,
+                capsule_data BLOB,
+                ck_mergeable_record_value BLOB,
+                parent_identifier BLOB,
+                zone_sync_data BLOB
+            );
+            CREATE TABLE boards_metadata (
+                board_identifier BLOB PRIMARY KEY NOT NULL,
+                crdt_data BLOB NOT NULL,
+                is_favorite INTEGER NOT NULL,
+                enable_collaborator_cursors INTEGER NOT NULL,
+                view_state_data BLOB NOT NULL,
+                last_open_crashed_version UNSIGNED BIG INT,
+                unsynced_changes UNSIGNED BIG INT DEFAULT 0,
+                sync_data BLOB,
+                min_required_version_for_full_fidelity UNSIGNED BIG INT DEFAULT 0
+            );
+            CREATE TABLE board_items (
+                item_uuid BLOB NOT NULL,
+                parent_uuid BLOB,
+                board_identifier BLOB NOT NULL,
+                item_type INTEGER NOT NULL,
+                common_data BLOB,
+                specific_data BLOB,
+                tombstoned INTEGER NOT NULL,
+                unsynced_changes UNSIGNED BIG INT DEFAULT 0,
+                sync_data BLOB,
+                min_required_version UNSIGNED BIG INT DEFAULT 0,
+                object_options UNSIGNED BIG INT DEFAULT 0,
+                min_required_version_for_good_enough_fidelity UNSIGNED BIG INT DEFAULT 0,
+                min_required_version_for_full_fidelity UNSIGNED BIG INT DEFAULT 0,
+                last_cloudkit_fetch_version UNSIGNED BIG INT,
+                sub_item_type INTEGER DEFAULT 0,
+                capsule_data BLOB,
+                ck_mergeable_record_value BLOB,
+                PRIMARY KEY (item_uuid, board_identifier)
+            );
+            CREATE TABLE asset_references (
+                referrer_identifier BLOB NOT NULL,
+                board_identifier BLOB,
+                referrer_asset_name TEXT NOT NULL,
+                asset_uuid BLOB NOT NULL,
+                referrer_type INTEGER NOT NULL,
+                unsynced_changes UNSIGNED BIG INT DEFAULT 0
+            );
+            CREATE TABLE assets (
+                asset_uuid BLOB PRIMARY KEY NOT NULL,
+                extension TEXT,
+                tombstone_date REAL NOT NULL
+            );
+            CREATE TABLE folders (
+                identifier BLOB PRIMARY KEY NOT NULL,
+                data BLOB NOT NULL,
+                ckshare_data BLOB,
+                parent_identifier BLOB,
+                min_required_version UNSIGNED BIG INT DEFAULT 0,
+                min_required_version_for_good_enough_fidelity UNSIGNED BIG INT DEFAULT 0,
+                min_required_version_for_full_fidelity UNSIGNED BIG INT DEFAULT 0,
+                title TEXT,
+                last_activity_time REAL,
+                tombstone INTEGER NOT NULL DEFAULT 0,
+                hide_from_recently_deleted INTEGER NOT NULL DEFAULT 0,
+                owner_name TEXT NOT NULL DEFAULT '',
+                unsynced_changes UNSIGNED BIG INT DEFAULT 0,
+                sync_data BLOB,
+                folder_options UNSIGNED BIG INT DEFAULT 0,
+                zone_sync_data BLOB
+            );
+            """
+        )
+        connection.execute(
+            """
+            INSERT INTO folders
+              (identifier, data, title, last_activity_time, tombstone,
+               hide_from_recently_deleted, owner_name, unsynced_changes)
+            VALUES (?, X'00', 'Runtime Planning Folder', 802310300.0, 0, 0, '', 0)
+            """,
+            (folder_id,),
+        )
+        connection.execute(
+            """
+            INSERT INTO boards
+              (board_identifier, owner_name, container_uuid, alternate_container_uuid,
+               data, last_activity_time, tombstoned, unsynced_changes,
+               hide_from_recently_deleted, is_discardable, capsule_data,
+               ck_mergeable_record_value, parent_identifier)
+            VALUES (?, '', X'00', X'00', X'52554E54494D452D424F4152442D424C4F42',
+                    802310400.0, 0, 0, 0, 0, X'00', X'00', ?)
+            """,
+            (board_id, folder_id),
+        )
+        connection.execute(
+            """
+            INSERT INTO boards_metadata
+              (board_identifier, crdt_data, is_favorite, enable_collaborator_cursors,
+               view_state_data, unsynced_changes)
+            VALUES (?, X'52554E54494D452D43524454', 1, 1, X'00', 0)
+            """,
+            (board_id,),
+        )
+        connection.execute(
+            """
+            INSERT INTO board_items
+              (item_uuid, board_identifier, item_type, common_data, specific_data, tombstoned)
+            VALUES (?, ?, 2, X'52554E54494D452D434F4D4D4F4E', X'52554E54494D452D53504543', 0)
+            """,
+            (item_id, board_id),
+        )
+        connection.execute(
+            "INSERT INTO assets (asset_uuid, extension, tombstone_date) VALUES (?, 'png', 0)",
+            (asset_id,),
+        )
+        connection.execute(
+            """
+            INSERT INTO asset_references
+              (referrer_identifier, board_identifier, referrer_asset_name, asset_uuid, referrer_type)
+            VALUES (?, ?, 'runtime-asset-name', ?, 1)
+            """,
+            (item_id, board_id, asset_id),
+        )
+
+
+def _freeform_smoke(tmp_root: Path) -> dict[str, Any]:
+    db_path = tmp_root / "freeform" / "boards.db"
+    _make_freeform_db(db_path)
+    boards = list_freeform_boards(db_path=db_path)
+    board_handle = boards["results"][0]["handle"]
+    board_detail = get_freeform_board(board_handle, db_path=db_path)
+    folders = search_freeform_folders("Planning", db_path=db_path)
+    folder_handle = folders["results"][0]["handle"]
+    folder_detail = get_freeform_folder(folder_handle, db_path=db_path)
+    legacy_board = get_freeform_board("freeform:board:1", db_path=db_path)
+    broad_folder = search_freeform_folders("Freeform", db_path=db_path)
+    serialized = str(boards) + str(board_detail) + str(folders) + str(folder_detail)
+    return {
+        "freeform_boards_status": boards["status"],
+        "freeform_board_detail_status": board_detail["status"],
+        "freeform_folders_status": folders["status"],
+        "freeform_folder_detail_status": folder_detail["status"],
+        "freeform_opaque_board_handle": board_handle.startswith("freeform:board:v1:"),
+        "freeform_opaque_folder_handle": folder_handle.startswith("freeform:folder:v1:"),
+        "freeform_board_title_returned": board_detail["result"]["board_title_returned"],
+        "freeform_board_content_returned": board_detail["result"]["board_content_returned"],
+        "freeform_asset_content_returned": board_detail["result"]["asset_content_returned"],
+        "freeform_board_items_returned": board_detail["result"]["board_items_returned"],
+        "freeform_board_item_count": board_detail["result"]["item_count"],
+        "freeform_board_asset_count": board_detail["result"]["asset_reference_count"],
+        "freeform_folder_board_count": folder_detail["result"]["board_count"],
+        "freeform_raw_identifier_returned": "11111111111111111111111111111111" in serialized
+        or "22222222222222222222222222222222" in serialized,
+        "freeform_blob_content_returned": "RUNTIME-BOARD-BLOB" in serialized
+        or "RUNTIME-CRDT" in serialized,
+        "freeform_legacy_board_status": legacy_board["status"],
+        "freeform_legacy_board_warning": legacy_board["warnings"][0]["code"],
+        "freeform_broad_folder_warning": broad_folder["warnings"][0]["code"],
     }
 
 
@@ -2184,7 +2381,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 70,
+        "tool_count": 74,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -2198,6 +2395,7 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "wildcard_podcasts": "broad_query",
         "wildcard_music": "broad_query",
         "wildcard_tv": "broad_query",
+        "wildcard_freeform": "broad_query",
         "wildcard_notes": "broad_query",
         "wildcard_icloud": "broad_query",
         "wildcard_calendar": "broad_query",
@@ -2366,6 +2564,24 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "tv_playlist_raw_identifier_returned": False,
         "tv_legacy_item_status": "error",
         "tv_legacy_item_warning": "invalid_handle",
+        "freeform_boards_status": "ok",
+        "freeform_board_detail_status": "ok",
+        "freeform_folders_status": "ok",
+        "freeform_folder_detail_status": "ok",
+        "freeform_opaque_board_handle": True,
+        "freeform_opaque_folder_handle": True,
+        "freeform_board_title_returned": False,
+        "freeform_board_content_returned": False,
+        "freeform_asset_content_returned": False,
+        "freeform_board_items_returned": False,
+        "freeform_board_item_count": 1,
+        "freeform_board_asset_count": 1,
+        "freeform_folder_board_count": 1,
+        "freeform_raw_identifier_returned": False,
+        "freeform_blob_content_returned": False,
+        "freeform_legacy_board_status": "error",
+        "freeform_legacy_board_warning": "invalid_handle",
+        "freeform_broad_folder_warning": "broad_query",
         "notes_opaque_handle": True,
         "notes_content_status": "ok",
         "notes_content_chars": 31,
@@ -2513,6 +2729,7 @@ def main() -> None:
         summary.update(_podcasts_smoke(tmp_path))
         summary.update(_music_smoke())
         summary.update(_tv_smoke())
+        summary.update(_freeform_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))
         summary.update(_notes_attachment_smoke(tmp_path))
         summary.update(_notes_plan_apply_smoke(tmp_path))

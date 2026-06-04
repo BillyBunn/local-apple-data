@@ -16,6 +16,7 @@ This project provides a privacy-gated CLI and MCP server for locally synced:
 - Apple Podcasts show and episode metadata synced through Podcasts/iCloud
 - Apple Music track and playlist metadata synced through Music/Apple Music
 - Apple TV item and playlist metadata synced through TV/iCloud
+- Apple Freeform board and folder metadata synced through Freeform/iCloud
 - Apple Notes
 - Apple Calendar
 - Apple Reminders
@@ -27,12 +28,12 @@ The current release is local-only and read-mostly. The only apply-capable mutati
 
 ## Current Status
 
-The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Music, TV, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, or Messages send-text apply operation generated from a matching plan.
+The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Music, TV, Freeform, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, or Messages send-text apply operation generated from a matching plan.
 
 Implemented now:
 
 - Repo guidance and privacy model
-- `local-apple-data health --json` with redacted broad-surface readiness summaries, schema-only Mail/Messages/Voice Memos/Books/Podcasts/Notes/Reminders checks, Safari bookmarks and iCloud Drive root checks, Shortcuts CLI and Music.app/TV.app automation availability, and non-prompting access requirements for framework-backed surfaces
+- `local-apple-data health --json` with redacted broad-surface readiness summaries, schema-only Mail/Messages/Voice Memos/Books/Podcasts/Freeform/Notes/Reminders checks, Safari bookmarks and iCloud Drive root checks, Shortcuts CLI and Music.app/TV.app automation availability, and non-prompting access requirements for framework-backed surfaces
 - `local-apple-data doctor --json` with redacted non-mutating remediation guidance
 - `local-apple-data mail search/get` metadata commands
 - Metadata-only `content_status` hints in Mail search results so agents can prefer locally retrievable messages before exact content calls
@@ -54,6 +55,7 @@ Implemented now:
 - `local-apple-data podcasts search/get/episodes/episode` commands for local Apple Podcasts show metadata, selected-show episode metadata, and exact selected-episode bounded descriptions by opaque handle, without returning transcripts, audio bytes, feed/enclosure URLs, raw identifiers, or local download paths
 - `local-apple-data music search/get/playlists/playlist` commands for local Apple Music track and playlist metadata by opaque handle, without returning audio bytes, lyrics, file paths, raw identifiers, play history, ratings, or playlist track dumps
 - `local-apple-data tv search/get/playlists/playlist` commands for local Apple TV item and playlist metadata by opaque handle, without returning video bytes, file paths, artwork, descriptions, playback state, watched state, ratings, raw identifiers, or playlist item dumps
+- `local-apple-data freeform boards/get/folders/folder` commands for local Apple Freeform recent-board and folder-title metadata by opaque handle, without returning board BLOBs, decoded board items, asset bytes, previews, collaboration payloads, raw identifiers, or board content
 - `local-apple-data notes search/get` metadata commands
 - `local-apple-data notes content --json --handle <notes:note:v2:...> --max-chars 4000 --offset 0` for exact-handle local Notes plain-text content, with `next_offset` pagination for long imported notes
 - `local-apple-data notes attachments --json --handle <notes:note:v2:...>` for exact selected-note attachment metadata with opaque `notes:attachment:v1:` handles

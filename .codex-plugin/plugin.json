@@ -1,7 +1,7 @@
 {
   "name": "local-apple-data",
-  "version": "0.1.0+codex.20260605040000",
-  "description": "Local-first Apple Mail/Messages/Notes attachment export, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Apple Music metadata, Apple TV metadata, Notes content, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients, with approved Reminders, iCloud Drive create/append text, Calendar, Contacts, Notes create/append text, Mail draft, Photos import, and Messages send-text apply.",
+  "version": "0.1.0+codex.20260605050000",
+  "description": "Local-first Apple Mail/Messages/Notes attachment export, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Apple Music metadata, Apple TV metadata, Apple Freeform metadata, Notes content, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients, with approved Reminders, iCloud Drive create/append text, Calendar, Contacts, Notes create/append text, Mail draft, Photos import, and Messages send-text apply.",
   "author": {
     "name": "Billy Bunn"
   },
@@ -14,6 +14,7 @@
     "apple-podcasts",
     "apple-music",
     "apple-tv",
+    "apple-freeform",
     "apple-reminders",
     "calendar",
     "contacts",
@@ -32,7 +33,7 @@
   "interface": {
     "displayName": "Local Apple Data",
     "shortDescription": "Search local Apple data",
-    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Apple Music track/playlist metadata, Apple TV item/playlist metadata, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a bounded MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Music, TV, Notes content and Mail/Messages/Notes attachment export, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. Safari search returns title/domain metadata only and full URLs only by exact handle. Shortcuts search returns shortcut/folder name metadata only and never runs, opens, signs, exports, or returns shortcut bodies. Books search returns title/author/genre metadata only; selected annotations are returned only by exact book handle and book text is not extracted. Podcasts search returns show metadata only; selected episode detail returns bounded episode descriptions only by exact episode handle and never returns transcripts, audio bytes, feed URLs, enclosure URLs, raw identifiers, or local download paths. Music search returns track and playlist metadata only through bounded Music.app automation and never returns audio bytes, lyrics, file paths, play history, ratings, raw identifiers, or playlist track dumps. TV search returns item and playlist metadata only through bounded TV.app automation and never returns video bytes, file paths, artwork, descriptions, playback or watched state, ratings, raw identifiers, or playlist item dumps. Messages transcript retrieval uses local message text plus a native attributedBody plaintext fallback when modern Messages rows omit the text column. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, each with a matching plan approval token and explicit confirmation. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
+    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Apple Music track/playlist metadata, Apple TV item/playlist metadata, Apple Freeform board/folder metadata, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a bounded MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Music, TV, Freeform, Notes content and Mail/Messages/Notes attachment export, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. Safari search returns title/domain metadata only and full URLs only by exact handle. Shortcuts search returns shortcut/folder name metadata only and never runs, opens, signs, exports, or returns shortcut bodies. Books search returns title/author/genre metadata only; selected annotations are returned only by exact book handle and book text is not extracted. Podcasts search returns show metadata only; selected episode detail returns bounded episode descriptions only by exact episode handle and never returns transcripts, audio bytes, feed URLs, enclosure URLs, raw identifiers, or local download paths. Music search returns track and playlist metadata only through bounded Music.app automation and never returns audio bytes, lyrics, file paths, play history, ratings, raw identifiers, or playlist track dumps. TV search returns item and playlist metadata only through bounded TV.app automation and never returns video bytes, file paths, artwork, descriptions, playback or watched state, ratings, raw identifiers, or playlist item dumps. Freeform lists recent board metadata and searches folder titles only; it never returns board BLOBs, decoded board items, assets, previews, collaboration payloads, raw identifiers, or board content. Messages transcript retrieval uses local message text plus a native attributedBody plaintext fallback when modern Messages rows omit the text column. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, each with a matching plan approval token and explicit confirmation. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
     "developerName": "Billy Bunn",
     "category": "Productivity",
     "capabilities": [
@@ -74,6 +75,9 @@
       "Search local Apple TV item metadata for this title, show, artist, genre, or kind.",
       "Search local Apple TV playlist metadata for this playlist name.",
       "Retrieve exact Apple TV item or playlist metadata from the selected opaque handle.",
+      "List recent Apple Freeform board metadata without board content.",
+      "Search local Apple Freeform folder metadata for this folder title.",
+      "Retrieve exact Apple Freeform board or folder metadata from the selected opaque handle.",
       "Find local Notes metadata matching this phrase.",
       "Retrieve exact Notes content from the selected opaque handle.",
       "List exact Notes attachments from the selected note handle.",

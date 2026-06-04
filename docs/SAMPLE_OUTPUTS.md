@@ -219,6 +219,50 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## Freeform Boards
+
+```json
+{
+  "status": "ok",
+  "source": "freeform",
+  "results": [
+    {
+      "handle": "<opaque freeform:board:v1 handle>",
+      "title_status": "unavailable_without_blob_decode",
+      "board_title_returned": false,
+      "last_activity_at": "2026-06-04T12:00:00+00:00",
+      "is_favorite": true,
+      "item_count": 12,
+      "asset_reference_count": 3,
+      "board_items_returned": false,
+      "board_content_returned": false,
+      "asset_content_returned": false,
+      "raw_identifier_returned": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Freeform Folders
+
+```json
+{
+  "status": "ok",
+  "source": "freeform",
+  "results": [
+    {
+      "handle": "<opaque freeform:folder:v1 handle>",
+      "title": "Synthetic Folder",
+      "board_count": 4,
+      "folder_blob_returned": false,
+      "raw_identifier_returned": false
+    }
+  ],
+  "warnings": []
+}
+```
+
 ## Books Search
 
 ```json
@@ -768,7 +812,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 70,
+  "tool_count": 74,
   "mail_content_status": "ok",
   "mail_plan_status": "ok",
   "mail_plan_mutation_applied": false,

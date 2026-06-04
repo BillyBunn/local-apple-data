@@ -257,6 +257,66 @@ def _make_schema_stores(
     tv.parent.mkdir(parents=True, exist_ok=True)
     tv.write_bytes(b"synthetic tvdb placeholder")
 
+    freeform = tmp_path / DEFAULT_STORE_PATHS["freeform_store"]
+    freeform.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(freeform) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE boards (
+                board_identifier BLOB PRIMARY KEY,
+                parent_identifier BLOB,
+                data BLOB,
+                last_activity_time REAL,
+                tombstoned INTEGER,
+                unsynced_changes INTEGER,
+                hide_from_recently_deleted INTEGER,
+                capsule_data BLOB,
+                ck_mergeable_record_value BLOB
+            );
+            CREATE TABLE boards_metadata (
+                board_identifier BLOB PRIMARY KEY,
+                crdt_data BLOB,
+                is_favorite INTEGER,
+                enable_collaborator_cursors INTEGER,
+                view_state_data BLOB,
+                unsynced_changes INTEGER
+            );
+            CREATE TABLE board_items (
+                item_uuid BLOB PRIMARY KEY,
+                board_identifier BLOB,
+                item_type INTEGER,
+                common_data BLOB,
+                specific_data BLOB,
+                tombstoned INTEGER,
+                unsynced_changes INTEGER
+            );
+            CREATE TABLE asset_references (
+                referrer_identifier BLOB,
+                board_identifier BLOB,
+                referrer_asset_name TEXT,
+                asset_uuid BLOB,
+                referrer_type INTEGER,
+                unsynced_changes INTEGER
+            );
+            CREATE TABLE assets (
+                asset_uuid BLOB PRIMARY KEY,
+                extension TEXT,
+                tombstone_date REAL
+            );
+            CREATE TABLE folders (
+                identifier BLOB PRIMARY KEY,
+                data BLOB,
+                parent_identifier BLOB,
+                title TEXT,
+                last_activity_time REAL,
+                tombstone INTEGER,
+                hide_from_recently_deleted INTEGER,
+                owner_name TEXT,
+                unsynced_changes INTEGER
+            );
+            """
+        )
+
     icloud_drive = tmp_path / DEFAULT_STORE_PATHS["icloud_drive_root"]
     icloud_drive.mkdir(parents=True, exist_ok=True)
 
@@ -297,6 +357,9 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["surfaces"]["tv"]["store_status"] == "ok"
     assert health["surfaces"]["tv"]["schema_check"] == "not_applicable"
     assert health["surfaces"]["tv"]["tool_check"] == "osascript"
+    assert health["surfaces"]["freeform"]["status"] == "ok"
+    assert health["surfaces"]["freeform"]["store_status"] == "ok"
+    assert health["surfaces"]["freeform"]["schema_check"] == "ok"
     assert health["surfaces"]["icloud_drive"]["status"] == "ok"
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
     assert health["surfaces"]["calendar"]["prompts"] is False
@@ -346,6 +409,12 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert any(
         requirement["surface"] == "tv"
         and requirement["check_mode"] == "app_and_osascript_availability_without_automation_probe"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert any(
+        requirement["surface"] == "freeform"
+        and requirement["check_mode"] == "schema_only"
         and requirement["prompts"] is False
         for requirement in health["access_requirements"]
     )

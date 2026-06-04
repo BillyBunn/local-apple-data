@@ -61,6 +61,7 @@ SYNC_FILES = [
     "docs/V1_28_PODCASTS_METADATA.md",
     "docs/V1_29_MUSIC_METADATA.md",
     "docs/V1_30_TV_METADATA.md",
+    "docs/V1_31_FREEFORM_METADATA.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "scripts/audit_release_readiness.py",
     "scripts/audit_mutation_gates.py",
@@ -99,6 +100,7 @@ SYNC_FILES = [
     "src/local_apple_data/adapters/safari.py",
     "src/local_apple_data/adapters/shortcuts.py",
     "src/local_apple_data/adapters/tv.py",
+    "src/local_apple_data/adapters/freeform.py",
     "src/local_apple_data/adapters/voice_memos.py",
     "tests/test_cli_safari.py",
     "tests/test_cli_shortcuts.py",
@@ -106,12 +108,14 @@ SYNC_FILES = [
     "tests/test_cli_podcasts.py",
     "tests/test_cli_music.py",
     "tests/test_cli_tv.py",
+    "tests/test_cli_freeform.py",
     "tests/test_safari_adapter.py",
     "tests/test_shortcuts_adapter.py",
     "tests/test_books_adapter.py",
     "tests/test_podcasts_adapter.py",
     "tests/test_music_adapter.py",
     "tests/test_tv_adapter.py",
+    "tests/test_freeform_adapter.py",
 ]
 
 

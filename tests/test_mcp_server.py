@@ -18,6 +18,8 @@ from local_apple_data.mcp_server import (
     contacts_apply_change,
     contacts_get,
     contacts_plan_change,
+    freeform_get_board,
+    freeform_get_folder,
     icloud_drive_apply_change,
     hide_my_email_get_alias,
     icloud_drive_get_content,
@@ -137,6 +139,8 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     music_playlist_result = music_get_playlist("bad-handle")
     tv_item_result = tv_get_item("bad-handle")
     tv_playlist_result = tv_get_playlist("bad-handle")
+    freeform_board_result = freeform_get_board("bad-handle")
+    freeform_folder_result = freeform_get_folder("bad-handle")
     notes_result = notes_get_metadata("bad-handle")
     notes_content_result = notes_get_content("bad-handle")
     notes_attachments_result = notes_list_attachments("bad-handle")
@@ -261,6 +265,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert tv_item_result["warnings"][0]["code"] == "invalid_handle"
     assert tv_playlist_result["status"] == "error"
     assert tv_playlist_result["warnings"][0]["code"] == "invalid_handle"
+    assert freeform_board_result["status"] == "error"
+    assert freeform_board_result["warnings"][0]["code"] == "invalid_handle"
+    assert freeform_folder_result["status"] == "error"
+    assert freeform_folder_result["warnings"][0]["code"] == "invalid_handle"
     assert notes_result["status"] == "error"
     assert notes_content_result["status"] == "error"
     assert notes_content_result["warnings"][0]["code"] == "invalid_handle"
@@ -364,6 +372,10 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "tv_get_item",
                     "tv_search_playlists",
                     "tv_get_playlist",
+                    "freeform_list_boards",
+                    "freeform_get_board",
+                    "freeform_search_folders",
+                    "freeform_get_folder",
                     "notes_search",
                     "notes_get_metadata",
                     "notes_get_content",

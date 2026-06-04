@@ -19,6 +19,12 @@ from .adapters.contacts import (
     plan_contact_change,
     search_contacts,
 )
+from .adapters.freeform import (
+    get_freeform_board,
+    get_freeform_folder,
+    list_freeform_boards,
+    search_freeform_folders,
+)
 from .adapters.icloud_drive import (
     apply_icloud_drive_change,
     get_icloud_drive_content,
@@ -564,6 +570,57 @@ def _tv_playlists_command(args: argparse.Namespace) -> int:
 def _tv_playlist_command(args: argparse.Namespace) -> int:
     payload = get_tv_playlist(args.handle, max_scan_items=args.max_scan_items)
     log_result("tv.playlist", payload)
+    _print_json(payload)
+    return 0
+
+
+def _freeform_boards_command(args: argparse.Namespace) -> int:
+    payload = (
+        list_freeform_boards(
+            db_path=Path(args.db).expanduser(),
+            limit=args.limit,
+        )
+        if args.db
+        else list_freeform_boards(limit=args.limit)
+    )
+    log_result("freeform.boards", payload)
+    _print_json(payload)
+    return 0
+
+
+def _freeform_get_command(args: argparse.Namespace) -> int:
+    payload = (
+        get_freeform_board(args.handle, db_path=Path(args.db).expanduser())
+        if args.db
+        else get_freeform_board(args.handle)
+    )
+    log_result("freeform.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _freeform_folders_command(args: argparse.Namespace) -> int:
+    payload = (
+        search_freeform_folders(
+            args.query,
+            db_path=Path(args.db).expanduser(),
+            limit=args.limit,
+        )
+        if args.db
+        else search_freeform_folders(args.query, limit=args.limit)
+    )
+    log_result("freeform.folders", payload)
+    _print_json(payload)
+    return 0
+
+
+def _freeform_folder_command(args: argparse.Namespace) -> int:
+    payload = (
+        get_freeform_folder(args.handle, db_path=Path(args.db).expanduser())
+        if args.db
+        else get_freeform_folder(args.handle)
+    )
+    log_result("freeform.folder", payload)
     _print_json(payload)
     return 0
 
@@ -1808,6 +1865,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum TV.app playlists to scan, capped by the adapter.",
     )
     tv_playlist.set_defaults(func=_tv_playlist_command)
+
+    freeform = subparsers.add_parser(
+        "freeform",
+        help="Apple Freeform board and folder metadata commands.",
+    )
+    freeform_subparsers = freeform.add_subparsers(
+        dest="freeform_command",
+        required=True,
+    )
+
+    freeform_boards = freeform_subparsers.add_parser(
+        "boards",
+        help="List recent Apple Freeform board metadata without board content.",
+    )
+    freeform_boards.add_argument("--json", action="store_true", help="Emit JSON output.")
+    freeform_boards.add_argument("--limit", type=int, default=20, help="Maximum results, capped at 50.")
+    freeform_boards.add_argument("--db", help=argparse.SUPPRESS)
+    freeform_boards.set_defaults(func=_freeform_boards_command)
+
+    freeform_get = freeform_subparsers.add_parser(
+        "get",
+        help="Get exact Apple Freeform board metadata by handle.",
+    )
+    freeform_get.add_argument("--json", action="store_true", help="Emit JSON output.")
+    freeform_get.add_argument("--handle", required=True, help="Board handle from boards output.")
+    freeform_get.add_argument("--db", help=argparse.SUPPRESS)
+    freeform_get.set_defaults(func=_freeform_get_command)
+
+    freeform_folders = freeform_subparsers.add_parser(
+        "folders",
+        help="Search Apple Freeform folder metadata by folder title.",
+    )
+    freeform_folders.add_argument("--json", action="store_true", help="Emit JSON output.")
+    freeform_folders.add_argument("--query", required=True, help="Folder title query text.")
+    freeform_folders.add_argument("--limit", type=int, default=20, help="Maximum results, capped at 50.")
+    freeform_folders.add_argument("--db", help=argparse.SUPPRESS)
+    freeform_folders.set_defaults(func=_freeform_folders_command)
+
+    freeform_folder = freeform_subparsers.add_parser(
+        "folder",
+        help="Get exact Apple Freeform folder metadata by handle.",
+    )
+    freeform_folder.add_argument("--json", action="store_true", help="Emit JSON output.")
+    freeform_folder.add_argument("--handle", required=True, help="Folder handle from folders output.")
+    freeform_folder.add_argument("--db", help=argparse.SUPPRESS)
+    freeform_folder.set_defaults(func=_freeform_folder_command)
 
     notes = subparsers.add_parser("notes", help="Apple Notes metadata commands.")
     notes_subparsers = notes.add_subparsers(dest="notes_command", required=True)

@@ -11,6 +11,7 @@ from typing import Any
 
 from . import __version__
 from .adapters.books import check_books_schema
+from .adapters.freeform import check_freeform_schema
 from .adapters.mail import check_mail_schema, mail_db_relative_path
 from .adapters.messages import check_messages_schema
 from .adapters.notes import check_notes_schema
@@ -40,6 +41,7 @@ DEFAULT_STORE_PATHS = {
     ),
     "music_library_store": Path("Music/Music/Music Library.musiclibrary/Library.musicdb"),
     "tv_library_store": Path("Movies/TV/TV Library.tvlibrary/Library.tvdb"),
+    "freeform_store": Path("Library/Group Containers/group.com.apple.freeform/Boards/boards.db"),
     "notes_store": Path("Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"),
     "reminders_stores": Path(
         "Library/Group Containers/group.com.apple.reminders/Container_v1/Stores"
@@ -119,6 +121,13 @@ ACCESS_REQUIREMENTS = [
         "permission_class": "Automation permission may be required",
         "status": "covered_by_tool_and_app_check",
         "check_mode": "app_and_osascript_availability_without_automation_probe",
+        "prompts": False,
+    },
+    {
+        "surface": "freeform",
+        "permission_class": "Full Disk Access may be required",
+        "status": "covered_by_store_check",
+        "check_mode": "schema_only",
         "prompts": False,
     },
     {
@@ -364,6 +373,11 @@ def _surface_summary(
             "automation_check": "on_exact_tool_call",
             "prompts": False,
         },
+        "freeform": {
+            "status": _schema_status(schema_checks, "freeform"),
+            "store_status": _store_status(stores, "freeform_store"),
+            "schema_check": _schema_status(schema_checks, "freeform"),
+        },
         "notes": {
             "status": _schema_status(schema_checks, "notes"),
             "store_status": _store_status(stores, "notes_store"),
@@ -474,6 +488,21 @@ def build_health(
         )
         if "podcasts_store" in store_paths and _store_available(stores, "podcasts_store")
         else _skipped_schema_check("podcasts", "podcasts_schema_skipped"),
+        "freeform": _safe_schema_check(
+            "freeform",
+            "freeform_schema_unavailable",
+            [
+                "boards",
+                "boards_metadata",
+                "board_items",
+                "asset_references",
+                "assets",
+                "folders",
+            ],
+            lambda: check_freeform_schema(db_path=home / store_paths["freeform_store"]),
+        )
+        if "freeform_store" in store_paths and _store_available(stores, "freeform_store")
+        else _skipped_schema_check("freeform", "freeform_schema_skipped"),
         "notes": _safe_schema_check(
             "notes",
             "notes_schema_unavailable",

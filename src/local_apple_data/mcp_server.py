@@ -19,6 +19,12 @@ from .adapters.contacts import (
     plan_contact_change,
     search_contacts,
 )
+from .adapters.freeform import (
+    get_freeform_board,
+    get_freeform_folder,
+    list_freeform_boards,
+    search_freeform_folders,
+)
 from .adapters.icloud_drive import (
     apply_icloud_drive_change,
     get_icloud_drive_content,
@@ -101,7 +107,7 @@ from .redacted_log import log_result
 INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
-    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts show/episode metadata, Apple Music track/playlist metadata, Apple TV item/playlist metadata, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
+    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts show/episode metadata, Apple Music track/playlist metadata, Apple TV item/playlist metadata, Apple Freeform board/folder metadata, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
     "Mail, Messages, and Notes attachment export are exact-handle only and never return attachment bytes inline. "
     "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, and each requires a matching plan approval token plus explicit confirmation."
 )
@@ -577,6 +583,37 @@ def tv_get_playlist(handle: str, max_scan_items: int = 5000) -> dict[str, Any]:
     """Get exact local Apple TV playlist metadata by opaque handle."""
 
     return _record("tv_get_playlist", get_tv_playlist(handle, max_scan_items=max_scan_items))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def freeform_list_boards(limit: int = 20) -> dict[str, Any]:
+    """List recent local Apple Freeform board metadata, capped and read-only."""
+
+    return _record("freeform_list_boards", list_freeform_boards(limit=limit))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def freeform_get_board(handle: str) -> dict[str, Any]:
+    """Get exact local Apple Freeform board metadata by opaque handle."""
+
+    return _record("freeform_get_board", get_freeform_board(handle))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def freeform_search_folders(query: str, limit: int = 20) -> dict[str, Any]:
+    """Search local Apple Freeform folder metadata by folder title."""
+
+    return _record(
+        "freeform_search_folders",
+        search_freeform_folders(query, limit=limit),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def freeform_get_folder(handle: str) -> dict[str, Any]:
+    """Get exact local Apple Freeform folder metadata by opaque handle."""
+
+    return _record("freeform_get_folder", get_freeform_folder(handle))
 
 
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)

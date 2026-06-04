@@ -68,6 +68,7 @@ REQUIRED_FILES = (
     "docs/V1_28_PODCASTS_METADATA.md",
     "docs/V1_29_MUSIC_METADATA.md",
     "docs/V1_30_TV_METADATA.md",
+    "docs/V1_31_FREEFORM_METADATA.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "docs/PUBLISHING.md",
     "docs/PRIVACY_MODEL.md",

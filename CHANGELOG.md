@@ -2,6 +2,22 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260605050000 - 2026-06-04
+
+### Added
+
+- Read-only Apple Freeform recent-board metadata listing through `local-apple-data freeform boards` and MCP `freeform_list_boards`.
+- Exact selected Apple Freeform board metadata retrieval through `local-apple-data freeform get` and MCP `freeform_get_board`.
+- Read-only Apple Freeform folder title metadata search through `local-apple-data freeform folders` and MCP `freeform_search_folders`.
+- Exact selected Apple Freeform folder metadata retrieval through `local-apple-data freeform folder` and MCP `freeform_get_folder`.
+- Synthetic Freeform SQLite fixtures, adapter, CLI, MCP, health, runtime, surface-contract, and redaction coverage for the Freeform metadata surface.
+
+### Security
+
+- Freeform board listing returns recency, favorite/collaborator-cursor flags, item counts, and asset-reference counts only; board titles are not returned because the title/content lives in BLOB/CRDT data.
+- Freeform folder search returns folder-title metadata only for specific folder-title queries.
+- Board BLOB decoding, board content export, asset export, previews, collaboration payloads, raw identifiers, raw `boards.db` rows, broad dumps, and Freeform mutation remain blocked.
+
 ## 0.1.0+codex.20260605040000 - 2026-06-04
 
 ### Added

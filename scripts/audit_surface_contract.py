@@ -141,6 +141,19 @@ SURFACE_CONTRACTS = (
         ),
     ),
     SurfaceContract(
+        name="freeform",
+        label="Freeform",
+        cli_group="freeform",
+        cli_subparser="freeform_subparsers",
+        cli_commands=("boards", "get", "folders", "folder"),
+        mcp_tools=(
+            "freeform_list_boards",
+            "freeform_get_board",
+            "freeform_search_folders",
+            "freeform_get_folder",
+        ),
+    ),
+    SurfaceContract(
         name="notes",
         label="Notes",
         cli_group="notes",
