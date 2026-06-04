@@ -24,8 +24,10 @@ from local_apple_data.mcp_server import (
     icloud_drive_get_metadata,
     icloud_drive_plan_change,
     mail_apply_change,
+    mail_export_attachment,
     mail_get_content,
     mail_get_metadata,
+    mail_list_attachments,
     mail_plan_change,
     messages_get_chat,
     notes_apply_change,
@@ -51,6 +53,7 @@ def test_mcp_instructions_preserve_safety_boundaries() -> None:
     assert "bounded" in INSTRUCTIONS
     assert "Gmail connector" in INSTRUCTIONS
     assert "exact-handle" in INSTRUCTIONS
+    assert "attachment export" in INSTRUCTIONS
     assert "approval token" in INSTRUCTIONS
 
 
@@ -70,6 +73,12 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
 
     mail_result = mail_get_metadata("bad-handle")
     mail_content_result = mail_get_content("bad-handle")
+    mail_attachments_result = mail_list_attachments("bad-handle")
+    mail_export_result = mail_export_attachment(
+        "bad-handle",
+        "bad-attachment",
+        str(tmp_path / "exports"),
+    )
     mail_plan_result = mail_plan_change(
         "create_draft",
         to=[],
@@ -170,6 +179,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert mail_result["status"] == "error"
     assert mail_content_result["status"] == "error"
     assert mail_content_result["warnings"][0]["code"] == "invalid_handle"
+    assert mail_attachments_result["status"] == "error"
+    assert mail_attachments_result["warnings"][0]["code"] == "invalid_handle"
+    assert mail_export_result["status"] == "error"
+    assert mail_export_result["warnings"][0]["code"] == "invalid_handle"
     assert mail_plan_result["status"] == "error"
     assert mail_plan_result["warnings"][0]["code"] == "missing_to"
     assert mail_apply_result["status"] == "error"
@@ -251,6 +264,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "mail_search",
                     "mail_get_metadata",
                     "mail_get_content",
+                    "mail_list_attachments",
+                    "mail_export_attachment",
                     "mail_plan_change",
                     "mail_apply_change",
                     "messages_search",

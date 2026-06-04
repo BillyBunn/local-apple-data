@@ -61,6 +61,48 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## Mail Attachments
+
+```json
+{
+  "status": "ok",
+  "source": "mail",
+  "results": [
+    {
+      "handle": "<opaque mail:attachment:v1 handle>",
+      "message_handle": "<opaque mail:message:v2 handle>",
+      "filename": "review-packet.pdf",
+      "content_type": "application/pdf",
+      "file_size": 123456,
+      "attachment_type": "document",
+      "media_status": "available",
+      "attachment_content_returned": false,
+      "attachment_content_exported": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Mail Attachment Export
+
+```json
+{
+  "status": "ok",
+  "source": "mail",
+  "result": {
+    "handle": "<opaque mail:attachment:v1 handle>",
+    "message_handle": "<opaque mail:message:v2 handle>",
+    "filename": "review-packet.pdf",
+    "attachment_content_returned": false,
+    "attachment_content_exported": true,
+    "exported_filename": "review-packet.pdf",
+    "exported_bytes": 123456
+  },
+  "warnings": []
+}
+```
+
 ## Notes Content
 
 ```json
@@ -265,13 +307,16 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 45,
+  "tool_count": 47,
   "mail_content_status": "ok",
   "mail_plan_status": "ok",
   "mail_plan_mutation_applied": false,
   "mail_plan_apply_available": true,
   "mail_apply_status": "ok",
   "mail_apply_mutation_applied": true,
+  "mail_attachment_list_status": "ok",
+  "mail_attachment_export_status": "ok",
+  "mail_attachment_content_exported": true,
   "notes_content_status": "ok",
   "notes_content_sha256_present": true,
   "notes_plan_status": "ok",

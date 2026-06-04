@@ -38,8 +38,10 @@ from local_apple_data.adapters.hide_my_email import (
 )
 from local_apple_data.adapters.mail import (
     apply_mail_change,
+    export_mail_attachment,
     get_mail_content,
     get_mail_metadata,
+    list_mail_attachments,
     plan_mail_change,
     search_mail_metadata,
 )
@@ -131,6 +133,29 @@ def _write_emlx(mail_root: Path, rowid: int) -> None:
         subject="Synthetic runtime verification mail",
         body="Synthetic runtime content.",
     )
+
+
+def _write_mail_attachment_emlx(mail_root: Path, rowid: int) -> None:
+    mime_text = (
+        "MIME-Version: 1.0\r\n"
+        'Content-Type: multipart/mixed; boundary="BOUNDARY"\r\n'
+        "\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        "Synthetic runtime body.\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: application/pdf\r\n"
+        'Content-Disposition: attachment; filename="runtime-mail-packet.pdf"\r\n'
+        "Content-Transfer-Encoding: base64\r\n"
+        "\r\n"
+        "UlVOVElNRS1NQUlM=\r\n"
+        "--BOUNDARY--\r\n"
+    )
+    mime_bytes = mime_text.encode("utf-8")
+    path = mail_root / "Synthetic.mbox/INBOX.mbox/Messages" / f"{rowid}.emlx"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(str(len(mime_bytes)).encode("ascii") + b"\n" + mime_bytes)
 
 
 def _make_notes_db(path: Path) -> None:
@@ -361,6 +386,48 @@ def _handle_smoke(tmp_path: Path) -> dict[str, Any]:
         "legacy_content_warning": legacy_content["warnings"][0]["code"],
         "legacy_status": legacy["status"],
         "legacy_warning": legacy["warnings"][0]["code"],
+    }
+
+
+def _mail_attachment_smoke(tmp_path: Path) -> dict[str, Any]:
+    db_path = tmp_path / "Library/Mail/V99-Attachments/MailData/Envelope Index"
+    mail_root = tmp_path / "Library/Mail/V99-Attachments"
+    _make_mail_db(db_path)
+    _write_mail_attachment_emlx(mail_root, 42)
+    search = search_mail_metadata("runtime verification", db_path=db_path)
+    message_handle = search["results"][0]["handle"]
+    listing = list_mail_attachments(
+        message_handle,
+        db_path=db_path,
+        mail_root=mail_root,
+    )
+    attachment = listing["results"][0]
+    exported = export_mail_attachment(
+        message_handle,
+        attachment["handle"],
+        output_dir=tmp_path / "mail-attachment-exports",
+        db_path=db_path,
+        mail_root=mail_root,
+    )
+    exported_path = Path(exported["result"]["exported_path"])
+    legacy_export = export_mail_attachment(
+        "mail:message:42",
+        attachment["handle"],
+        output_dir=tmp_path / "mail-attachment-exports",
+        db_path=db_path,
+        mail_root=mail_root,
+    )
+    return {
+        "mail_attachment_list_status": listing["status"],
+        "mail_attachment_count": listing["result_count"],
+        "mail_attachment_opaque_handle": attachment["handle"].startswith("mail:attachment:v1:"),
+        "mail_attachment_media_status": attachment["media_status"],
+        "mail_attachment_export_status": exported["status"],
+        "mail_attachment_content_returned": exported["result"]["attachment_content_returned"],
+        "mail_attachment_content_exported": exported["result"]["attachment_content_exported"],
+        "mail_attachment_exported_bytes": exported_path.stat().st_size,
+        "mail_attachment_legacy_export_status": legacy_export["status"],
+        "mail_attachment_legacy_export_warning": legacy_export["warnings"][0]["code"],
     }
 
 
@@ -1436,7 +1503,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 45,
+        "tool_count": 47,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1470,6 +1537,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "mail_apply_mutation_applied": True,
         "mail_apply_read_back_subject": "Synthetic runtime planned draft",
         "mail_apply_missing_confirmation": "missing_apply_confirmation",
+        "mail_attachment_list_status": "ok",
+        "mail_attachment_count": 1,
+        "mail_attachment_opaque_handle": True,
+        "mail_attachment_media_status": "available",
+        "mail_attachment_export_status": "ok",
+        "mail_attachment_content_returned": False,
+        "mail_attachment_content_exported": True,
+        "mail_attachment_exported_bytes": 12,
+        "mail_attachment_legacy_export_status": "error",
+        "mail_attachment_legacy_export_warning": "invalid_handle",
         "messages_opaque_handle": True,
         "messages_content_status": "ok",
         "messages_returned": 2,
@@ -1627,6 +1704,7 @@ def main() -> None:
         )
         summary = asyncio.run(_mcp_smoke(env))
         summary.update(_handle_smoke(tmp_path))
+        summary.update(_mail_attachment_smoke(tmp_path))
         summary.update(_mail_plan_apply_smoke(tmp_path))
         summary.update(_messages_content_smoke(tmp_path))
         summary.update(_hide_my_email_smoke(tmp_path))

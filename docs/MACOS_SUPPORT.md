@@ -11,7 +11,7 @@ The project is expected to need macOS because it depends on local Apple stores a
 
 | Surface | Local mechanism | Permission class |
 | --- | --- | --- |
-| Mail | Mail.app local metadata and `.emlx` content files plus save-only Mail.app automation for approved create-draft apply | Full Disk Access and Automation may be required |
+| Mail | Mail.app local metadata and `.emlx` content/attachment MIME files plus save-only Mail.app automation for approved create-draft apply | Full Disk Access and Automation may be required |
 | Messages | Messages local `chat.db` | Full Disk Access may be required |
 | Hide My Email | Inferred local Mail address metadata | Full Disk Access may be required |
 | Voice Memos | Voice Memos local database and embedded transcript atom | Full Disk Access may be required |

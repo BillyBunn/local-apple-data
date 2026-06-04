@@ -28,10 +28,11 @@ Architecture implication: Messages reads are common enough to be expected. Sendi
 ### Mail
 
 - `sweetrb/apple-mail-mcp` exposes Apple Mail through MCP, including message search/read, draft creation, immediate send, reply/forward, flag/read changes, deletion/move, mailbox/account operations, attachments, rules, and diagnostics. Source: https://github.com/sweetrb/apple-mail-mcp
+- Apple Mail `.emlx` conversion/export tools document that normal `.emlx` files can contain MIME attachments, while some partial messages externalize attachment bytes. Sources: https://github.com/Crosten/emlx2mbox and https://github.com/LRGH/emlx2eml
 - Apple Support documents that Mail can be automated through Script Editor and that scripts can create and send messages. Source: https://support.apple.com/guide/mail/automate-mail-tasks-mlhlp1120/mac
 - The local Mail.app scripting dictionary exposes `outgoing message`, recipient objects, `save`, and `send`; compile-only checks confirm draft creation and save syntax on this Mac.
 
-Architecture implication: Mail write operations are common in other MCP servers, but broad send/manage tools are too risky for this plugin's current privacy model. A save-only draft gate is the durable first Mail write path because it keeps the user in control of final sending and can be independently checked through the local Mail read surface when Drafts indexing is available.
+Architecture implication: Mail write operations are common in other MCP servers, but broad send/manage tools are too risky for this plugin's current privacy model. A save-only draft gate is the durable first Mail write path because it keeps the user in control of final sending and can be independently checked through the local Mail read surface when Drafts indexing is available. Selected Mail MIME attachment export is appropriate as an exact-handle read/export path, but externalized or partial-message attachments should report unavailable rather than using private network fetches or broad filesystem scans.
 
 ### Voice Memos
 

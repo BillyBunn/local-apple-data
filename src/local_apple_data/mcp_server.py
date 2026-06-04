@@ -28,8 +28,10 @@ from .adapters.icloud_drive import (
 from .adapters.hide_my_email import get_hide_my_email_alias, search_hide_my_email_aliases
 from .adapters.mail import (
     apply_mail_change,
+    export_mail_attachment,
     get_mail_content,
     get_mail_metadata,
+    list_mail_attachments,
     plan_mail_change,
     search_mail_metadata,
 )
@@ -72,6 +74,7 @@ INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
+    "Mail and Notes attachment export are exact-handle only and never return attachment bytes inline. "
     "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
@@ -130,6 +133,33 @@ def mail_get_content(handle: str, max_chars: int = 4000) -> dict[str, Any]:
     """Get exact local Mail plain-text content by opaque v2 handle, capped and read-only."""
 
     return _record("mail_get_content", get_mail_content(handle, max_chars=max_chars))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def mail_list_attachments(handle: str, limit: int = 20) -> dict[str, Any]:
+    """List exact local Mail attachment metadata by selected message handle, capped and read-only."""
+
+    return _record("mail_list_attachments", list_mail_attachments(handle, limit=limit))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def mail_export_attachment(
+    message_handle: str,
+    attachment_handle: str,
+    output_dir: str,
+    filename: str = "",
+) -> dict[str, Any]:
+    """Export one exact local Mail attachment to a caller-selected directory without inline bytes."""
+
+    return _record(
+        "mail_export_attachment",
+        export_mail_attachment(
+            message_handle,
+            attachment_handle,
+            output_dir=Path(output_dir).expanduser(),
+            filename=filename or None,
+        ),
+    )
 
 
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)

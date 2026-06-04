@@ -2,7 +2,7 @@
 
 ## Status
 
-Status: v1.2 Notes exact-handle content, v1.3 iCloud Drive exact-handle text-file content, v1.4 Calendar exact-handle event detail retrieval, v1.5 Reminders exact-handle note retrieval, v1.6 Contacts exact-handle detail retrieval, v1.7 Photos exact-handle asset/resource metadata and asset export, v1.8 Messages exact-handle chat transcript retrieval, v1.9 Voice Memos exact-handle existing transcript and audio export retrieval, v1.10 inferred Hide My Email exact-handle alias detail retrieval, and v1.20 Notes exact-handle attachment metadata/export implemented. Broader Apple data expansion remains planned behind separate surface gates.
+Status: v1.2 Notes exact-handle content, v1.3 iCloud Drive exact-handle text-file content, v1.4 Calendar exact-handle event detail retrieval, v1.5 Reminders exact-handle note retrieval, v1.6 Contacts exact-handle detail retrieval, v1.7 Photos exact-handle asset/resource metadata and asset export, v1.8 Messages exact-handle chat transcript retrieval, v1.9 Voice Memos exact-handle existing transcript and audio export retrieval, v1.10 inferred Hide My Email exact-handle alias detail retrieval, v1.20 Notes exact-handle attachment metadata/export, and v1.21 Mail exact-handle attachment metadata/export implemented. Broader Apple data expansion remains planned behind separate surface gates.
 
 ## Why This Phase Exists
 

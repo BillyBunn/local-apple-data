@@ -151,6 +151,83 @@ def test_cli_mail_content_uses_synthetic_db_and_handle(
     assert parsed["result"]["content_text"] == "Synthetic CLI content."
 
 
+def test_cli_mail_attachments_and_export_use_exact_handles(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    db_path = tmp_path / "Library/Mail/V99/MailData/Envelope Index"
+    mail_root = tmp_path / "Library/Mail/V99"
+    _mail_db(db_path)
+    _write_emlx(
+        mail_root,
+        7,
+        "MIME-Version: 1.0\r\n"
+        'Content-Type: multipart/mixed; boundary="BOUNDARY"\r\n'
+        "\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        "Synthetic CLI body.\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: application/pdf\r\n"
+        'Content-Disposition: attachment; filename="cli-packet.pdf"\r\n'
+        "Content-Transfer-Encoding: base64\r\n"
+        "\r\n"
+        "Q0xJLU1BSUw=\r\n"
+        "--BOUNDARY--\r\n",
+    )
+    message_handle = search_mail_metadata("planning", db_path=db_path)["results"][0]["handle"]
+
+    list_exit_code = main(
+        [
+            "mail",
+            "attachments",
+            "--json",
+            "--handle",
+            message_handle,
+            "--db",
+            str(db_path),
+            "--mail-root",
+            str(mail_root),
+        ]
+    )
+
+    assert list_exit_code == 0
+    listed = json.loads(capsys.readouterr().out)
+    attachment_handle = listed["results"][0]["handle"]
+    assert attachment_handle.startswith("mail:attachment:v1:")
+
+    export_exit_code = main(
+        [
+            "mail",
+            "export-attachment",
+            "--json",
+            "--message-handle",
+            message_handle,
+            "--handle",
+            attachment_handle,
+            "--output-dir",
+            str(tmp_path / "exports"),
+            "--filename",
+            "../review packet.pdf",
+            "--db",
+            str(db_path),
+            "--mail-root",
+            str(mail_root),
+        ]
+    )
+
+    assert export_exit_code == 0
+    exported = json.loads(capsys.readouterr().out)
+    assert exported["status"] == "ok"
+    assert exported["result"]["exported_filename"] == "review-packet.pdf"
+    assert exported["result"]["exported_bytes"] == 8
+    assert Path(exported["result"]["exported_path"]).read_bytes() == b"CLI-MAIL"
+    assert str(mail_root) not in json.dumps(exported)
+
+
 def test_cli_mail_plan_and_apply_create_draft(monkeypatch, capsys) -> None:
     plan_exit_code = main(
         [

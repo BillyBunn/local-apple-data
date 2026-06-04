@@ -6,7 +6,9 @@ from pathlib import Path
 
 from local_apple_data.adapters.mail import (
     apply_mail_change,
+    export_mail_attachment,
     get_mail_content,
+    list_mail_attachments,
     plan_mail_change,
     search_mail_metadata,
 )
@@ -185,6 +187,157 @@ def test_mail_content_unavailable_warning_is_path_safe(tmp_path: Path) -> None:
     assert result["status"] == "content_unavailable"
     assert result["warnings"][0]["code"] == "content_unavailable"
     assert str(tmp_path) not in json.dumps(result)
+
+
+def test_list_mail_attachments_returns_exact_attachment_handles(tmp_path: Path) -> None:
+    db_path, mail_root = _synthetic_store(tmp_path)
+    _write_emlx(
+        mail_root,
+        10,
+        "MIME-Version: 1.0\r\n"
+        'Content-Type: multipart/mixed; boundary="BOUNDARY"\r\n'
+        "\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        "Synthetic body.\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: application/pdf\r\n"
+        'Content-Disposition: attachment; filename="packet.pdf"\r\n'
+        "Content-Transfer-Encoding: base64\r\n"
+        "\r\n"
+        "UERGREFUQQ==\r\n"
+        "--BOUNDARY--\r\n",
+    )
+    message_handle = search_mail_metadata("content", db_path=db_path)["results"][0]["handle"]
+
+    result = list_mail_attachments(message_handle, db_path=db_path, mail_root=mail_root)
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["attachment_content_returned"] is False
+    assert result["result_count"] == 1
+    attachment = result["results"][0]
+    assert attachment["handle"].startswith("mail:attachment:v1:")
+    assert attachment["message_handle"] == message_handle
+    assert attachment["filename"] == "packet.pdf"
+    assert attachment["content_type"] == "application/pdf"
+    assert attachment["file_size"] == 7
+    assert attachment["media_status"] == "available"
+    assert attachment["attachment_type"] == "document"
+
+
+def test_export_mail_attachment_writes_selected_mime_part(tmp_path: Path) -> None:
+    db_path, mail_root = _synthetic_store(tmp_path)
+    _write_emlx(
+        mail_root,
+        10,
+        "MIME-Version: 1.0\r\n"
+        'Content-Type: multipart/mixed; boundary="BOUNDARY"\r\n'
+        "\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        "Synthetic body.\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: application/pdf\r\n"
+        'Content-Disposition: attachment; filename="../packet.pdf"\r\n'
+        "Content-Transfer-Encoding: base64\r\n"
+        "\r\n"
+        "UERGREFUQQ==\r\n"
+        "--BOUNDARY--\r\n",
+    )
+    message_handle = search_mail_metadata("content", db_path=db_path)["results"][0]["handle"]
+    attachment_handle = list_mail_attachments(
+        message_handle,
+        db_path=db_path,
+        mail_root=mail_root,
+    )["results"][0]["handle"]
+
+    result = export_mail_attachment(
+        message_handle,
+        attachment_handle,
+        output_dir=tmp_path / "exports",
+        filename="../review packet.pdf",
+        db_path=db_path,
+        mail_root=mail_root,
+    )
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["attachment_content_returned"] is False
+    assert result["result"]["attachment_content_exported"] is True
+    assert result["result"]["exported_filename"] == "review-packet.pdf"
+    assert result["result"]["exported_bytes"] == 7
+    assert Path(result["result"]["exported_path"]).read_bytes() == b"PDFDATA"
+    assert str(mail_root) not in json.dumps(result)
+
+
+def test_mail_attachment_export_rejects_bad_handles(tmp_path: Path) -> None:
+    db_path, mail_root = _synthetic_store(tmp_path)
+
+    result = export_mail_attachment(
+        "mail:message:10",
+        "mail:attachment:v1:0123456789abcdef0123456789abcdef",
+        output_dir=tmp_path / "exports",
+        db_path=db_path,
+        mail_root=mail_root,
+    )
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "invalid_handle"
+
+    message_handle = make_int_handle("mail:message", 10)
+    result = export_mail_attachment(
+        message_handle,
+        "mail:attachment:10",
+        output_dir=tmp_path / "exports",
+        db_path=db_path,
+        mail_root=mail_root,
+    )
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "invalid_handle"
+
+
+def test_mail_attachment_export_reports_unavailable_for_externalized_part(
+    tmp_path: Path,
+) -> None:
+    db_path, mail_root = _synthetic_store(tmp_path)
+    _write_emlx(
+        mail_root,
+        10,
+        "MIME-Version: 1.0\r\n"
+        'Content-Type: multipart/mixed; boundary="BOUNDARY"\r\n'
+        "\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: text/plain; charset=utf-8\r\n"
+        "\r\n"
+        "Synthetic body.\r\n"
+        "--BOUNDARY\r\n"
+        "Content-Type: application/pdf\r\n"
+        'Content-Disposition: attachment; filename="remote.pdf"\r\n'
+        "X-Apple-Content-Length: 123\r\n"
+        "\r\n"
+        "\r\n"
+        "--BOUNDARY--\r\n",
+    )
+    message_handle = search_mail_metadata("content", db_path=db_path)["results"][0]["handle"]
+    attachment = list_mail_attachments(
+        message_handle,
+        db_path=db_path,
+        mail_root=mail_root,
+    )["results"][0]
+
+    result = export_mail_attachment(
+        message_handle,
+        attachment["handle"],
+        output_dir=tmp_path / "exports",
+        db_path=db_path,
+        mail_root=mail_root,
+    )
+
+    assert attachment["media_status"] == "unavailable"
+    assert attachment["file_size"] == 123
+    assert result["status"] == "attachment_unavailable"
+    assert result["warnings"][0]["code"] == "mail_attachment_unavailable"
+    assert not (tmp_path / "exports" / "remote.pdf").exists()
 
 
 def test_mail_content_redacted_log_excludes_sensitive_payload_fields(

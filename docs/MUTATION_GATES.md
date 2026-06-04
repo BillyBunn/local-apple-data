@@ -44,7 +44,7 @@ The current `photos apply` CLI command and `photos_apply_change` MCP tool are mu
 | Reminders | Create reminder, complete reminder, update due date | EventKit helper | Approved. Confirm target list, title, due date, completion state, approval token, and explicit confirmation before apply |
 | Calendar | Create timed event | EventKit helper | Approved. Confirm exact calendar title, title, start/end timestamps, approval token, and explicit confirmation before apply; no attendees, recurrence, alarms, all-day events, update, or delete |
 | Notes | Create note; append text to an exact note | Notes.app automation | Approved. Confirm title/body for create, or exact note handle plus expected current SHA-256 for append, approval token, and explicit confirmation before apply; no arbitrary update, delete, move, rich text, attachment mutation, broad attachment export, folder/account targeting, locked/shared-note mutation, or bulk operations |
-| Mail | Create draft only | Mail.app automation | Approved. Confirm recipients, subject, body length/preview, approval token, explicit confirmation, and save-only behavior; no send, attachments, reply, forward, mailbox/account management, or sender-account selection |
+| Mail | Create draft only | Mail.app automation | Approved. Confirm recipients, subject, body length/preview, approval token, explicit confirmation, and save-only behavior; no send, attachment mutation, broad attachment export, reply, forward, mailbox/account management, or sender-account selection |
 | Contacts | Create contact | Contacts.framework helper | Approved. Confirm contact type, name or organization, labeled fields, approval token, and explicit confirmation before apply; no update, delete, notes, image data, postal addresses, birthdays, group membership, or bulk operations |
 | Photos | Import one image or video asset | PhotoKit change requests | Approved. Confirm caller-selected source file, inferred media type, file size/hash, approval token, and explicit confirmation before apply; no edits, delete, album targeting, hidden/favorite/metadata mutation, network fetch, or bulk operations |
 | Messages | None in first write phase | Messages.app automation later | Sending/editing must remain outside the plugin until identity/account confirmation is solved |
@@ -56,7 +56,7 @@ The current `photos apply` CLI command and `photos_apply_change` MCP tool are mu
 Outside the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, and Photos import apply gates, the plugin must refuse:
 
 - Sending mail or messages.
-- Mail reply, forward, archive, move, delete, mark read/unread, flag, mailbox/account management, sender-account selection, attachments, HTML/rich-text draft mutation, templates, or bulk mail mutation.
+- Mail reply, forward, archive, move, delete, mark read/unread, flag, mailbox/account management, sender-account selection, attachment mutation, broad attachment export, HTML/rich-text draft mutation, templates, or bulk mail mutation.
 - Deleting, archiving, moving, or marking Messages.
 - Creating, deleting, deactivating, or managing Hide My Email aliases.
 - Deleting Calendar events, Contacts, Photos, Notes, Reminders, Voice Memos, or iCloud Drive files.

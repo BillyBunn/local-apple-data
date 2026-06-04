@@ -28,8 +28,10 @@ from .adapters.icloud_drive import (
 from .adapters.hide_my_email import get_hide_my_email_alias, search_hide_my_email_aliases
 from .adapters.mail import (
     apply_mail_change,
+    export_mail_attachment,
     get_mail_content,
     get_mail_metadata,
+    list_mail_attachments,
     plan_mail_change,
     search_mail_metadata,
 )
@@ -124,6 +126,36 @@ def _mail_content_command(args: argparse.Namespace) -> int:
         else get_mail_content(args.handle, max_chars=args.max_chars)
     )
     log_result("mail.content", payload)
+    _print_json(payload)
+    return 0
+
+
+def _mail_attachments_command(args: argparse.Namespace) -> int:
+    payload = (
+        list_mail_attachments(
+            args.handle,
+            db_path=Path(args.db).expanduser() if args.db else None,
+            mail_root=Path(args.mail_root).expanduser() if args.mail_root else None,
+            limit=args.limit,
+        )
+        if args.db or args.mail_root
+        else list_mail_attachments(args.handle, limit=args.limit)
+    )
+    log_result("mail.attachments", payload)
+    _print_json(payload)
+    return 0
+
+
+def _mail_export_attachment_command(args: argparse.Namespace) -> int:
+    payload = export_mail_attachment(
+        args.message_handle,
+        args.handle,
+        output_dir=Path(args.output_dir).expanduser(),
+        filename=args.filename,
+        db_path=Path(args.db).expanduser() if args.db else None,
+        mail_root=Path(args.mail_root).expanduser() if args.mail_root else None,
+    )
+    log_result("mail.export_attachment", payload)
     _print_json(payload)
     return 0
 
@@ -784,6 +816,51 @@ def build_parser() -> argparse.ArgumentParser:
     mail_content.add_argument("--db", help=argparse.SUPPRESS)
     mail_content.add_argument("--mail-root", help=argparse.SUPPRESS)
     mail_content.set_defaults(func=_mail_content_command)
+
+    mail_attachments = mail_subparsers.add_parser(
+        "attachments",
+        help="List exact local Mail attachment metadata by message handle.",
+    )
+    mail_attachments.add_argument("--json", action="store_true", help="Emit JSON output.")
+    mail_attachments.add_argument("--handle", required=True, help="Mail message handle from search output.")
+    mail_attachments.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum attachment results, capped at 50.",
+    )
+    mail_attachments.add_argument("--db", help=argparse.SUPPRESS)
+    mail_attachments.add_argument("--mail-root", help=argparse.SUPPRESS)
+    mail_attachments.set_defaults(func=_mail_attachments_command)
+
+    mail_export_attachment = mail_subparsers.add_parser(
+        "export-attachment",
+        help="Export one exact local Mail attachment by message and attachment handles.",
+    )
+    mail_export_attachment.add_argument("--json", action="store_true", help="Emit JSON output.")
+    mail_export_attachment.add_argument(
+        "--message-handle",
+        required=True,
+        help="Mail message handle from search output.",
+    )
+    mail_export_attachment.add_argument(
+        "--handle",
+        required=True,
+        help="Mail attachment handle from attachments output.",
+    )
+    mail_export_attachment.add_argument(
+        "--output-dir",
+        required=True,
+        help="Directory where the selected attachment should be written.",
+    )
+    mail_export_attachment.add_argument(
+        "--filename",
+        default=None,
+        help="Optional export filename; sanitized before writing.",
+    )
+    mail_export_attachment.add_argument("--db", help=argparse.SUPPRESS)
+    mail_export_attachment.add_argument("--mail-root", help=argparse.SUPPRESS)
+    mail_export_attachment.set_defaults(func=_mail_export_attachment_command)
 
     mail_plan = mail_subparsers.add_parser(
         "plan",

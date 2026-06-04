@@ -31,6 +31,8 @@ Implemented now:
 - `local-apple-data mail search/get` metadata commands
 - Metadata-only `content_status` hints in Mail search results so agents can prefer locally retrievable messages before exact content calls
 - `local-apple-data mail content --json --handle <mail:message:v2:...> --max-chars 4000` for exact-handle local Mail plain-text content
+- `local-apple-data mail attachments --json --handle <mail:message:v2:...>` for exact selected-message attachment metadata with opaque `mail:attachment:v1:` handles
+- `local-apple-data mail export-attachment --json --message-handle <mail:message:v2:...> --handle <mail:attachment:v1:...> --output-dir <dir>` for exact local Mail attachment export without inline bytes or source message paths
 - `local-apple-data mail plan --json --operation create-draft --to <address> --subject <subject> --body-text <text>` for non-mutating future draft-create previews with idempotency and approval metadata
 - `local-apple-data mail apply --json --operation create-draft --to <address> --subject <subject> --body-text <text> --approval-token <token> --confirm-apply` for the approved Mail create-draft path, with save-only Mail.app automation and local read-back verification when the Drafts store exposes the saved draft
 - `local-apple-data messages search/get` commands for local Messages chat display-name metadata and exact bounded transcripts
@@ -103,7 +105,7 @@ Implemented now:
 Deferred:
 
 - Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create/append-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, Notes create/append-text apply surface, Mail create-draft apply surface, and Photos import apply surface
-- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation or attachments, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages/Voice Memos mutation or attachments, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
+- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages/Voice Memos mutation or attachments, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
 
 The v1.1 design gate for exact-handle Mail content retrieval is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`.
 The v1.2 Notes content and broader local Apple data expansion plan is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`.
@@ -121,6 +123,7 @@ The first Photos import write design gate is documented in `docs/V1_17_PHOTOS_IM
 The first iCloud Drive append-text write design gate is documented in `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`.
 The first Notes append-text write design gate is documented in `docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md`.
 The first Notes attachment export design gate is documented in `docs/V1_20_NOTES_ATTACHMENT_EXPORT.md`.
+The first Mail attachment export design gate is documented in `docs/V1_21_MAIL_ATTACHMENT_EXPORT.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.
@@ -151,6 +154,8 @@ uv run python scripts/verify_runtime.py
 uv run local-apple-data health --json
 uv run local-apple-data mail search --json --query '<subject text>'
 uv run local-apple-data mail content --json --handle '<mail:message:v2:...>' --max-chars 4000
+uv run local-apple-data mail attachments --json --handle '<mail:message:v2:...>'
+uv run local-apple-data mail export-attachment --json --message-handle '<mail:message:v2:...>' --handle '<mail:attachment:v1:...>' --output-dir /tmp/local-apple-data-exports
 uv run local-apple-data messages search --json --query '<chat display name text>'
 uv run local-apple-data messages get --json --handle '<messages:chat:v1:...>' --max-messages 25 --max-chars 4000
 uv run local-apple-data hide-my-email search --json --query '<specific alias substring>'

@@ -11,7 +11,14 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import unquote, urlparse
 
-from ..handles import int_handle_matches, is_int_handle, make_int_handle
+from ..handles import (
+    int_handle_matches,
+    is_int_handle,
+    is_opaque_handle,
+    make_int_handle,
+    make_opaque_handle,
+    opaque_handle_matches,
+)
 from .sqlite_store import (
     StoreUnavailableError,
     connect_readonly,
@@ -32,6 +39,8 @@ MAX_PREVIEW_SUBJECT_CHARS = 256
 MAX_DRAFT_BODY_CHARS = 12000
 MAX_DRAFT_BODY_PREVIEW_CHARS = 240
 MAX_RECIPIENTS_PER_FIELD = 20
+DEFAULT_ATTACHMENTS_LIMIT = 20
+ATTACHMENT_HANDLE_PREFIX = "mail:attachment"
 PLAN_OPERATIONS = {"create_draft"}
 APPROVAL_TOKEN_PREFIX = "mail-apply:v1:"
 
@@ -54,6 +63,28 @@ def _content_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "content",
+    }
+
+
+def _attachment_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
+    return {
+        "content_inspected": content_inspected,
+        "attachment_content_returned": False,
+        "attachment_content_exported": False,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "metadata",
+    }
+
+
+def _export_privacy() -> dict[str, bool | str]:
+    return {
+        "content_inspected": True,
+        "attachment_content_returned": False,
+        "attachment_content_exported": True,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "export",
     }
 
 
@@ -483,6 +514,238 @@ def get_mail_content(
     }
 
 
+def list_mail_attachments(
+    handle: str,
+    *,
+    db_path: Path | None = None,
+    mail_root: Path | None = None,
+    limit: int = DEFAULT_ATTACHMENTS_LIMIT,
+) -> dict[str, Any]:
+    if not is_int_handle(handle, "mail:message"):
+        return _invalid_attachment_message_handle_result()
+
+    bounded_limit = max(1, min(limit, 50))
+    try:
+        resolved_db_path = _resolve_db_path(db_path)
+        with connect_readonly(resolved_db_path) as connection:
+            fingerprint = _check_schema(connection)
+            rowid = _resolve_mail_handle_rowid(connection, handle)
+            if rowid is None:
+                return {
+                    "schema_version": 1,
+                    "status": "not_found",
+                    "source": "mail",
+                    "schema_fingerprint": fingerprint,
+                    "privacy": _attachment_privacy(content_inspected=False),
+                    "results": [],
+                    "result_count": 0,
+                    "warnings": [],
+                }
+            row = _select_mail_row(connection, rowid)
+    except StoreUnavailableError as exc:
+        return {
+            "schema_version": 1,
+            "status": "degraded",
+            "source": "mail",
+            "privacy": _attachment_privacy(content_inspected=False),
+            "results": [],
+            "result_count": 0,
+            "warnings": [_warning("mail_store_unavailable", str(exc))],
+        }
+
+    if row is None:
+        return {
+            "schema_version": 1,
+            "status": "not_found",
+            "source": "mail",
+            "schema_fingerprint": fingerprint,
+            "privacy": _attachment_privacy(content_inspected=False),
+            "results": [],
+            "result_count": 0,
+            "warnings": [],
+        }
+
+    root = mail_root or _mail_content_root(resolved_db_path)
+    message = _parse_message_for_attachment_access(root, int(row["rowid"]))
+    if message is None:
+        return {
+            "schema_version": 1,
+            "status": "attachments_unavailable",
+            "source": "mail",
+            "schema_fingerprint": fingerprint,
+            "privacy": _attachment_privacy(content_inspected=False),
+            "results": [],
+            "result_count": 0,
+            "warnings": [
+                _warning(
+                    "attachments_unavailable",
+                    "Mail attachment metadata was not available through the local message file.",
+                )
+            ],
+        }
+
+    results = _mail_attachment_metadata_list(
+        message,
+        fingerprint=fingerprint,
+        rowid=int(row["rowid"]),
+        limit=bounded_limit,
+    )
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "mail",
+        "schema_fingerprint": fingerprint,
+        "privacy": _attachment_privacy(content_inspected=True),
+        "query": {"scope": "message_attachments", "limit": bounded_limit},
+        "results": results,
+        "result_count": len(results),
+        "warnings": [],
+    }
+
+
+def export_mail_attachment(
+    message_handle: str,
+    attachment_handle: str,
+    *,
+    output_dir: Path,
+    filename: str | None = None,
+    db_path: Path | None = None,
+    mail_root: Path | None = None,
+) -> dict[str, Any]:
+    if not is_int_handle(message_handle, "mail:message"):
+        return _invalid_attachment_message_handle_result(export=True)
+    if not is_opaque_handle(attachment_handle, ATTACHMENT_HANDLE_PREFIX):
+        return _invalid_attachment_export_handle_result()
+
+    try:
+        resolved_db_path = _resolve_db_path(db_path)
+        with connect_readonly(resolved_db_path) as connection:
+            fingerprint = _check_schema(connection)
+            rowid = _resolve_mail_handle_rowid(connection, message_handle)
+            if rowid is None:
+                return {
+                    "schema_version": 1,
+                    "status": "not_found",
+                    "source": "mail",
+                    "schema_fingerprint": fingerprint,
+                    "privacy": _export_privacy(),
+                    "result": None,
+                    "warnings": [],
+                }
+            row = _select_mail_row(connection, rowid)
+    except StoreUnavailableError as exc:
+        return {
+            "schema_version": 1,
+            "status": "degraded",
+            "source": "mail",
+            "privacy": _export_privacy(),
+            "result": None,
+            "warnings": [_warning("mail_store_unavailable", str(exc))],
+        }
+
+    if row is None:
+        return {
+            "schema_version": 1,
+            "status": "not_found",
+            "source": "mail",
+            "schema_fingerprint": fingerprint,
+            "privacy": _export_privacy(),
+            "result": None,
+            "warnings": [],
+        }
+
+    root = mail_root or _mail_content_root(resolved_db_path)
+    message = _parse_message_for_attachment_access(root, int(row["rowid"]))
+    if message is None:
+        return _mail_attachment_export_unavailable_result(
+            None,
+            fingerprint,
+            "attachments_unavailable",
+        )
+
+    target_part = _find_mail_attachment_part(
+        message,
+        fingerprint=fingerprint,
+        rowid=int(row["rowid"]),
+        attachment_handle=attachment_handle,
+    )
+    if target_part is None:
+        return {
+            "schema_version": 1,
+            "status": "not_found",
+            "source": "mail",
+            "schema_fingerprint": fingerprint,
+            "privacy": _export_privacy(),
+            "result": None,
+            "warnings": [],
+        }
+
+    part_index, part = target_part
+    result = _mail_attachment_metadata(
+        part,
+        fingerprint=fingerprint,
+        rowid=int(row["rowid"]),
+        part_index=part_index,
+    )
+    result.update(
+        {
+            "attachment_content_returned": False,
+            "attachment_content_exported": False,
+            "exported_path": "",
+            "exported_filename": "",
+            "exported_bytes": 0,
+        }
+    )
+    data = _attachment_payload_bytes(part)
+    if data is None:
+        return _mail_attachment_export_unavailable_result(
+            result,
+            fingerprint,
+            "mail_attachment_unavailable",
+        )
+
+    target_dir = output_dir.expanduser()
+    if target_dir.exists() and not target_dir.is_dir():
+        return _mail_attachment_export_unavailable_result(
+            result,
+            fingerprint,
+            "invalid_output_dir",
+        )
+
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = _unique_output_path(
+            target_dir,
+            _mail_attachment_export_filename(filename, result),
+        )
+        target.write_bytes(data)
+    except OSError:
+        return _mail_attachment_export_unavailable_result(
+            result,
+            fingerprint,
+            "mail_attachment_export_failed",
+        )
+
+    result.update(
+        {
+            "attachment_content_exported": True,
+            "exported_path": str(target),
+            "exported_filename": target.name,
+            "exported_bytes": len(data),
+        }
+    )
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "mail",
+        "schema_fingerprint": fingerprint,
+        "privacy": _export_privacy(),
+        "result": result,
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
 def plan_mail_change(
     operation: str,
     *,
@@ -743,6 +1006,308 @@ def _select_mail_row(connection, rowid: int):
         """,
         (rowid,),
     ).fetchone()
+
+
+def _invalid_attachment_message_handle_result(*, export: bool = False) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "mail",
+        "privacy": _export_privacy() if export else _attachment_privacy(content_inspected=False),
+        "result": None if export else None,
+        "results": [] if not export else None,
+        "result_count": 0,
+        "warnings": [
+            _warning(
+                "invalid_handle",
+                "Expected mail:message:v2 opaque handle from search output.",
+            )
+        ],
+    }
+
+
+def _invalid_attachment_export_handle_result() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "mail",
+        "privacy": _export_privacy(),
+        "result": None,
+        "warnings": [
+            _warning(
+                "invalid_handle",
+                "Expected mail:attachment:v1 opaque handle from mail attachment list output.",
+            )
+        ],
+    }
+
+
+def _parse_message_for_attachment_access(mail_root: Path, rowid: int):
+    message_path = _find_message_file(mail_root, rowid)
+    if message_path is None:
+        return None
+    try:
+        raw = message_path.read_bytes()
+        mime_bytes = _mime_bytes_from_emlx(raw)
+        return BytesParser(policy=policy.default).parsebytes(mime_bytes)
+    except (OSError, ValueError):
+        return None
+
+
+def _mail_attachment_metadata_list(
+    message,
+    *,
+    fingerprint: str,
+    rowid: int,
+    limit: int,
+) -> list[dict[str, Any]]:
+    results: list[dict[str, Any]] = []
+    for part_index, part in enumerate(message.walk()):
+        if part.is_multipart() or not _is_attachment_part(part):
+            continue
+        results.append(
+            _mail_attachment_metadata(
+                part,
+                fingerprint=fingerprint,
+                rowid=rowid,
+                part_index=part_index,
+            )
+        )
+        if len(results) >= limit:
+            break
+    return results
+
+
+def _find_mail_attachment_part(
+    message,
+    *,
+    fingerprint: str,
+    rowid: int,
+    attachment_handle: str,
+):
+    for part_index, part in enumerate(message.walk()):
+        if part.is_multipart() or not _is_attachment_part(part):
+            continue
+        metadata = _mail_attachment_identity_metadata(part)
+        if opaque_handle_matches(
+            attachment_handle,
+            ATTACHMENT_HANDLE_PREFIX,
+            fingerprint,
+            rowid,
+            part_index,
+            metadata["filename"],
+            metadata["content_type"],
+            metadata["file_size"],
+        ):
+            return part_index, part
+    return None
+
+
+def _mail_attachment_metadata(
+    part,
+    *,
+    fingerprint: str,
+    rowid: int,
+    part_index: int,
+) -> dict[str, Any]:
+    metadata = _mail_attachment_identity_metadata(part)
+    return {
+        "handle": make_opaque_handle(
+            ATTACHMENT_HANDLE_PREFIX,
+            fingerprint,
+            rowid,
+            part_index,
+            metadata["filename"],
+            metadata["content_type"],
+            metadata["file_size"],
+        ),
+        "message_handle": make_int_handle("mail:message", rowid),
+        "filename": metadata["filename"],
+        "content_type": metadata["content_type"],
+        "content_disposition": metadata["content_disposition"],
+        "file_size": metadata["file_size"],
+        "part_index": part_index,
+        "attachment_type": _mail_attachment_type(
+            metadata["content_type"],
+            metadata["filename"],
+        ),
+        "media_status": metadata["media_status"],
+        "remote_status": "local_or_unknown",
+        "attachment_content_returned": False,
+        "attachment_content_exported": False,
+    }
+
+
+def _mail_attachment_identity_metadata(part) -> dict[str, Any]:
+    data = _attachment_payload_bytes(part)
+    filename = _mail_attachment_filename(part)
+    content_type = _bounded_string(part.get_content_type(), 300) or "application/octet-stream"
+    disposition = _bounded_string(part.get_content_disposition(), 50)
+    return {
+        "filename": filename,
+        "content_type": content_type,
+        "content_disposition": disposition or "attachment",
+        "file_size": len(data) if data is not None else _declared_attachment_size(part),
+        "media_status": "available" if data is not None else "unavailable",
+    }
+
+
+def _is_attachment_part(part) -> bool:
+    disposition = part.get_content_disposition()
+    if disposition == "attachment":
+        return True
+    filename = part.get_filename()
+    return bool(filename and disposition in {None, "inline"})
+
+
+def _mail_attachment_filename(part) -> str:
+    filename = part.get_filename() or ""
+    safe_name = Path(str(filename).replace("\\", "/")).name
+    return _bounded_string(safe_name, 500)
+
+
+def _attachment_payload_bytes(part) -> bytes | None:
+    try:
+        data = part.get_payload(decode=True)
+    except (LookupError, UnicodeError, ValueError):
+        return None
+    if data is None:
+        payload = part.get_payload()
+        if isinstance(payload, bytes):
+            data = payload
+        elif isinstance(payload, str):
+            charset = part.get_content_charset() or "utf-8"
+            try:
+                data = payload.encode(charset, errors="replace")
+            except LookupError:
+                data = payload.encode("utf-8", errors="replace")
+    if data is None:
+        return None
+    if not data and (_declared_attachment_size(part) or 0) > 0:
+        return None
+    return data
+
+
+def _declared_attachment_size(part) -> int | None:
+    for key, value in part.items():
+        if key.lower() in {"x-apple-content-length", "size"}:
+            try:
+                size = int(str(value).strip())
+            except ValueError:
+                continue
+            if size >= 0:
+                return size
+    return None
+
+
+def _mail_attachment_type(content_type: Any, filename: Any) -> str:
+    mime_type = _bounded_string(content_type, 300).lower()
+    suffix = Path(_bounded_string(filename, 300)).suffix.lower()
+    if mime_type.startswith("image/") or suffix in {
+        ".gif",
+        ".heic",
+        ".jpeg",
+        ".jpg",
+        ".png",
+        ".tif",
+        ".tiff",
+        ".webp",
+    }:
+        return "image"
+    if mime_type.startswith("video/") or suffix in {".m4v", ".mov", ".mp4"}:
+        return "video"
+    if mime_type.startswith("audio/") or suffix in {
+        ".aif",
+        ".aiff",
+        ".m4a",
+        ".mp3",
+        ".wav",
+    }:
+        return "audio"
+    if mime_type in {
+        "application/pdf",
+        "application/msword",
+        "application/rtf",
+        "text/plain",
+    } or suffix in {".doc", ".docx", ".pdf", ".rtf", ".txt"}:
+        return "document"
+    return "other"
+
+
+def _mail_attachment_export_filename(value: str | None, metadata: dict[str, Any]) -> str:
+    fallback = str(metadata.get("filename") or "").strip()
+    if not fallback:
+        fallback = f"attachment-{metadata.get('part_index', 'mail')}{_mail_attachment_extension(metadata)}"
+    candidate = _bounded_string(value, 200).strip() if value else fallback
+    name = Path(candidate.replace("\\", "/")).name
+    suffix = Path(name).suffix or Path(fallback).suffix or _mail_attachment_extension(metadata)
+    stem = Path(name).stem if Path(name).suffix else name
+    safe_stem = re.sub(r"[^A-Za-z0-9._-]+", "-", stem).strip(".-_")
+    if not safe_stem:
+        safe_stem = f"attachment-{metadata.get('part_index', 'mail')}"
+    return f"{safe_stem[:120]}{suffix.lower()}"
+
+
+def _mail_attachment_extension(metadata: dict[str, Any]) -> str:
+    filename_suffix = Path(str(metadata.get("filename") or "")).suffix
+    if filename_suffix:
+        return filename_suffix.lower()
+    content_type = str(metadata.get("content_type") or "").lower()
+    return {
+        "application/pdf": ".pdf",
+        "image/jpeg": ".jpg",
+        "image/png": ".png",
+        "image/tiff": ".tiff",
+        "image/heic": ".heic",
+        "video/mp4": ".mp4",
+        "video/quicktime": ".mov",
+        "audio/mp4": ".m4a",
+        "audio/mpeg": ".mp3",
+        "text/plain": ".txt",
+    }.get(content_type, ".bin")
+
+
+def _unique_output_path(directory: Path, filename: str) -> Path:
+    candidate = directory / filename
+    if not candidate.exists():
+        return candidate
+    stem = candidate.stem
+    suffix = candidate.suffix
+    for index in range(1, 1000):
+        next_candidate = directory / f"{stem}-{index}{suffix}"
+        if not next_candidate.exists():
+            return next_candidate
+    raise OSError("could not allocate unique output path")
+
+
+def _mail_attachment_export_unavailable_result(
+    result: dict[str, Any] | None,
+    fingerprint: str,
+    code: str,
+) -> dict[str, Any]:
+    messages = {
+        "attachments_unavailable": "Mail attachment metadata was not available through the local message file.",
+        "invalid_output_dir": "Mail attachment export output path was not a directory.",
+        "mail_attachment_export_failed": "Mail attachment could not be exported safely.",
+        "mail_attachment_unavailable": "Mail attachment bytes are not locally available for export.",
+    }
+    return {
+        "schema_version": 1,
+        "status": "attachment_unavailable" if code == "mail_attachment_unavailable" else "error",
+        "source": "mail",
+        "schema_fingerprint": fingerprint,
+        "privacy": _export_privacy(),
+        "result": result,
+        "warnings": [_warning(code, messages.get(code, "Mail attachment export was unavailable."))],
+    }
+
+
+def _bounded_string(value: Any, limit: int) -> str:
+    if value is None:
+        return ""
+    text = str(value).replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]+", "", text).strip()
+    return text[:limit]
 
 
 def _plan_error(warnings: list[dict[str, str]]) -> dict[str, Any]:

@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604200000 - 2026-06-04
+
+### Added
+
+- Exact-handle Mail attachment metadata listing through `local-apple-data mail attachments` and MCP `mail_list_attachments`.
+- Exact-handle local Mail MIME attachment export through `local-apple-data mail export-attachment` and MCP `mail_export_attachment`.
+- Synthetic MIME attachment export, externalized/partial attachment unavailable, CLI, MCP, runtime, surface-contract, and redacted-log coverage for Mail attachment export.
+
+### Security
+
+- Mail attachment bytes are never returned inline, source `.emlx` or attachment paths are never returned, and remote or externalized missing attachments are not fetched.
+- Export requires both the selected `mail:message:v2:` message handle and selected `mail:attachment:v1:` attachment handle so the tool does not scan the whole Mail store to resolve a detached token.
+- Mail send/reply/forward, attachment mutation, broad attachment export, raw MIME/full-header exposure, and mailbox/account mutation remain blocked.
+
 ## 0.1.0+codex.20260604190000 - 2026-06-04
 
 ### Added

@@ -7,7 +7,7 @@ This project handles local personal-data surfaces. The default is metadata-first
 1. Health: tool availability, macOS version, and store presence/readability only.
 2. Metadata: bounded subjects/titles/snippets and Mail content-availability hints only when the user asks for the workflow.
 3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
-4. Attachments: metadata only until a later approved phase.
+4. Attachments: exact selected Mail and Notes attachment metadata/export only, using the selected parent item handle plus selected attachment handle where required. Broad attachment export, inline bytes, source paths, remote fetches, and attachment mutation remain blocked.
 5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating iCloud Drive append-text planning for exact requested file handles plus expected current content hash, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, non-mutating Notes create-note planning for bounded title/body input, non-mutating Notes append-text planning for exact requested note handles plus expected current content hash, non-mutating Mail create-draft planning for bounded recipient/subject/body input, and non-mutating Photos import planning for caller-selected image/video source files.
 6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply; all other mutation requires a separate design and approval phase.
 
@@ -90,7 +90,7 @@ Ask the local operator before:
 - Adding direct network mail access
 - Adding authoritative Hide My Email inventory or Hide My Email creation/deactivation/deletion
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
-- Adding new content classes beyond exact-handle Mail, Messages chat transcripts, inferred Hide My Email aliases, Voice Memos existing embedded transcripts/audio export, Notes, Calendar event detail, Contact detail, Photos asset/resource metadata/export, Reminder notes, and supported iCloud Drive text-file retrieval
+- Adding new content classes beyond exact-handle Mail content/attachment export, Messages chat transcripts, inferred Hide My Email aliases, Voice Memos existing embedded transcripts/audio export, Notes content/attachment export, Calendar event detail, Contact detail, Photos asset/resource metadata/export, Reminder notes, and supported iCloud Drive text-file retrieval
 
 ## v1.11 Reminders Planning And Apply
 
@@ -198,7 +198,7 @@ The v1.1 implementation:
 - Add a `content_status` hint to Mail search results using a metadata-only local file-presence check; it does not read message bodies.
 - Reject raw IDs, old handles, mailbox refs, direct paths, and fabricated handles.
 - Return bounded plain text with truncation metadata.
-- Exclude attachments, raw MIME, full headers, remote resources, Notes bodies, Reminder notes, broad content search, background indexing, and durable content caches.
+- Exclude broad attachment export, inline attachment bytes, raw MIME, full headers, remote resources, Notes bodies, Reminder notes, broad content search, background indexing, and durable content caches. Exact selected Mail attachment export is governed separately by v1.21.
 - Keep automated tests synthetic-only.
 - Keep redacted event logs free of handles, subjects, bodies, warning messages, raw paths, and raw exceptions.
 
@@ -229,6 +229,20 @@ The v1.20 implementation:
 - Does not return source media paths, remote attachment URLs, or attachment bytes inline.
 - Does not fetch remote iCloud-only attachments.
 - Keeps automated tests synthetic-only and verifies redacted logs exclude handles, filenames, warning messages, and export paths.
+
+## v1.21 Mail Attachment Export
+
+The implemented v1.21 phase adds exact-handle Apple Mail attachment metadata and local MIME attachment export. It is not permission to run broad Mail attachment exports, expose raw MIME/full headers, fetch externalized attachments, or mutate Mail attachments.
+
+The v1.21 implementation:
+
+- Requires a `mail:message:v2:` handle returned by `mail_search` before listing attachments.
+- Returns bounded metadata and opaque `mail:attachment:v1:` handles for attachments on that selected message.
+- Requires both the selected message handle and selected attachment handle before export, so export does not scan the whole Mail store to resolve a detached token.
+- Exports one selected MIME attachment only to a caller-selected output directory.
+- Does not return source `.emlx` paths, raw MIME, full headers, or attachment bytes inline.
+- Reports externalized or partial-message attachments as unavailable when bytes are not in the local `.emlx`; it does not fetch remote or missing attachment data.
+- Keeps automated tests synthetic-only and verifies redacted logs exclude handles, filenames, warning messages, source paths, and export paths.
 
 ## v1.3 iCloud Drive Content Retrieval
 

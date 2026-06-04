@@ -536,3 +536,46 @@ def test_log_result_excludes_notes_attachment_export_content(
     assert "do-not-log-packet.pdf" not in text
     assert "/do/not/log/exported" not in text
     assert "do not log warning" not in text
+
+
+def test_log_result_excludes_mail_attachment_export_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "mail",
+        "status": "ok",
+        "result_count": 1,
+        "privacy": {
+            "output_tier": "export",
+            "content_inspected": True,
+            "attachment_content_returned": False,
+            "attachment_content_exported": True,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "result": {
+            "handle": "mail:attachment:v1:abcdef0123456789abcdef0123456789",
+            "message_handle": "mail:message:v2:abcdef0123456789abcdef0123456789",
+            "filename": "do-not-log-mail-packet.pdf",
+            "exported_path": "/do/not/log/exported/do-not-log-mail-packet.pdf",
+            "attachment_content_returned": False,
+            "attachment_content_exported": True,
+        },
+        "warnings": [{"code": "synthetic_warning", "message": "do not log warning"}],
+    }
+
+    log_result("mail.export_attachment", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "mail.export_attachment"
+    assert event["privacy"]["output_tier"] == "export"
+    assert event["warning_codes"] == ["synthetic_warning"]
+    assert "mail:attachment:v1:" not in text
+    assert "mail:message:v2:" not in text
+    assert "do-not-log-mail-packet.pdf" not in text
+    assert "/do/not/log/exported" not in text
+    assert "do not log warning" not in text

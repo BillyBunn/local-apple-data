@@ -47,6 +47,7 @@ The public README should explain:
 - What the plugin does.
 - What local permissions may be required.
 - That search is metadata-first and exact content/detail is handle-gated.
+- That Mail attachment export is exact-message-handle plus exact-attachment-handle gated and never returns inline bytes.
 - That Notes attachment export is exact-note-handle plus exact-attachment-handle gated and never returns inline bytes.
 - That only Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, and Photos import apply are currently available, and only after plan approval-token and explicit-confirmation checks.
 - That Hide My Email support is inferred local Mail evidence, not iCloud account management.
@@ -76,6 +77,7 @@ Current public-facing docs:
 - `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`
 - `docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md`
 - `docs/V1_20_NOTES_ATTACHMENT_EXPORT.md`
+- `docs/V1_21_MAIL_ATTACHMENT_EXPORT.md`
 - `docs/PRIVACY_MODEL.md`
 - `docs/THREAT_MODEL.md`
 - `docs/TESTING.md`
