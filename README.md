@@ -1,5 +1,7 @@
 # local-apple-data
 
+[![CI](https://github.com/BillyBunn/local-apple-data/actions/workflows/ci.yml/badge.svg)](https://github.com/BillyBunn/local-apple-data/actions/workflows/ci.yml)
+
 Local-first Apple data access for Codex and other MCP clients.
 
 This project provides a privacy-gated CLI and MCP server for locally synced:

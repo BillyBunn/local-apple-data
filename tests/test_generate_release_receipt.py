@@ -23,8 +23,10 @@ def test_current_project_release_receipt_is_path_redacted() -> None:
 
     assert payload["status"] == "ok"
     assert payload["local_package_ready"] is True
-    assert payload["github_publication_ready"] is False
-    assert "missing_git_remote" in payload["blockers"]
+    if payload["github_publication_ready"]:
+        assert "missing_git_remote" not in payload["blockers"]
+    else:
+        assert "missing_git_remote" in payload["blockers"]
     assert payload["mutation_gate"]["status"] == "ok"
     assert payload["surface_contract"]["status"] == "ok"
     assert payload["public_git_checkout"]["file_count"] == payload["public_git_checkout"]["staged_files"]
