@@ -128,6 +128,79 @@ def test_cli_mail_content_uses_synthetic_db_and_handle(
     assert parsed["result"]["content_text"] == "Synthetic CLI content."
 
 
+def test_cli_mail_plan_and_apply_create_draft(monkeypatch, capsys) -> None:
+    plan_exit_code = main(
+        [
+            "mail",
+            "plan",
+            "--json",
+            "--operation",
+            "create-draft",
+            "--to",
+            "synthetic@example.invalid",
+            "--cc",
+            "copy@example.invalid",
+            "--subject",
+            "Synthetic planned draft",
+            "--body-text",
+            "Synthetic draft body.",
+        ]
+    )
+    assert plan_exit_code == 0
+    plan = json.loads(capsys.readouterr().out)
+    token = "mail-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def fake_apply_mail_change(operation: str, **kwargs):
+        assert operation == "create-draft"
+        assert kwargs["to"] == ["synthetic@example.invalid"]
+        assert kwargs["cc"] == ["copy@example.invalid"]
+        assert kwargs["bcc"] == []
+        assert kwargs["subject"] == "Synthetic planned draft"
+        assert kwargs["body_text"] == "Synthetic draft body."
+        assert kwargs["approval_token"] == token
+        assert kwargs["confirm_apply"] is True
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "mail",
+            "privacy": {"content_inspected": True, "output_tier": "mutation"},
+            "mode": "apply",
+            "mutation_applied": True,
+            "read_back": {"subject": "Synthetic planned draft"},
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("local_apple_data.cli.apply_mail_change", fake_apply_mail_change)
+
+    apply_exit_code = main(
+        [
+            "mail",
+            "apply",
+            "--json",
+            "--operation",
+            "create-draft",
+            "--to",
+            "synthetic@example.invalid",
+            "--cc",
+            "copy@example.invalid",
+            "--subject",
+            "Synthetic planned draft",
+            "--body-text",
+            "Synthetic draft body.",
+            "--approval-token",
+            token,
+            "--confirm-apply",
+        ]
+    )
+
+    assert apply_exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "apply"
+    assert parsed["mutation_applied"] is True
+
+
 def test_cli_notes_search_uses_synthetic_db(tmp_path: Path, monkeypatch, capsys) -> None:
     monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
     db_path = tmp_path / "notes.sqlite"

@@ -22,7 +22,7 @@ def test_current_project_write_design_gate_audit_passes() -> None:
 
     assert payload["status"] == "ok"
     assert payload["write_design_gate"] is True
-    assert payload["design_docs_checked"] >= 5
+    assert payload["design_docs_checked"] >= 6
     assert payload["approved_preview_tools"] == [
         "calendar_plan",
         "calendar_plan_change",
@@ -30,6 +30,8 @@ def test_current_project_write_design_gate_audit_passes() -> None:
         "contacts_plan_change",
         "icloud_drive_plan",
         "icloud_drive_plan_change",
+        "mail_plan",
+        "mail_plan_change",
         "notes_plan",
         "notes_plan_change",
         "reminders_plan_change",
@@ -41,6 +43,8 @@ def test_current_project_write_design_gate_audit_passes() -> None:
         "contacts_apply_change",
         "icloud_drive_apply",
         "icloud_drive_apply_change",
+        "mail_apply",
+        "mail_apply_change",
         "notes_apply",
         "notes_apply_change",
         "reminders_apply",
@@ -77,12 +81,12 @@ def test_write_design_gate_flags_incomplete_design_doc(tmp_path: Path) -> None:
 
 
 def test_write_design_gate_flags_write_phase_mcp_tool(tmp_path: Path) -> None:
-    root = _minimal_project(tmp_path, mcp_tool_name="mail_apply")
+    root = _minimal_project(tmp_path, mcp_tool_name="mail_preview")
 
     payload = audit_write_design_gates.audit_write_design_gates(root)
 
     assert payload["status"] == "error"
-    assert _finding(payload, "write_phase_mcp_tool", "mail_apply")
+    assert _finding(payload, "write_phase_mcp_tool", "mail_preview")
 
 
 def test_write_design_gate_flags_write_phase_cli_handler(tmp_path: Path) -> None:
@@ -123,15 +127,15 @@ def _minimal_project(
     root.joinpath("docs").mkdir()
 
     (root / "README.md").write_text(
-        "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply.\n",
+        "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, and `notes_apply_change`.\n",
+        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, and `mail_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply are the only approved write surfaces.\n",
+        "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply are the only approved write surfaces.\n",
         encoding="utf-8",
     )
     for contract in audit_write_design_gates.REQUIRED_DESIGN_DOCS.values():
@@ -145,7 +149,7 @@ def _minimal_project(
         f"""
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def {mcp_tool_name}() -> dict:

@@ -2,13 +2,13 @@ interface:
   display_name: "Local Apple Data"
   short_description: "Local Apple data"
   brand_color: "#2F7D68"
-  default_prompt: "Use $local-apple-data to search local Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive; retrieve exact content/detail only by opaque handle; and apply only approved Reminders, iCloud Drive create-text, Calendar create-event, Contacts create-contact, or Notes create-note changes after a matching plan approval token."
+  default_prompt: "Use $local-apple-data to search local Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive; retrieve exact content/detail only by opaque handle; and apply only approved Reminders, iCloud Drive create-text, Calendar create-event, Contacts create-contact, Notes create-note, or Mail create-draft changes after a matching plan approval token."
 
 dependencies:
   tools:
     - type: "mcp"
       value: "local-apple-data"
-      description: "Local MCP server for Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive metadata, with exact-handle content/detail retrieval and approved Reminders, iCloud Drive create-text, Calendar create-event, Contacts create-contact, and Notes create-note apply."
+      description: "Local MCP server for Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive metadata, with exact-handle content/detail retrieval and approved Reminders, iCloud Drive create-text, Calendar create-event, Contacts create-contact, Notes create-note, and Mail create-draft apply."
       transport: "stdio"
 
 policy:

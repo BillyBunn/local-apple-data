@@ -26,7 +26,13 @@ from .adapters.icloud_drive import (
     search_icloud_drive_metadata,
 )
 from .adapters.hide_my_email import get_hide_my_email_alias, search_hide_my_email_aliases
-from .adapters.mail import get_mail_content, get_mail_metadata, search_mail_metadata
+from .adapters.mail import (
+    apply_mail_change,
+    get_mail_content,
+    get_mail_metadata,
+    plan_mail_change,
+    search_mail_metadata,
+)
 from .adapters.messages import get_message_chat, search_message_chats
 from .adapters.notes import (
     apply_notes_change,
@@ -110,6 +116,38 @@ def _mail_content_command(args: argparse.Namespace) -> int:
         else get_mail_content(args.handle, max_chars=args.max_chars)
     )
     log_result("mail.content", payload)
+    _print_json(payload)
+    return 0
+
+
+def _mail_plan_command(args: argparse.Namespace) -> int:
+    payload = plan_mail_change(
+        args.operation,
+        to=args.to or [],
+        cc=args.cc or [],
+        bcc=args.bcc or [],
+        subject=args.subject,
+        body_text=args.body_text or "",
+    )
+    log_result("mail.plan", payload)
+    _print_json(payload)
+    return 0
+
+
+def _mail_apply_command(args: argparse.Namespace) -> int:
+    payload = apply_mail_change(
+        args.operation,
+        to=args.to or [],
+        cc=args.cc or [],
+        bcc=args.bcc or [],
+        subject=args.subject,
+        body_text=args.body_text or "",
+        approval_token=args.approval_token,
+        confirm_apply=args.confirm_apply,
+        db_path=Path(args.db).expanduser() if args.db else None,
+        mail_root=Path(args.mail_root).expanduser() if args.mail_root else None,
+    )
+    log_result("mail.apply", payload)
     _print_json(payload)
     return 0
 
@@ -678,6 +716,92 @@ def build_parser() -> argparse.ArgumentParser:
     mail_content.add_argument("--db", help=argparse.SUPPRESS)
     mail_content.add_argument("--mail-root", help=argparse.SUPPRESS)
     mail_content.set_defaults(func=_mail_content_command)
+
+    mail_plan = mail_subparsers.add_parser(
+        "plan",
+        help="Preview an approved Mail draft creation without writing.",
+    )
+    mail_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
+    mail_plan.add_argument(
+        "--operation",
+        required=True,
+        choices=["create-draft", "create_draft"],
+        help="Mail operation to preview.",
+    )
+    mail_plan.add_argument(
+        "--to",
+        action="append",
+        default=[],
+        help="To recipient email address. Repeat for multiple recipients.",
+    )
+    mail_plan.add_argument(
+        "--cc",
+        action="append",
+        default=[],
+        help="Cc recipient email address. Repeat for multiple recipients.",
+    )
+    mail_plan.add_argument(
+        "--bcc",
+        action="append",
+        default=[],
+        help="Bcc recipient email address. Repeat for multiple recipients.",
+    )
+    mail_plan.add_argument("--subject", required=True, help="Draft subject.")
+    mail_plan.add_argument(
+        "--body-text",
+        default="",
+        help="Plain-text draft body, capped at 12000 characters.",
+    )
+    mail_plan.set_defaults(func=_mail_plan_command)
+
+    mail_apply = mail_subparsers.add_parser(
+        "apply",
+        help="Apply an approved Mail draft creation after plan approval.",
+    )
+    mail_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
+    mail_apply.add_argument(
+        "--operation",
+        required=True,
+        choices=["create-draft", "create_draft"],
+        help="Mail operation to apply.",
+    )
+    mail_apply.add_argument(
+        "--to",
+        action="append",
+        default=[],
+        help="To recipient email address. Repeat for multiple recipients.",
+    )
+    mail_apply.add_argument(
+        "--cc",
+        action="append",
+        default=[],
+        help="Cc recipient email address. Repeat for multiple recipients.",
+    )
+    mail_apply.add_argument(
+        "--bcc",
+        action="append",
+        default=[],
+        help="Bcc recipient email address. Repeat for multiple recipients.",
+    )
+    mail_apply.add_argument("--subject", required=True, help="Draft subject.")
+    mail_apply.add_argument(
+        "--body-text",
+        default="",
+        help="Plain-text draft body, capped at 12000 characters.",
+    )
+    mail_apply.add_argument(
+        "--approval-token",
+        required=True,
+        help="Approval token returned by mail plan.",
+    )
+    mail_apply.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required explicit confirmation before writing Mail data.",
+    )
+    mail_apply.add_argument("--db", help=argparse.SUPPRESS)
+    mail_apply.add_argument("--mail-root", help=argparse.SUPPRESS)
+    mail_apply.set_defaults(func=_mail_apply_command)
 
     messages = subparsers.add_parser("messages", help="Messages chat commands.")
     messages_subparsers = messages.add_subparsers(dest="messages_command", required=True)

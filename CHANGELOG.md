@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604150000 - 2026-06-04
+
+### Added
+
+- Approved Mail create-draft apply through `local-apple-data mail apply` and MCP `mail_apply_change`.
+- Non-mutating Mail create-draft planning through `local-apple-data mail plan` and MCP `mail_plan_change`.
+- Approval-token, explicit-confirmation, bounded recipient/subject/body, save-only Mail.app automation, best-effort idempotency, and local Drafts read-back verification checks for Mail create-draft apply.
+- Synthetic adapter, CLI, MCP annotation, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the approved Mail draft apply surface.
+
+### Security
+
+- `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, `contacts_apply_change`, `notes_apply_change`, and `mail_apply_change` are the only non-read-only MCP tools and are annotated non-destructive, idempotent, and closed-world.
+- Mail send, reply, forward, archive, move, delete, mark read/unread, flag, mailbox/account management, attachments, HTML/rich-text drafts, sender-account selection, and bulk operations remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604140000 - 2026-06-04
 
 ### Added

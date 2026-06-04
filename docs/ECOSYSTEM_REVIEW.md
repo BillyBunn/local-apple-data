@@ -25,6 +25,14 @@ Architecture implication: Notes content retrieval is appropriate for a local Mac
 
 Architecture implication: Messages reads are common enough to be expected. Sending is also implemented elsewhere, but this plugin should keep Messages mutation out of the current release until identity, recipient confirmation, account selection, and AppleScript automation risks are explicitly solved.
 
+### Mail
+
+- `sweetrb/apple-mail-mcp` exposes Apple Mail through MCP, including message search/read, draft creation, immediate send, reply/forward, flag/read changes, deletion/move, mailbox/account operations, attachments, rules, and diagnostics. Source: https://github.com/sweetrb/apple-mail-mcp
+- Apple Support documents that Mail can be automated through Script Editor and that scripts can create and send messages. Source: https://support.apple.com/guide/mail/automate-mail-tasks-mlhlp1120/mac
+- The local Mail.app scripting dictionary exposes `outgoing message`, recipient objects, `save`, and `send`; compile-only checks confirm draft creation and save syntax on this Mac.
+
+Architecture implication: Mail write operations are common in other MCP servers, but broad send/manage tools are too risky for this plugin's current privacy model. A save-only draft gate is the durable first Mail write path because it keeps the user in control of final sending and can be independently checked through the local Mail read surface when Drafts indexing is available.
+
 ### Voice Memos
 
 - `jwulff/apple-voice-memo-mcp` exposes Voice Memos metadata, audio access, transcript extraction, and generated transcription. Its README documents `CloudRecordings.db`, local `.m4a` files, and Apple's `tsrp` transcript atom. Source: https://github.com/jwulff/apple-voice-memo-mcp
@@ -65,5 +73,5 @@ This plugin should be broader than single-surface MCP servers and stricter than 
 
 - Whether to add a small privileged helper architecture for users who do not want their AI client process to hold Full Disk Access.
 - Whether future generated transcription belongs in this plugin or a separate transcription tool connected by handles.
-- Whether future write support after the approved Reminders, iCloud Drive, Calendar, Contacts, and Notes create tranches should prioritize Mail drafts, Notes append/update, or richer framework-backed edits.
+- Whether future write support after the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, and Mail draft tranches should prioritize Notes append/update, Mail send, Messages send, Photos import/edit, or richer framework-backed edits.
 - Whether public registry packaging should target npm, PyPI, a Codex personal marketplace, Smithery-style registries, or only GitHub source installation first.

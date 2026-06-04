@@ -26,6 +26,8 @@ APPROVED_WRITE_TOOLS: tuple[str, ...] = (
     "contacts_apply_change",
     "icloud_drive_apply",
     "icloud_drive_apply_change",
+    "mail_apply",
+    "mail_apply_change",
     "notes_apply",
     "notes_apply_change",
     "reminders_apply",
@@ -38,14 +40,16 @@ APPROVED_PREVIEW_TOOLS: tuple[str, ...] = (
     "contacts_plan_change",
     "icloud_drive_plan",
     "icloud_drive_plan_change",
+    "mail_plan",
+    "mail_plan_change",
     "notes_plan",
     "notes_plan_change",
     "reminders_plan_change",
 )
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, and `notes_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply are the only approved write surfaces",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, and `mail_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply are the only approved write surfaces",
 }
 REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
@@ -147,6 +151,27 @@ REQUIRED_DESIGN_DOCS = {
             "redaction",
             "Synthetic Tests Required",
             "The current release allows only this Notes create-note apply surface.",
+        ),
+    },
+    "mail_draft_write_v1": {
+        "path": "docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md",
+        "phrases": (
+            "Status: Apply-capable implementation.",
+            "Approved write tools: `local-apple-data mail apply` and `mail_apply_change`.",
+            "`local-apple-data mail plan` and `mail_plan_change`",
+            "No other mutating CLI or MCP tools are approved or exposed by this document.",
+            "preview",
+            "apply",
+            "read_back",
+            "mutation_applied:false",
+            "approval token",
+            "Mail.app automation",
+            "create one plaintext draft",
+            "save-only",
+            "idempotency",
+            "redaction",
+            "Synthetic Tests Required",
+            "The current release allows only this Mail create-draft apply surface.",
         ),
     },
 }

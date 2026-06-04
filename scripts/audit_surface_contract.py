@@ -31,8 +31,14 @@ SURFACE_CONTRACTS = (
         label="Mail",
         cli_group="mail",
         cli_subparser="mail_subparsers",
-        cli_commands=("search", "get", "content"),
-        mcp_tools=("mail_search", "mail_get_metadata", "mail_get_content"),
+        cli_commands=("search", "get", "content", "plan", "apply"),
+        mcp_tools=(
+            "mail_search",
+            "mail_get_metadata",
+            "mail_get_content",
+            "mail_plan_change",
+            "mail_apply_change",
+        ),
     ),
     SurfaceContract(
         name="messages",

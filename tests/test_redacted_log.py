@@ -38,6 +38,61 @@ def test_log_result_excludes_query_and_result_content(
     assert "do not log message" not in text
 
 
+def test_log_result_excludes_mail_apply_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "mail",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "apply",
+        "privacy": {
+            "output_tier": "mutation",
+            "content_inspected": True,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "preview": {
+            "target": {"account": "mail_app_default", "mailbox": "drafts"},
+            "proposed": {
+                "to": ["do-not-log@example.invalid"],
+                "cc": ["copy-do-not-log@example.invalid"],
+                "subject": "do not log draft subject",
+                "body_preview_text": "do not log draft body",
+            },
+            "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
+        },
+        "approval": {
+            "approval_fingerprint": "do-not-log-fingerprint",
+            "approval_token_verified": True,
+        },
+        "read_back": {
+            "handle": "mail:message:v2:abcdef0123456789abcdef0123456789",
+            "subject": "do not log draft subject",
+            "content_text": "do not log draft body",
+        },
+        "warnings": [{"code": "already_applied", "message": "do not log warning"}],
+    }
+
+    log_result("mail.apply", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "mail.apply"
+    assert event["privacy"]["output_tier"] == "mutation"
+    assert event["warning_codes"] == ["already_applied"]
+    assert "do-not-log@example.invalid" not in text
+    assert "copy-do-not-log@example.invalid" not in text
+    assert "do not log draft subject" not in text
+    assert "do not log draft body" not in text
+    assert "mail:message:v2:" not in text
+    assert "do-not-log-fingerprint" not in text
+    assert "do not log warning" not in text
+
+
 def test_log_result_excludes_reminder_plan_content(
     tmp_path: Path,
     monkeypatch,

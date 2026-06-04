@@ -1,6 +1,6 @@
 # Privacy Model
 
-This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply through plan/apply/read-back gates.
+This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply through plan/apply/read-back gates.
 
 ## Data Tiers
 
@@ -8,14 +8,15 @@ This project handles local personal-data surfaces. The default is metadata-first
 2. Metadata: bounded subjects/titles/snippets and Mail content-availability hints only when the user asks for the workflow.
 3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
 4. Attachments: metadata only until a later approved phase.
-5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, and non-mutating Notes create-note planning for bounded title/body input.
-6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply; all other mutation requires a separate design and approval phase.
+5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, non-mutating Notes create-note planning for bounded title/body input, and non-mutating Mail create-draft planning for bounded recipient/subject/body input.
+6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply; all other mutation requires a separate design and approval phase.
 
 ## Never Persist
 
 Do not persist any of the following in logs, docs, prompts, fixtures, tests, commits, or durable plan files:
 
 - Message bodies
+- Mail draft planned recipients, subjects, body previews, handles, or approval fingerprints outside transient preview/apply responses
 - Messages transcripts outside exact selected responses
 - Full Hide My Email aliases outside exact selected responses
 - Voice Memos transcript text outside exact selected responses
@@ -84,7 +85,7 @@ Ask the local operator before:
 - Editing Codex config
 - Editing launchd jobs
 - Editing OpenClaw runtime state
-- Mutating Mail, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders, iCloud Drive, Calendar, Contacts, and Notes apply gates
+- Mutating Mail, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, and Mail draft apply gates
 - Adding direct network mail access
 - Adding authoritative Hide My Email inventory or Hide My Email creation/deactivation/deletion
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
@@ -298,6 +299,32 @@ The v1.15 apply implementation:
 - Recomputes the plan before applying.
 - Applies through Notes.app automation only after those checks.
 - Returns read-back content through the existing exact-handle Notes content shape.
+- Keeps automated tests synthetic-only.
+
+## v1.16 Mail Draft Create Apply
+
+The implemented v1.16 phase adds non-mutating Mail create-draft planning and the approved apply-capable mutation surface for saving one plaintext draft through Mail.app automation. It is not permission to send, reply, forward, archive, move, delete, mark read/unread, flag, manage mailboxes/accounts, select sender accounts, attach files, create HTML/rich-text drafts, or run bulk Mail operations.
+
+The v1.16 planning implementation:
+
+- Exposes `local-apple-data mail plan` and MCP `mail_plan_change`.
+- Returns `mode: "plan"`, `mutation_applied:false`, and `apply_available:true`.
+- Validates requested create-draft operations without calling Mail.app, reading Mail data, or writing Mail.
+- Requires at least one bounded To recipient and a bounded non-empty subject.
+- Caps body text at 12000 normalized characters.
+- Returns deterministic idempotency keys and approval fingerprints for the apply gate.
+- Keeps automated tests synthetic-only.
+- Keeps redacted event logs free of planned recipients, subjects, body previews, handles, and approval fingerprints.
+
+The v1.16 apply implementation:
+
+- Exposes `local-apple-data mail apply` and MCP `mail_apply_change`.
+- Requires the matching `mail-apply:v1:<approval_fingerprint>` token.
+- Requires explicit confirmation.
+- Recomputes the plan before applying.
+- Applies through save-only Mail.app automation after those checks and does not call `send`.
+- Returns read-back through the existing exact-handle Mail content shape when the local Drafts store indexes the saved draft.
+- Returns `partial` if Mail.app accepts the draft save but read-back is not available yet.
 - Keeps automated tests synthetic-only.
 
 ## v1.7 Photos Asset Detail Retrieval

@@ -36,8 +36,10 @@ from local_apple_data.adapters.hide_my_email import (
     search_hide_my_email_aliases,
 )
 from local_apple_data.adapters.mail import (
+    apply_mail_change,
     get_mail_content,
     get_mail_metadata,
+    plan_mail_change,
     search_mail_metadata,
 )
 from local_apple_data.adapters.messages import get_message_chat, search_message_chats
@@ -100,17 +102,26 @@ def _make_mail_db(path: Path) -> None:
         connection.execute("INSERT INTO recipients VALUES (1, 42, 1, 0)")
 
 
-def _write_emlx(mail_root: Path, rowid: int) -> None:
+def _write_mail_emlx(mail_root: Path, rowid: int, *, subject: str, body: str) -> None:
     mime_text = (
-        "Subject: Synthetic runtime verification mail\r\n"
+        f"Subject: {subject}\r\n"
         "Content-Type: text/plain; charset=utf-8\r\n"
         "\r\n"
-        "Synthetic runtime content.\r\n"
+        f"{body}\r\n"
     )
     mime_bytes = mime_text.encode("utf-8")
     path = mail_root / "Synthetic.mbox/INBOX.mbox/Messages" / f"{rowid}.emlx"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(str(len(mime_bytes)).encode("ascii") + b"\n" + mime_bytes)
+
+
+def _write_emlx(mail_root: Path, rowid: int) -> None:
+    _write_mail_emlx(
+        mail_root,
+        rowid,
+        subject="Synthetic runtime verification mail",
+        body="Synthetic runtime content.",
+    )
 
 
 def _make_notes_db(path: Path) -> None:
@@ -320,6 +331,71 @@ def _handle_smoke(tmp_path: Path) -> dict[str, Any]:
         "legacy_content_warning": legacy_content["warnings"][0]["code"],
         "legacy_status": legacy["status"],
         "legacy_warning": legacy["warnings"][0]["code"],
+    }
+
+
+def _mail_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
+    db_path = tmp_path / "Library/Mail/V99-MailDraft/MailData/Envelope Index"
+    mail_root = tmp_path / "Library/Mail/V99-MailDraft"
+    _make_mail_db(db_path)
+    subject = "Synthetic runtime planned draft"
+    body_text = "Synthetic runtime draft body."
+    plan = plan_mail_change(
+        "create-draft",
+        to=["synthetic-runtime@example.invalid"],
+        subject=subject,
+        body_text=body_text,
+    )
+    token = "mail-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    missing_confirmation = apply_mail_change(
+        "create-draft",
+        to=["synthetic-runtime@example.invalid"],
+        subject=subject,
+        body_text=body_text,
+        approval_token=token,
+        confirm_apply=False,
+        db_path=db_path,
+        mail_root=mail_root,
+        script_runner=lambda _script, _timeout: "",
+    )
+
+    def runner(script: str, _timeout: float) -> str:
+        if "send draftMessage" in script or "\nsend " in script:
+            raise RuntimeError("Mail draft smoke must not send")
+        with sqlite3.connect(db_path) as connection:
+            connection.execute("INSERT INTO subjects VALUES (?, ?)", (43, subject))
+            connection.execute("INSERT INTO mailboxes VALUES (?, ?)", (43, "local://synthetic/Drafts"))
+            connection.execute(
+                "INSERT INTO messages VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (43, 43, 43, 1, 20, 20, 0, 0, 0, 12),
+            )
+        _write_mail_emlx(mail_root, 43, subject=subject, body=body_text)
+        return "43"
+
+    result = apply_mail_change(
+        "create-draft",
+        to=["synthetic-runtime@example.invalid"],
+        subject=subject,
+        body_text=body_text,
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+        mail_root=mail_root,
+        script_runner=runner,
+    )
+    return {
+        "mail_plan_status": plan["status"],
+        "mail_plan_mode": plan["mode"],
+        "mail_plan_mutation_applied": plan["mutation_applied"],
+        "mail_plan_apply_available": plan["apply_available"],
+        "mail_plan_idempotency_key": plan["preview"]["idempotency_key"].startswith(
+            "mail-plan:v1:"
+        ),
+        "mail_apply_status": result["status"],
+        "mail_apply_mode": result["mode"],
+        "mail_apply_mutation_applied": result["mutation_applied"],
+        "mail_apply_read_back_subject": result["read_back"]["subject"],
+        "mail_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
     }
 
 
@@ -1125,7 +1201,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 39,
+        "tool_count": 41,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1149,6 +1225,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "legacy_content_warning": "invalid_handle",
         "legacy_status": "error",
         "legacy_warning": "invalid_handle",
+        "mail_plan_status": "ok",
+        "mail_plan_mode": "plan",
+        "mail_plan_mutation_applied": False,
+        "mail_plan_apply_available": True,
+        "mail_plan_idempotency_key": True,
+        "mail_apply_status": "ok",
+        "mail_apply_mode": "apply",
+        "mail_apply_mutation_applied": True,
+        "mail_apply_read_back_subject": "Synthetic runtime planned draft",
+        "mail_apply_missing_confirmation": "missing_apply_confirmation",
         "messages_opaque_handle": True,
         "messages_content_status": "ok",
         "messages_returned": 2,
@@ -1279,6 +1365,7 @@ def main() -> None:
         )
         summary = asyncio.run(_mcp_smoke(env))
         summary.update(_handle_smoke(tmp_path))
+        summary.update(_mail_plan_apply_smoke(tmp_path))
         summary.update(_messages_content_smoke(tmp_path))
         summary.update(_hide_my_email_smoke(tmp_path))
         summary.update(_voice_memos_content_smoke(tmp_path))

@@ -11,7 +11,7 @@ The project is expected to need macOS because it depends on local Apple stores a
 
 | Surface | Local mechanism | Permission class |
 | --- | --- | --- |
-| Mail | Mail.app local metadata and `.emlx` content files | Full Disk Access may be required |
+| Mail | Mail.app local metadata and `.emlx` content files plus save-only Mail.app automation for approved create-draft apply | Full Disk Access and Automation may be required |
 | Messages | Messages local `chat.db` | Full Disk Access may be required |
 | Hide My Email | Inferred local Mail address metadata | Full Disk Access may be required |
 | Voice Memos | Voice Memos local database and embedded transcript atom | Full Disk Access may be required |
@@ -42,4 +42,4 @@ Expected degraded cases include:
 - Hide My Email support is inferred from local Mail evidence, not an authoritative iCloud inventory.
 - Photos support returns asset/resource metadata and can export one exact selected asset to a caller-selected output directory; it does not return image or video bytes inline.
 - Voice Memos support returns existing embedded transcript text when present and can export one exact selected `.m4a` to a caller-selected output directory; it does not generate transcripts.
-- Write and mutation tools require separate approval gates before implementation.
+- Write and mutation tools require separate approval gates before implementation. The current Mail write gate is limited to save-only draft creation; it does not send mail.

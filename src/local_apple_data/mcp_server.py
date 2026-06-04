@@ -26,7 +26,13 @@ from .adapters.icloud_drive import (
     search_icloud_drive_metadata,
 )
 from .adapters.hide_my_email import get_hide_my_email_alias, search_hide_my_email_aliases
-from .adapters.mail import get_mail_content, get_mail_metadata, search_mail_metadata
+from .adapters.mail import (
+    apply_mail_change,
+    get_mail_content,
+    get_mail_metadata,
+    plan_mail_change,
+    search_mail_metadata,
+)
 from .adapters.messages import get_message_chat, search_message_chats
 from .adapters.notes import (
     apply_notes_change,
@@ -58,7 +64,7 @@ INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
-    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply, and each requires a matching plan approval token plus explicit confirmation."
+    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
@@ -116,6 +122,58 @@ def mail_get_content(handle: str, max_chars: int = 4000) -> dict[str, Any]:
     """Get exact local Mail plain-text content by opaque v2 handle, capped and read-only."""
 
     return _record("mail_get_content", get_mail_content(handle, max_chars=max_chars))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def mail_plan_change(
+    operation: str,
+    to: list[str] | None = None,
+    cc: list[str] | None = None,
+    bcc: list[str] | None = None,
+    subject: str = "",
+    body_text: str = "",
+) -> dict[str, Any]:
+    """Plan a future Mail draft creation without applying it."""
+
+    return _record(
+        "mail_plan_change",
+        plan_mail_change(
+            operation,
+            to=to,
+            cc=cc,
+            bcc=bcc,
+            subject=subject,
+            body_text=body_text,
+        ),
+    )
+
+
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
+def mail_apply_change(
+    operation: str,
+    approval_token: str,
+    to: list[str] | None = None,
+    cc: list[str] | None = None,
+    bcc: list[str] | None = None,
+    subject: str = "",
+    body_text: str = "",
+    confirm_apply: bool = False,
+) -> dict[str, Any]:
+    """Apply an approved Mail draft creation and read back local Mail content when available."""
+
+    return _record(
+        "mail_apply_change",
+        apply_mail_change(
+            operation,
+            to=to,
+            cc=cc,
+            bcc=bcc,
+            subject=subject,
+            body_text=body_text,
+            approval_token=approval_token,
+            confirm_apply=confirm_apply,
+        ),
+    )
 
 
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)

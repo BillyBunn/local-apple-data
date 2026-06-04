@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
+import subprocess
 from email import policy
 from email.parser import BytesParser
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import unquote, urlparse
 
 from ..handles import int_handle_matches, is_int_handle, make_int_handle
@@ -25,8 +27,16 @@ DEFAULT_MAIL_RELATIVE = MAIL_ROOT_RELATIVE / "V10/MailData/Envelope Index"
 DEFAULT_MAIL_DB = Path.home() / DEFAULT_MAIL_RELATIVE
 DEFAULT_CONTENT_CHARS = 4000
 MAX_CONTENT_CHARS = 12000
+MAIL_APPLESCRIPT_TIMEOUT_SECONDS = 10.0
+MAX_PREVIEW_SUBJECT_CHARS = 256
+MAX_DRAFT_BODY_CHARS = 12000
+MAX_DRAFT_BODY_PREVIEW_CHARS = 240
+MAX_RECIPIENTS_PER_FIELD = 20
+PLAN_OPERATIONS = {"create_draft"}
+APPROVAL_TOKEN_PREFIX = "mail-apply:v1:"
 
 MAIL_TABLES = ["messages", "subjects", "mailboxes"]
+ScriptRunner = Callable[[str, float], str]
 
 
 def _privacy() -> dict[str, bool | str]:
@@ -44,6 +54,24 @@ def _content_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "content",
+    }
+
+
+def _preview_privacy() -> dict[str, bool | str]:
+    return {
+        "content_inspected": False,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "preview",
+    }
+
+
+def _mutation_privacy(*, content_inspected: bool = False) -> dict[str, bool | str]:
+    return {
+        "content_inspected": content_inspected,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "mutation",
     }
 
 
@@ -455,6 +483,213 @@ def get_mail_content(
     }
 
 
+def plan_mail_change(
+    operation: str,
+    *,
+    to: list[str] | None = None,
+    cc: list[str] | None = None,
+    bcc: list[str] | None = None,
+    subject: str = "",
+    body_text: str = "",
+) -> dict[str, Any]:
+    normalized_operation = operation.strip().replace("-", "_")
+    warnings: list[dict[str, str]] = []
+    if normalized_operation not in PLAN_OPERATIONS:
+        warnings.append(_warning("invalid_operation", "Expected operation create_draft."))
+
+    normalized_to, to_warnings = _normalize_recipients(to or [], field="to")
+    normalized_cc, cc_warnings = _normalize_recipients(cc or [], field="cc")
+    normalized_bcc, bcc_warnings = _normalize_recipients(bcc or [], field="bcc")
+    warnings.extend(to_warnings)
+    warnings.extend(cc_warnings)
+    warnings.extend(bcc_warnings)
+    if not normalized_to:
+        warnings.append(_warning("missing_to", "Mail draft creation requires at least one To recipient."))
+
+    normalized_subject, subject_warning = _normalize_draft_subject(subject)
+    if subject_warning is not None:
+        warnings.append(subject_warning)
+    normalized_body, body_warning = _normalize_draft_body(body_text)
+    if body_warning is not None:
+        warnings.append(body_warning)
+
+    if warnings:
+        return _plan_error(warnings)
+
+    body_preview, body_preview_truncated = _bounded_text(
+        normalized_body,
+        MAX_DRAFT_BODY_PREVIEW_CHARS,
+    )
+    target = {
+        "account": "mail_app_default",
+        "mailbox": "drafts",
+    }
+    proposed = {
+        "kind": "mail_draft",
+        "format": "plaintext",
+        "to": normalized_to,
+        "cc": normalized_cc,
+        "bcc": normalized_bcc,
+        "recipient_count": len(normalized_to) + len(normalized_cc) + len(normalized_bcc),
+        "subject": normalized_subject,
+        "body_chars": len(normalized_body),
+        "body_preview_text": body_preview,
+        "body_preview_chars": len(body_preview),
+        "body_preview_truncated": body_preview_truncated,
+        "send_permitted": False,
+        "attachments_permitted": False,
+    }
+    fingerprint_payload = {
+        "operation": normalized_operation,
+        "target": target,
+        "proposed": {
+            **proposed,
+            "body_sha256": hashlib.sha256(normalized_body.encode("utf-8")).hexdigest(),
+        },
+    }
+    idempotency_key = _plan_idempotency_key(fingerprint_payload)
+    approval_fingerprint = _approval_fingerprint(
+        {
+            **fingerprint_payload,
+            "idempotency_key": idempotency_key,
+        }
+    )
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "mail",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": True,
+        "preview": {
+            "operation": normalized_operation,
+            "target": target,
+            "proposed": proposed,
+            "idempotency_key": idempotency_key,
+            "approval": {
+                "required_for_apply": True,
+                "apply_tool_available": True,
+                "approval_fingerprint": approval_fingerprint,
+                "approval_token_format": f"{APPROVAL_TOKEN_PREFIX}<approval_fingerprint>",
+            },
+            "read_back_required_after_apply": True,
+        },
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
+def apply_mail_change(
+    operation: str,
+    *,
+    to: list[str] | None = None,
+    cc: list[str] | None = None,
+    bcc: list[str] | None = None,
+    subject: str = "",
+    body_text: str = "",
+    approval_token: str = "",
+    confirm_apply: bool = False,
+    db_path: Path | None = None,
+    mail_root: Path | None = None,
+    script_runner: ScriptRunner | None = None,
+) -> dict[str, Any]:
+    plan = plan_mail_change(
+        operation,
+        to=to,
+        cc=cc,
+        bcc=bcc,
+        subject=subject,
+        body_text=body_text,
+    )
+    if plan.get("status") != "ok":
+        return _apply_error(_safe_warnings(plan), plan=plan)
+
+    preview = plan["preview"]
+    approval = preview["approval"]
+    fingerprint = str(approval["approval_fingerprint"])
+    expected_token = _approval_token(fingerprint)
+    if not confirm_apply:
+        return _apply_error(
+            [_warning("missing_apply_confirmation", "Mail apply requires confirm_apply=true.")],
+            plan=plan,
+        )
+    if approval_token.strip() != expected_token:
+        return _apply_error(
+            [_warning("invalid_approval_token", "Mail apply approval token did not match the plan.")],
+            plan=plan,
+        )
+
+    normalized_to, _ = _normalize_recipients(to or [], field="to")
+    normalized_cc, _ = _normalize_recipients(cc or [], field="cc")
+    normalized_bcc, _ = _normalize_recipients(bcc or [], field="bcc")
+    normalized_subject, _ = _normalize_draft_subject(subject)
+    normalized_body, _ = _normalize_draft_body(body_text)
+    resolved_db_path = _resolve_db_path(db_path)
+    resolved_mail_root = mail_root or _mail_content_root(resolved_db_path)
+
+    already_applied = _find_matching_draft_content(
+        normalized_subject,
+        normalized_body,
+        db_path=resolved_db_path,
+        mail_root=resolved_mail_root,
+    )
+    if already_applied is not None:
+        return _apply_success(
+            already_applied,
+            idempotency_key=preview["idempotency_key"],
+            approval_fingerprint=fingerprint,
+            mutation_applied=False,
+            warnings=[_warning("already_applied", "Matching Mail draft already exists.")],
+        )
+
+    runner = script_runner or _run_osascript
+    try:
+        runner(
+            _mail_create_draft_script(
+                to=normalized_to,
+                cc=normalized_cc,
+                bcc=normalized_bcc,
+                subject=normalized_subject,
+                body_text=normalized_body,
+            ),
+            MAIL_APPLESCRIPT_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return _apply_error(
+            [_warning("automation_timeout", "Mail draft creation timed out through local automation.")],
+            plan=plan,
+            status="degraded",
+        )
+    except MailAutomationError:
+        return _apply_error(
+            [_warning("write_error", "Mail draft could not be created safely.")],
+            plan=plan,
+        )
+
+    read_back = _find_matching_draft_content(
+        normalized_subject,
+        normalized_body,
+        db_path=resolved_db_path,
+        mail_root=resolved_mail_root,
+    )
+    if read_back is None:
+        return _apply_error(
+            [_warning("read_back_unavailable", "Mail draft creation succeeded but read-back was unavailable.")],
+            plan=plan,
+            status="partial",
+            mutation_applied=True,
+        )
+
+    return _apply_success(
+        read_back,
+        idempotency_key=preview["idempotency_key"],
+        approval_fingerprint=fingerprint,
+        mutation_applied=True,
+        warnings=[],
+    )
+
+
 def _resolve_mail_handle_rowid(connection, handle: str) -> int | None:
     rows = connection.execute(
         """
@@ -508,6 +743,277 @@ def _select_mail_row(connection, rowid: int):
         """,
         (rowid,),
     ).fetchone()
+
+
+def _plan_error(warnings: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "mail",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": False,
+        "preview": None,
+        "warnings": warnings,
+    }
+
+
+def _apply_error(
+    warnings: list[dict[str, str]],
+    *,
+    plan: dict[str, Any] | None = None,
+    status: str = "error",
+    mutation_applied: bool = False,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": status,
+        "source": "mail",
+        "privacy": _mutation_privacy(content_inspected=False),
+        "mode": "apply",
+        "mutation_applied": mutation_applied,
+        "plan": plan.get("preview") if isinstance(plan, dict) else None,
+        "result": None,
+        "warnings": warnings,
+    }
+
+
+def _apply_success(
+    read_back: dict[str, Any],
+    *,
+    idempotency_key: str,
+    approval_fingerprint: str,
+    mutation_applied: bool,
+    warnings: list[dict[str, str]],
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "mail",
+        "privacy": _mutation_privacy(content_inspected=True),
+        "mode": "apply",
+        "mutation_applied": mutation_applied,
+        "idempotency_key": idempotency_key,
+        "approval": {
+            "approval_fingerprint": approval_fingerprint,
+            "approval_token_verified": True,
+        },
+        "read_back": read_back,
+        "result_count": 1,
+        "warnings": warnings,
+    }
+
+
+def _normalize_draft_subject(value: str) -> tuple[str, dict[str, str] | None]:
+    normalized = re.sub(r"\s+", " ", _normalize_text(value)).strip()
+    if not normalized:
+        return "", _warning("missing_subject", "Mail draft creation requires a non-empty subject.")
+    if not has_minimum_query_quality(normalized):
+        return "", _warning("broad_subject", "Mail draft subject requires at least two letters or digits.")
+    if len(normalized) > MAX_PREVIEW_SUBJECT_CHARS:
+        return (
+            normalized[:MAX_PREVIEW_SUBJECT_CHARS],
+            _warning("subject_too_long", "Mail draft subject exceeded the maximum length."),
+        )
+    return normalized, None
+
+
+def _normalize_draft_body(value: str) -> tuple[str, dict[str, str] | None]:
+    normalized = _normalize_text(value)
+    if len(normalized) > MAX_DRAFT_BODY_CHARS:
+        return (
+            normalized[:MAX_DRAFT_BODY_CHARS],
+            _warning("body_too_long", "Mail draft body exceeded the maximum length."),
+        )
+    return normalized, None
+
+
+def _normalize_recipients(
+    values: list[str],
+    *,
+    field: str,
+) -> tuple[list[str], list[dict[str, str]]]:
+    warnings: list[dict[str, str]] = []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    if len(values) > MAX_RECIPIENTS_PER_FIELD:
+        warnings.append(
+            _warning(
+                f"too_many_{field}_recipients",
+                "Mail draft recipient lists are capped.",
+            )
+        )
+        values = values[:MAX_RECIPIENTS_PER_FIELD]
+    for value in values:
+        candidate = re.sub(r"\s+", "", str(value).strip())
+        if not candidate:
+            continue
+        if not _valid_email_address(candidate):
+            warnings.append(
+                _warning(
+                    f"invalid_{field}_recipient",
+                    "Mail draft recipients must be plain email addresses.",
+                )
+            )
+            continue
+        key = candidate.casefold()
+        if key in seen:
+            continue
+        normalized.append(candidate)
+        seen.add(key)
+    return normalized, warnings
+
+
+def _valid_email_address(value: str) -> bool:
+    if len(value) > 254 or any(character.isspace() for character in value):
+        return False
+    return bool(
+        re.fullmatch(
+            r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+",
+            value,
+        )
+    )
+
+
+def _find_matching_draft_content(
+    subject: str,
+    body_text: str,
+    *,
+    db_path: Path,
+    mail_root: Path,
+) -> dict[str, Any] | None:
+    search = search_mail_metadata(subject, db_path=db_path, limit=20)
+    if search.get("status") != "ok":
+        return None
+    for item in search.get("results", []):
+        if item.get("subject") != subject or not _is_draft_mailbox(item.get("mailbox_name")):
+            continue
+        handle = item.get("handle")
+        if not isinstance(handle, str):
+            continue
+        content = get_mail_content(
+            handle,
+            db_path=db_path,
+            mail_root=mail_root,
+            max_chars=MAX_CONTENT_CHARS,
+        )
+        if content.get("status") != "ok" or not isinstance(content.get("result"), dict):
+            continue
+        if _normalized_content_matches(content["result"].get("content_text", ""), body_text):
+            return content["result"]
+    return None
+
+
+def _is_draft_mailbox(value: Any) -> bool:
+    return isinstance(value, str) and "draft" in value.casefold()
+
+
+def _normalized_content_matches(value: Any, expected: str) -> bool:
+    if not isinstance(value, str):
+        return False
+    return _normalize_text(value) == _normalize_text(expected)
+
+
+def _mail_create_draft_script(
+    *,
+    to: list[str],
+    cc: list[str],
+    bcc: list[str],
+    subject: str,
+    body_text: str,
+) -> str:
+    lines = [
+        f"set draftSubject to {_applescript_string(subject)}",
+        f"set draftBody to {_applescript_string(body_text)}",
+        'tell application "Mail"',
+        "    set draftMessage to make new outgoing message with properties {subject:draftSubject, content:draftBody, visible:false}",
+        "    set message signature of draftMessage to missing value",
+        "    tell draftMessage",
+    ]
+    lines.extend(_recipient_script_lines("to", to))
+    lines.extend(_recipient_script_lines("cc", cc))
+    lines.extend(_recipient_script_lines("bcc", bcc))
+    lines.extend(
+        [
+            "    end tell",
+            "    save draftMessage",
+            "    return id of draftMessage",
+            "end tell",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _recipient_script_lines(field: str, recipients: list[str]) -> list[str]:
+    if field == "to":
+        class_name = "to recipient"
+        collection_name = "to recipients"
+    elif field == "cc":
+        class_name = "cc recipient"
+        collection_name = "cc recipients"
+    else:
+        class_name = "bcc recipient"
+        collection_name = "bcc recipients"
+    return [
+        f"        make new {class_name} at end of {collection_name} with properties {{address:{_applescript_string(recipient)}}}"
+        for recipient in recipients
+    ]
+
+
+def _safe_warnings(payload: dict[str, Any]) -> list[dict[str, str]]:
+    warnings = payload.get("warnings")
+    if not isinstance(warnings, list):
+        return []
+    safe: list[dict[str, str]] = []
+    for warning in warnings:
+        if not isinstance(warning, dict):
+            continue
+        code = warning.get("code")
+        message = warning.get("message")
+        if isinstance(code, str) and isinstance(message, str):
+            safe.append({"code": code, "message": message})
+    return safe
+
+
+def _plan_idempotency_key(payload: dict[str, Any]) -> str:
+    digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+    return f"mail-plan:v1:{digest}"
+
+
+def _approval_fingerprint(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+
+
+def _approval_token(fingerprint: str) -> str:
+    return f"{APPROVAL_TOKEN_PREFIX}{fingerprint}"
+
+
+def _canonical_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+
+
+def _applescript_string(value: str) -> str:
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+class MailAutomationError(RuntimeError):
+    pass
+
+
+def _run_osascript(script: str, timeout: float) -> str:
+    completed = subprocess.run(
+        ["osascript"],
+        input=script,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise MailAutomationError()
+    return completed.stdout
 
 
 def _mail_content_root(db_path: Path) -> Path:

@@ -1,10 +1,10 @@
 # Write Tool Roadmap
 
-The current release is read-mostly. Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply are the only approved write surfaces; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
+The current release is read-mostly. Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, and Mail create-draft apply are the only approved write surfaces; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
 
-Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`; the first iCloud Drive write design gate is `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`; the first Calendar write design gate is `docs/V1_13_CALENDAR_WRITE_DESIGN.md`; the first Contacts write design gate is `docs/V1_14_CONTACTS_WRITE_DESIGN.md`; the first Notes write design gate is `docs/V1_15_NOTES_WRITE_DESIGN.md`.
+Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`; the first iCloud Drive write design gate is `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`; the first Calendar write design gate is `docs/V1_13_CALENDAR_WRITE_DESIGN.md`; the first Contacts write design gate is `docs/V1_14_CONTACTS_WRITE_DESIGN.md`; the first Notes write design gate is `docs/V1_15_NOTES_WRITE_DESIGN.md`; the first Mail draft write design gate is `docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md`.
 
-Current progress: `reminders plan` / `reminders_plan_change`, `icloud-drive plan` / `icloud_drive_plan_change`, `calendar plan` / `calendar_plan_change`, `contacts plan` / `contacts_plan_change`, and `notes plan` / `notes_plan_change` implement non-mutating previews. `reminders apply` / `reminders_apply_change` implement approved Reminder create, complete, and due-date update with approval-token checks and read-back verification. `icloud-drive apply` / `icloud_drive_apply_change` implement approved iCloud Drive create-text with approval-token checks, exclusive create, and read-back verification. `calendar apply` / `calendar_apply_change` implement approved Calendar create-event with approval-token checks, explicit calendar title, EventKit apply, and read-back verification. `contacts apply` / `contacts_apply_change` implement approved Contacts create-contact with approval-token checks, Contacts.framework apply, and read-back verification. `notes apply` / `notes_apply_change` implement approved Notes create-note with approval-token checks, Notes.app automation, and exact-content read-back verification.
+Current progress: `reminders plan` / `reminders_plan_change`, `icloud-drive plan` / `icloud_drive_plan_change`, `calendar plan` / `calendar_plan_change`, `contacts plan` / `contacts_plan_change`, `notes plan` / `notes_plan_change`, and `mail plan` / `mail_plan_change` implement non-mutating previews. `reminders apply` / `reminders_apply_change` implement approved Reminder create, complete, and due-date update with approval-token checks and read-back verification. `icloud-drive apply` / `icloud_drive_apply_change` implement approved iCloud Drive create-text with approval-token checks, exclusive create, and read-back verification. `calendar apply` / `calendar_apply_change` implement approved Calendar create-event with approval-token checks, explicit calendar title, EventKit apply, and read-back verification. `contacts apply` / `contacts_apply_change` implement approved Contacts create-contact with approval-token checks, Contacts.framework apply, and read-back verification. `notes apply` / `notes_apply_change` implement approved Notes create-note with approval-token checks, Notes.app automation, and exact-content read-back verification. `mail apply` / `mail_apply_change` implement approved Mail create-draft with approval-token checks, save-only Mail.app automation, and local Drafts read-back verification when available.
 
 ## Principle
 
@@ -33,7 +33,7 @@ Start with low-risk local writes through public Apple APIs or user-visible app a
 | 5 | Calendar | Create timed event | Implemented; Swift EventKit helper | Implemented; EventKit read-back |
 | 6 | Contacts | Create contact | Implemented; Swift Contacts.framework helper | Implemented; Contacts.framework read-back |
 | 7 | Notes | Create note | Implemented; Notes.app automation | Implemented; Notes metadata search and exact content |
-| 8 | Mail | Create draft only | Mail.app automation | Mail metadata search for draft |
+| 8 | Mail | Create draft only | Implemented; save-only Mail.app automation | Implemented; Mail metadata search and exact content when local Drafts indexing is available |
 
 No first-tranche tool should delete, send, archive, move, overwrite, bulk edit, or manage account state.
 
@@ -46,7 +46,7 @@ These need separate design documents:
 - Reminder delete, uncomplete, list/account management, attachments, URLs, and rich-content mutation.
 - Note append/update with rich-text conversion, delete, move, folder/account targeting, attachments, and checklist state.
 - iCloud Drive append/overwrite/rename/move/copy/delete and binary/document writes.
-- Mail send.
+- Mail send, reply, forward, archive, move, delete, mark read/unread, flag, mailbox/account management, sender-account selection, attachments, HTML/rich-text draft mutation, templates, or bulk operations.
 - Messages send/edit/delete.
 - Photos asset edits/import/delete.
 - Voice Memos creation, generated transcription, or deletion.
@@ -83,6 +83,6 @@ The following remain blocked until a separate source review proves a durable, lo
 - Hide My Email alias creation, deactivation, deletion, or authoritative inventory.
 - Any iCloud.com, browser-session, cookie, keychain, private iCloud web/API, IMAP, OAuth, or connector fallback mutation path.
 - Sending Messages from the plugin.
-- Mail sending from the plugin before draft-only behavior is proven.
+- Mail sending or management from the plugin before a separate source review and explicit design gate.
 - Photos mutation/import/delete before a separate PhotoKit write design.
 - Voice Memos generated transcription or mutation before a separate media-content design.
