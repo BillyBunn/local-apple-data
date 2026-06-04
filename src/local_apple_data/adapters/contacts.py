@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 from pathlib import Path
@@ -17,6 +18,12 @@ DEFAULT_MAX_SCAN_CONTACTS = 10000
 DEFAULT_CONTENT_CHARS = 4000
 MAX_CONTENT_CHARS = 12000
 CONTACT_HANDLE_PREFIX = "contacts:contact"
+MAX_PREVIEW_FIELD_CHARS = 512
+MAX_CONTACT_METHODS = 5
+MAX_LABEL_CHARS = 64
+PLAN_OPERATIONS = {"create"}
+CONTACT_TYPES = {"person", "organization"}
+APPROVAL_TOKEN_PREFIX = "contacts-apply:v1:"
 ContactsRunner = Callable[[dict[str, Any], float], dict[str, Any]]
 
 
@@ -35,6 +42,24 @@ def _content_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "content",
+    }
+
+
+def _preview_privacy() -> dict[str, bool | str]:
+    return {
+        "content_inspected": False,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "preview",
+    }
+
+
+def _mutation_privacy(*, content_inspected: bool = False) -> dict[str, bool | str]:
+    return {
+        "content_inspected": content_inspected,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "mutation",
     }
 
 
@@ -184,6 +209,230 @@ def get_contact(
     }
 
 
+def plan_contact_change(
+    operation: str,
+    *,
+    contact_type: str = "person",
+    given_name: str = "",
+    family_name: str = "",
+    organization_name: str = "",
+    department_name: str = "",
+    job_title: str = "",
+    nickname: str = "",
+    email_addresses: list[Any] | None = None,
+    phone_numbers: list[Any] | None = None,
+    url_addresses: list[Any] | None = None,
+) -> dict[str, Any]:
+    normalized_operation = operation.strip().replace("-", "_")
+    warnings: list[dict[str, str]] = []
+    if normalized_operation not in PLAN_OPERATIONS:
+        warnings.append(_warning("invalid_operation", "Expected operation create."))
+        return _preview_error(warnings)
+
+    normalized_type = contact_type.strip().lower()
+    if normalized_type not in CONTACT_TYPES:
+        warnings.append(_warning("invalid_contact_type", "Expected contact_type person or organization."))
+
+    fields: dict[str, str] = {}
+    for field, value in {
+        "given_name": given_name,
+        "family_name": family_name,
+        "organization_name": organization_name,
+        "department_name": department_name,
+        "job_title": job_title,
+        "nickname": nickname,
+    }.items():
+        normalized, warning = _bounded_preview_value(value, field=field, max_chars=MAX_PREVIEW_FIELD_CHARS)
+        fields[field] = normalized
+        if warning is not None:
+            warnings.append(warning)
+
+    if normalized_type == "person" and not (fields["given_name"] or fields["family_name"]):
+        warnings.append(
+            _warning("missing_required_field", "Person contact create requires given_name or family_name.")
+        )
+    if normalized_type == "organization" and not fields["organization_name"]:
+        warnings.append(
+            _warning("missing_required_field", "Organization contact create requires organization_name.")
+        )
+
+    normalized_emails, email_warnings = _normalize_labeled_values(
+        email_addresses, field="email_addresses"
+    )
+    normalized_phones, phone_warnings = _normalize_labeled_values(
+        phone_numbers, field="phone_numbers"
+    )
+    normalized_urls, url_warnings = _normalize_labeled_values(url_addresses, field="url_addresses")
+    warnings.extend(email_warnings)
+    warnings.extend(phone_warnings)
+    warnings.extend(url_warnings)
+
+    if warnings:
+        return _preview_error(warnings)
+
+    proposed = {
+        "contact_type": normalized_type,
+        "given_name": fields["given_name"],
+        "family_name": fields["family_name"],
+        "organization_name": fields["organization_name"],
+        "department_name": fields["department_name"],
+        "job_title": fields["job_title"],
+        "nickname": fields["nickname"],
+        "email_addresses": normalized_emails,
+        "phone_numbers": normalized_phones,
+        "url_addresses": normalized_urls,
+        "email_count": len(normalized_emails),
+        "phone_count": len(normalized_phones),
+        "url_count": len(normalized_urls),
+        "note_status": "blocked",
+        "image_data": "blocked",
+    }
+    fingerprint_payload = {
+        "operation": normalized_operation,
+        "target": {"container": "default_contacts_container"},
+        "proposed": proposed,
+    }
+    idempotency_key = _plan_idempotency_key(fingerprint_payload)
+    approval_fingerprint = _approval_fingerprint(
+        {
+            **fingerprint_payload,
+            "idempotency_key": idempotency_key,
+        }
+    )
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "contacts",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": True,
+        "preview": {
+            "operation": normalized_operation,
+            "target": {"container": "default_contacts_container"},
+            "proposed": proposed,
+            "idempotency_key": idempotency_key,
+            "approval": {
+                "required_for_apply": True,
+                "apply_tool_available": True,
+                "approval_fingerprint": approval_fingerprint,
+                "approval_token_format": f"{APPROVAL_TOKEN_PREFIX}<approval_fingerprint>",
+            },
+            "read_back_required_after_apply": True,
+        },
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
+def apply_contact_change(
+    operation: str,
+    *,
+    contact_type: str = "person",
+    given_name: str = "",
+    family_name: str = "",
+    organization_name: str = "",
+    department_name: str = "",
+    job_title: str = "",
+    nickname: str = "",
+    email_addresses: list[Any] | None = None,
+    phone_numbers: list[Any] | None = None,
+    url_addresses: list[Any] | None = None,
+    approval_token: str = "",
+    confirm_apply: bool = False,
+    contacts_runner: ContactsRunner | None = None,
+) -> dict[str, Any]:
+    plan = plan_contact_change(
+        operation,
+        contact_type=contact_type,
+        given_name=given_name,
+        family_name=family_name,
+        organization_name=organization_name,
+        department_name=department_name,
+        job_title=job_title,
+        nickname=nickname,
+        email_addresses=email_addresses,
+        phone_numbers=phone_numbers,
+        url_addresses=url_addresses,
+    )
+    if plan.get("status") != "ok":
+        return _apply_error(_safe_warnings(plan), plan=plan)
+
+    preview = plan.get("preview")
+    if not isinstance(preview, dict):
+        return _apply_error(
+            [_warning("invalid_plan", "Contacts apply requires a valid plan preview.")],
+            plan=plan,
+        )
+    approval = preview.get("approval")
+    fingerprint = approval.get("approval_fingerprint") if isinstance(approval, dict) else None
+    expected_token = _approval_token(str(fingerprint or ""))
+    if not confirm_apply:
+        return _apply_error(
+            [_warning("missing_apply_confirmation", "Contacts apply requires confirm_apply=true.")],
+            plan=plan,
+        )
+    if not approval_token.strip() or approval_token.strip() != expected_token:
+        return _apply_error(
+            [_warning("invalid_approval_token", "Contacts apply approval token did not match the plan.")],
+            plan=plan,
+        )
+
+    runner = contacts_runner or _run_contacts_helper
+    try:
+        applied = runner(_apply_helper_payload(preview), CONTACTS_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        return _apply_error(
+            [_warning("contacts_timeout", "Contacts apply timed out through the local Contacts helper.")],
+            plan=plan,
+            status="apply_unknown",
+        )
+    except (OSError, ValueError):
+        return _apply_error(
+            [_warning("contacts_unavailable", "Contacts apply is unavailable through the local Contacts helper.")],
+            plan=plan,
+        )
+
+    if applied.get("status") != "ok":
+        return _apply_error(
+            _safe_warnings(applied)
+            or [_warning("contacts_apply_failed", "Contact could not be created safely.")],
+            plan=plan,
+            status=str(applied.get("status") or "error"),
+            authorization_status=applied.get("authorization_status"),
+        )
+
+    contact = applied.get("contact")
+    if not isinstance(contact, dict):
+        return _apply_error(
+            [_warning("read_back_unavailable", "Contacts apply succeeded but read-back was unavailable.")],
+            plan=plan,
+            status="apply_unknown",
+            mutation_applied=True,
+            authorization_status=applied.get("authorization_status"),
+        )
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "contacts",
+        "privacy": _mutation_privacy(content_inspected=True),
+        "authorization_status": applied.get("authorization_status"),
+        "mode": "apply",
+        "operation": str(preview["operation"]),
+        "mutation_applied": True,
+        "apply_available": True,
+        "idempotency_key": preview["idempotency_key"],
+        "approval": {
+            "approval_fingerprint": fingerprint,
+            "approval_token_verified": True,
+        },
+        "read_back": _contact_detail(contact, max_chars=MAX_CONTENT_CHARS),
+        "result_count": 1,
+        "warnings": _safe_warnings(applied),
+    }
+
+
 def _contacts_response(
     *,
     query: str,
@@ -327,6 +576,48 @@ def _invalid_handle_result() -> dict[str, Any]:
     }
 
 
+def _preview_error(warnings: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "contacts",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": True,
+        "preview": None,
+        "result_count": 0,
+        "warnings": warnings,
+    }
+
+
+def _apply_error(
+    warnings: list[dict[str, str]],
+    *,
+    plan: dict[str, Any] | None,
+    status: str = "error",
+    mutation_applied: bool = False,
+    authorization_status: Any = None,
+) -> dict[str, Any]:
+    preview = plan.get("preview") if isinstance(plan, dict) else None
+    payload: dict[str, Any] = {
+        "schema_version": 1,
+        "status": status,
+        "source": "contacts",
+        "privacy": _mutation_privacy(content_inspected=False),
+        "mode": "apply",
+        "mutation_applied": mutation_applied,
+        "apply_available": True,
+        "preview": preview if isinstance(preview, dict) else None,
+        "read_back": None,
+        "result_count": 0,
+        "warnings": warnings,
+    }
+    if authorization_status is not None:
+        payload["authorization_status"] = authorization_status
+    return payload
+
+
 def _contacts_degraded_result(response: dict[str, Any], *, content: bool) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -405,3 +696,88 @@ def _bounded_payload(value: Any, max_chars: int) -> Any:
     if isinstance(value, bool | int | float) or value is None:
         return value
     return _bounded_string(value, string_limit)
+
+
+def _bounded_preview_value(
+    value: str,
+    *,
+    field: str,
+    max_chars: int,
+) -> tuple[str, dict[str, str] | None]:
+    normalized = value.strip().replace("\r\n", "\n").replace("\r", "\n")
+    if len(normalized) > max_chars:
+        return "", _warning("input_too_large", f"Field exceeds maximum length: {field}.")
+    return normalized, None
+
+
+def _normalize_labeled_values(
+    values: list[Any] | None,
+    *,
+    field: str,
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    if values is None:
+        return [], []
+    if not isinstance(values, list):
+        return [], [_warning("invalid_labeled_values", f"{field} must be a list.")]
+    if len(values) > MAX_CONTACT_METHODS:
+        return [], [_warning("too_many_values", f"{field} is capped at {MAX_CONTACT_METHODS} entries.")]
+
+    normalized: list[dict[str, str]] = []
+    warnings: list[dict[str, str]] = []
+    for index, item in enumerate(values):
+        label = "other"
+        value = ""
+        if isinstance(item, str):
+            value = item
+        elif isinstance(item, dict):
+            label = str(item.get("label") or "other")
+            value = str(item.get("value") or "")
+        else:
+            warnings.append(_warning("invalid_labeled_value", f"{field}[{index}] must be an object."))
+            continue
+
+        normalized_label = label.strip().lower().replace(" ", "_")[:MAX_LABEL_CHARS] or "other"
+        normalized_value = value.strip().replace("\r\n", "\n").replace("\r", "\n")
+        if not normalized_value:
+            warnings.append(_warning("missing_required_field", f"{field}[{index}].value is required."))
+            continue
+        if len(normalized_value) > MAX_PREVIEW_FIELD_CHARS:
+            warnings.append(_warning("input_too_large", f"{field}[{index}].value exceeds maximum length."))
+            continue
+        normalized.append({"label": normalized_label, "value": normalized_value})
+    return normalized, warnings
+
+
+def _apply_helper_payload(preview: dict[str, Any]) -> dict[str, Any]:
+    proposed = preview["proposed"]
+    return {
+        "command": "contacts_apply_change",
+        "operation": preview["operation"],
+        "contact_type": proposed["contact_type"],
+        "given_name": proposed["given_name"],
+        "family_name": proposed["family_name"],
+        "organization_name": proposed["organization_name"],
+        "department_name": proposed["department_name"],
+        "job_title": proposed["job_title"],
+        "nickname": proposed["nickname"],
+        "email_addresses": proposed["email_addresses"],
+        "phone_numbers": proposed["phone_numbers"],
+        "url_addresses": proposed["url_addresses"],
+    }
+
+
+def _plan_idempotency_key(payload: dict[str, Any]) -> str:
+    digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+    return f"contacts-plan:v1:{digest}"
+
+
+def _approval_fingerprint(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+
+
+def _approval_token(fingerprint: str) -> str:
+    return f"{APPROVAL_TOKEN_PREFIX}{fingerprint}"
+
+
+def _canonical_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))

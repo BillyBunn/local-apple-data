@@ -253,6 +253,130 @@ func contactPayload(_ contact: CNContact, includeDetails: Bool) -> [String: Any]
     return payload
 }
 
+func emitContactsApplyError(_ status: String, _ code: String, _ message: String) -> Never {
+    emit([
+        "schema_version": 1,
+        "status": status,
+        "source": "contacts",
+        "authorization_status": authorizationName(CNContactStore.authorizationStatus(for: .contacts)),
+        "contacts": [],
+        "contact": NSNull(),
+        "warnings": [warning(code, message)],
+    ])
+}
+
+func normalizedLabel(_ label: String?) -> String {
+    let localized = labelName(label).lowercased().replacingOccurrences(of: " ", with: "_")
+    if localized.isEmpty {
+        return "other"
+    }
+    return localized
+}
+
+func contactsLabel(_ label: String) -> String {
+    switch label.lowercased() {
+    case "home":
+        return CNLabelHome
+    case "work":
+        return CNLabelWork
+    case "mobile":
+        return CNLabelPhoneNumberMobile
+    case "iphone":
+        return CNLabelPhoneNumberiPhone
+    case "main":
+        return CNLabelPhoneNumberMain
+    case "home_fax":
+        return CNLabelPhoneNumberHomeFax
+    case "work_fax":
+        return CNLabelPhoneNumberWorkFax
+    case "other":
+        return CNLabelOther
+    default:
+        return label
+    }
+}
+
+func requestLabeledEntries(_ request: [String: Any], _ key: String) -> [[String: String]] {
+    guard let raw = request[key] as? [[String: Any]] else {
+        return []
+    }
+    return raw.compactMap { item in
+        guard let value = item["value"] as? String else {
+            return nil
+        }
+        let label = (item["label"] as? String) ?? "other"
+        return ["label": label, "value": value]
+    }
+}
+
+func labeledStringsMatch(_ actual: [CNLabeledValue<NSString>], _ expected: [[String: String]]) -> Bool {
+    if actual.count != expected.count {
+        return false
+    }
+    for (left, right) in zip(actual, expected) {
+        if normalizedLabel(left.label) != (right["label"] ?? "other") {
+            return false
+        }
+        if String(left.value) != (right["value"] ?? "") {
+            return false
+        }
+    }
+    return true
+}
+
+func phoneNumbersMatch(_ actual: [CNLabeledValue<CNPhoneNumber>], _ expected: [[String: String]]) -> Bool {
+    if actual.count != expected.count {
+        return false
+    }
+    for (left, right) in zip(actual, expected) {
+        if normalizedLabel(left.label) != (right["label"] ?? "other") {
+            return false
+        }
+        if left.value.stringValue != (right["value"] ?? "") {
+            return false
+        }
+    }
+    return true
+}
+
+func contactMatchesCreate(_ contact: CNContact, request: [String: Any]) -> Bool {
+    let requestedType = stringValue(request, "contact_type")
+    if requestedType == "organization" && contact.contactType != .organization {
+        return false
+    }
+    if requestedType == "person" && contact.contactType != .person {
+        return false
+    }
+    if contact.givenName != stringValue(request, "given_name") {
+        return false
+    }
+    if contact.familyName != stringValue(request, "family_name") {
+        return false
+    }
+    if contact.organizationName != stringValue(request, "organization_name") {
+        return false
+    }
+    if contact.departmentName != stringValue(request, "department_name") {
+        return false
+    }
+    if contact.jobTitle != stringValue(request, "job_title") {
+        return false
+    }
+    if contact.nickname != stringValue(request, "nickname") {
+        return false
+    }
+    if !labeledStringsMatch(contact.emailAddresses, requestLabeledEntries(request, "email_addresses")) {
+        return false
+    }
+    if !phoneNumbersMatch(contact.phoneNumbers, requestLabeledEntries(request, "phone_numbers")) {
+        return false
+    }
+    if !labeledStringsMatch(contact.urlAddresses, requestLabeledEntries(request, "url_addresses")) {
+        return false
+    }
+    return true
+}
+
 func matches(_ contact: CNContact, query: String) -> Bool {
     if query.isEmpty {
         return true
@@ -283,6 +407,91 @@ else {
 }
 
 let command = stringValue(request, "command")
+
+if command == "contacts_apply_change" {
+    let store = ensureAccess()!
+    let operation = stringValue(request, "operation")
+    if operation != "create" {
+        emitContactsApplyError("error", "invalid_operation", "Unsupported Contacts apply operation.")
+    }
+    let contactType = stringValue(request, "contact_type")
+    if contactType != "person" && contactType != "organization" {
+        emitContactsApplyError("error", "invalid_contact_type", "Expected contact_type person or organization.")
+    }
+    let givenName = stringValue(request, "given_name")
+    let familyName = stringValue(request, "family_name")
+    let organizationName = stringValue(request, "organization_name")
+    if contactType == "person" && givenName.isEmpty && familyName.isEmpty {
+        emitContactsApplyError("error", "missing_required_field", "Person contact create requires given_name or family_name.")
+    }
+    if contactType == "organization" && organizationName.isEmpty {
+        emitContactsApplyError("error", "missing_required_field", "Organization contact create requires organization_name.")
+    }
+
+    let fetch = CNContactFetchRequest(keysToFetch: baseKeys)
+    fetch.sortOrder = .userDefault
+    fetch.unifyResults = true
+    do {
+        try store.enumerateContacts(with: fetch) { contact, stop in
+            if contactMatchesCreate(contact, request: request) {
+                emit([
+                    "schema_version": 1,
+                    "status": "ok",
+                    "source": "contacts",
+                    "authorization_status": authorizationName(CNContactStore.authorizationStatus(for: .contacts)),
+                    "contact": contactPayload(contact, includeDetails: true),
+                    "warnings": [warning("already_applied", "Contacts create already matches an existing contact.")],
+                ])
+            }
+        }
+    } catch {
+        emitContactsApplyError("error", "contacts_fetch_failed", "Contacts could not be checked before create.")
+    }
+
+    let contact = CNMutableContact()
+    if contactType == "organization" {
+        contact.contactType = .organization
+    } else {
+        contact.contactType = .person
+    }
+    contact.givenName = givenName
+    contact.familyName = familyName
+    contact.organizationName = organizationName
+    contact.departmentName = stringValue(request, "department_name")
+    contact.jobTitle = stringValue(request, "job_title")
+    contact.nickname = stringValue(request, "nickname")
+    contact.emailAddresses = requestLabeledEntries(request, "email_addresses").map {
+        CNLabeledValue(label: contactsLabel($0["label"] ?? "other"), value: NSString(string: $0["value"] ?? ""))
+    }
+    contact.phoneNumbers = requestLabeledEntries(request, "phone_numbers").map {
+        CNLabeledValue(label: contactsLabel($0["label"] ?? "other"), value: CNPhoneNumber(stringValue: $0["value"] ?? ""))
+    }
+    contact.urlAddresses = requestLabeledEntries(request, "url_addresses").map {
+        CNLabeledValue(label: contactsLabel($0["label"] ?? "other"), value: NSString(string: $0["value"] ?? ""))
+    }
+
+    let save = CNSaveRequest()
+    save.add(contact, toContainerWithIdentifier: nil)
+    do {
+        try store.execute(save)
+    } catch {
+        emitContactsApplyError("error", "contacts_apply_failed", "Contact could not be created.")
+    }
+
+    do {
+        let saved = try store.unifiedContact(withIdentifier: contact.identifier, keysToFetch: baseKeys)
+        emit([
+            "schema_version": 1,
+            "status": "ok",
+            "source": "contacts",
+            "authorization_status": authorizationName(CNContactStore.authorizationStatus(for: .contacts)),
+            "contact": contactPayload(saved, includeDetails: true),
+            "warnings": [],
+        ])
+    } catch {
+        emitContactsApplyError("apply_unknown", "read_back_unavailable", "Contact was created but read-back was unavailable.")
+    }
+}
 
 if command == "contacts" {
     let store = ensureAccess()!

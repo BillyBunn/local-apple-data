@@ -22,6 +22,8 @@ from audit_mutation_gates import audit_mutation_gates
 APPROVED_WRITE_TOOLS: tuple[str, ...] = (
     "calendar_apply",
     "calendar_apply_change",
+    "contacts_apply",
+    "contacts_apply_change",
     "icloud_drive_apply",
     "icloud_drive_apply_change",
     "reminders_apply",
@@ -30,14 +32,16 @@ APPROVED_WRITE_TOOLS: tuple[str, ...] = (
 APPROVED_PREVIEW_TOOLS: tuple[str, ...] = (
     "calendar_plan",
     "calendar_plan_change",
+    "contacts_plan",
+    "contacts_plan_change",
     "icloud_drive_plan",
     "icloud_drive_plan_change",
     "reminders_plan_change",
 )
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, and `calendar_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply are the only approved write surfaces",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, and `contacts_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply are the only approved write surfaces",
 }
 REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
@@ -99,6 +103,26 @@ REQUIRED_DESIGN_DOCS = {
             "redaction",
             "Synthetic Tests Required",
             "The current release allows only this Calendar create-event apply surface.",
+        ),
+    },
+    "contacts_write_v1": {
+        "path": "docs/V1_14_CONTACTS_WRITE_DESIGN.md",
+        "phrases": (
+            "Status: Apply-capable implementation.",
+            "Approved write tools: `local-apple-data contacts apply` and `contacts_apply_change`.",
+            "`local-apple-data contacts plan` and `contacts_plan_change`",
+            "No other mutating CLI or MCP tools are approved or exposed by this document.",
+            "preview",
+            "apply",
+            "read_back",
+            "mutation_applied:false",
+            "approval token",
+            "Contacts.framework",
+            "create one contact",
+            "idempotency",
+            "redaction",
+            "Synthetic Tests Required",
+            "The current release allows only this Contacts create-contact apply surface.",
         ),
     },
 }

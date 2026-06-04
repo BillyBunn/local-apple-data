@@ -22,10 +22,12 @@ def test_current_project_write_design_gate_audit_passes() -> None:
 
     assert payload["status"] == "ok"
     assert payload["write_design_gate"] is True
-    assert payload["design_docs_checked"] >= 3
+    assert payload["design_docs_checked"] >= 4
     assert payload["approved_preview_tools"] == [
         "calendar_plan",
         "calendar_plan_change",
+        "contacts_plan",
+        "contacts_plan_change",
         "icloud_drive_plan",
         "icloud_drive_plan_change",
         "reminders_plan_change",
@@ -33,6 +35,8 @@ def test_current_project_write_design_gate_audit_passes() -> None:
     assert payload["approved_write_tools"] == [
         "calendar_apply",
         "calendar_apply_change",
+        "contacts_apply",
+        "contacts_apply_change",
         "icloud_drive_apply",
         "icloud_drive_apply_change",
         "reminders_apply",
@@ -115,15 +119,15 @@ def _minimal_project(
     root.joinpath("docs").mkdir()
 
     (root / "README.md").write_text(
-        "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply.\n",
+        "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, and `calendar_apply_change`.\n",
+        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, and `contacts_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply are the only approved write surfaces.\n",
+        "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply are the only approved write surfaces.\n",
         encoding="utf-8",
     )
     for contract in audit_write_design_gates.REQUIRED_DESIGN_DOCS.values():
@@ -137,7 +141,7 @@ def _minimal_project(
         f"""
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def {mcp_tool_name}() -> dict:

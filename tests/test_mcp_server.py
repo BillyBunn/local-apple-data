@@ -15,7 +15,9 @@ from local_apple_data.mcp_server import (
     calendar_apply_change,
     calendar_get_event,
     calendar_plan_change,
+    contacts_apply_change,
     contacts_get,
+    contacts_plan_change,
     icloud_drive_apply_change,
     hide_my_email_get_alias,
     icloud_drive_get_content,
@@ -100,6 +102,16 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
         confirm_apply=True,
     )
     contact_result = contacts_get("bad-handle")
+    contacts_plan_result = contacts_plan_change(
+        "create",
+        contact_type="person",
+    )
+    contacts_apply_result = contacts_apply_change(
+        "create",
+        approval_token="contacts-apply:v1:bad",
+        contact_type="person",
+        confirm_apply=True,
+    )
     photo_result = photos_get_asset("bad-handle")
     photo_export_result = photos_export_asset("bad-handle", str(tmp_path / "exports"))
     reminder_result = reminders_get_content("bad-handle")
@@ -146,6 +158,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert calendar_apply_result["warnings"][0]["code"] == "invalid_datetime"
     assert contact_result["status"] == "error"
     assert contact_result["warnings"][0]["code"] == "invalid_handle"
+    assert contacts_plan_result["status"] == "error"
+    assert contacts_plan_result["warnings"][0]["code"] == "missing_required_field"
+    assert contacts_apply_result["status"] == "error"
+    assert contacts_apply_result["warnings"][0]["code"] == "missing_required_field"
     assert photo_result["status"] == "error"
     assert photo_result["warnings"][0]["code"] == "invalid_handle"
     assert photo_export_result["status"] == "error"
@@ -201,6 +217,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "calendar_apply_change",
                     "contacts_search",
                     "contacts_get",
+                    "contacts_plan_change",
+                    "contacts_apply_change",
                     "photos_search",
                     "photos_get_asset",
                     "photos_export_asset",
@@ -218,6 +236,7 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                             "reminders_apply_change",
                             "icloud_drive_apply_change",
                             "calendar_apply_change",
+                            "contacts_apply_change",
                         }:
                             assert tool.annotations.readOnlyHint is False
                         else:

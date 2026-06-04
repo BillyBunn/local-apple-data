@@ -12,7 +12,12 @@ from .adapters.calendar import (
     plan_calendar_change,
     search_calendar_events,
 )
-from .adapters.contacts import get_contact, search_contacts
+from .adapters.contacts import (
+    apply_contact_change,
+    get_contact,
+    plan_contact_change,
+    search_contacts,
+)
 from .adapters.icloud_drive import (
     apply_icloud_drive_change,
     get_icloud_drive_content,
@@ -397,6 +402,57 @@ def _contacts_get_command(args: argparse.Namespace) -> int:
         max_scan_contacts=args.max_scan_contacts,
     )
     log_result("contacts.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _contact_labeled_values(values: list[str] | None) -> list[dict[str, str]]:
+    entries: list[dict[str, str]] = []
+    for raw in values or []:
+        label, separator, value = raw.partition("=")
+        if separator:
+            entries.append({"label": label, "value": value})
+        else:
+            entries.append({"label": "other", "value": raw})
+    return entries
+
+
+def _contacts_plan_command(args: argparse.Namespace) -> int:
+    payload = plan_contact_change(
+        args.operation,
+        contact_type=args.contact_type,
+        given_name=args.given_name or "",
+        family_name=args.family_name or "",
+        organization_name=args.organization_name or "",
+        department_name=args.department_name or "",
+        job_title=args.job_title or "",
+        nickname=args.nickname or "",
+        email_addresses=_contact_labeled_values(args.email),
+        phone_numbers=_contact_labeled_values(args.phone),
+        url_addresses=_contact_labeled_values(args.url),
+    )
+    log_result("contacts.plan", payload)
+    _print_json(payload)
+    return 0
+
+
+def _contacts_apply_command(args: argparse.Namespace) -> int:
+    payload = apply_contact_change(
+        args.operation,
+        contact_type=args.contact_type,
+        given_name=args.given_name or "",
+        family_name=args.family_name or "",
+        organization_name=args.organization_name or "",
+        department_name=args.department_name or "",
+        job_title=args.job_title or "",
+        nickname=args.nickname or "",
+        email_addresses=_contact_labeled_values(args.email),
+        phone_numbers=_contact_labeled_values(args.phone),
+        url_addresses=_contact_labeled_values(args.url),
+        approval_token=args.approval_token or "",
+        confirm_apply=args.confirm_apply,
+    )
+    log_result("contacts.apply", payload)
     _print_json(payload)
     return 0
 
@@ -1102,6 +1158,102 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum contacts to scan while resolving the handle, capped at 10000.",
     )
     contacts_get.set_defaults(func=_contacts_get_command)
+
+    contacts_plan = contacts_subparsers.add_parser(
+        "plan",
+        help="Plan a future Contacts contact create without applying it.",
+    )
+    contacts_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
+    contacts_plan.add_argument(
+        "--operation",
+        required=True,
+        choices=["create"],
+        help="Future Contacts operation to plan. No mutation is applied.",
+    )
+    contacts_plan.add_argument(
+        "--contact-type",
+        choices=["person", "organization"],
+        default="person",
+        help="Contact type to create.",
+    )
+    contacts_plan.add_argument("--given-name", default="", help="Given name for a person contact.")
+    contacts_plan.add_argument("--family-name", default="", help="Family name for a person contact.")
+    contacts_plan.add_argument("--organization-name", default="", help="Organization name.")
+    contacts_plan.add_argument("--department-name", default="", help="Department name.")
+    contacts_plan.add_argument("--job-title", default="", help="Job title.")
+    contacts_plan.add_argument("--nickname", default="", help="Nickname.")
+    contacts_plan.add_argument(
+        "--email",
+        action="append",
+        default=[],
+        help="Optional labeled email as label=value. Repeatable, capped at 5.",
+    )
+    contacts_plan.add_argument(
+        "--phone",
+        action="append",
+        default=[],
+        help="Optional labeled phone number as label=value. Repeatable, capped at 5.",
+    )
+    contacts_plan.add_argument(
+        "--url",
+        action="append",
+        default=[],
+        help="Optional labeled URL as label=value. Repeatable, capped at 5.",
+    )
+    contacts_plan.set_defaults(func=_contacts_plan_command)
+
+    contacts_apply = contacts_subparsers.add_parser(
+        "apply",
+        help="Apply an approved Contacts contact create.",
+    )
+    contacts_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
+    contacts_apply.add_argument(
+        "--operation",
+        required=True,
+        choices=["create"],
+        help="Approved Contacts operation to apply.",
+    )
+    contacts_apply.add_argument(
+        "--contact-type",
+        choices=["person", "organization"],
+        default="person",
+        help="Contact type to create.",
+    )
+    contacts_apply.add_argument("--given-name", default="", help="Given name for a person contact.")
+    contacts_apply.add_argument("--family-name", default="", help="Family name for a person contact.")
+    contacts_apply.add_argument("--organization-name", default="", help="Organization name.")
+    contacts_apply.add_argument("--department-name", default="", help="Department name.")
+    contacts_apply.add_argument("--job-title", default="", help="Job title.")
+    contacts_apply.add_argument("--nickname", default="", help="Nickname.")
+    contacts_apply.add_argument(
+        "--email",
+        action="append",
+        default=[],
+        help="Optional labeled email as label=value. Repeatable, capped at 5.",
+    )
+    contacts_apply.add_argument(
+        "--phone",
+        action="append",
+        default=[],
+        help="Optional labeled phone number as label=value. Repeatable, capped at 5.",
+    )
+    contacts_apply.add_argument(
+        "--url",
+        action="append",
+        default=[],
+        help="Optional labeled URL as label=value. Repeatable, capped at 5.",
+    )
+    contacts_apply.add_argument(
+        "--approval-token",
+        required=True,
+        help="contacts-apply:v1 token from the matching plan response.",
+    )
+    contacts_apply.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required explicit confirmation flag for the approved apply operation.",
+    )
+    contacts_apply.set_defaults(func=_contacts_apply_command)
 
     photos = subparsers.add_parser("photos", help="Apple Photos metadata commands.")
     photos_subparsers = photos.add_subparsers(dest="photos_command", required=True)

@@ -1,10 +1,10 @@
 # Write Tool Roadmap
 
-The current release is read-mostly. Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply are the only approved write surfaces; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
+The current release is read-mostly. Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply are the only approved write surfaces; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
 
-Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`; the first iCloud Drive write design gate is `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`; the first Calendar write design gate is `docs/V1_13_CALENDAR_WRITE_DESIGN.md`.
+Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`; the first iCloud Drive write design gate is `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`; the first Calendar write design gate is `docs/V1_13_CALENDAR_WRITE_DESIGN.md`; the first Contacts write design gate is `docs/V1_14_CONTACTS_WRITE_DESIGN.md`.
 
-Current progress: `reminders plan` / `reminders_plan_change`, `icloud-drive plan` / `icloud_drive_plan_change`, and `calendar plan` / `calendar_plan_change` implement non-mutating previews. `reminders apply` / `reminders_apply_change` implement approved Reminder create, complete, and due-date update with approval-token checks and read-back verification. `icloud-drive apply` / `icloud_drive_apply_change` implement approved iCloud Drive create-text with approval-token checks, exclusive create, and read-back verification. `calendar apply` / `calendar_apply_change` implement approved Calendar create-event with approval-token checks, explicit calendar title, EventKit apply, and read-back verification.
+Current progress: `reminders plan` / `reminders_plan_change`, `icloud-drive plan` / `icloud_drive_plan_change`, `calendar plan` / `calendar_plan_change`, and `contacts plan` / `contacts_plan_change` implement non-mutating previews. `reminders apply` / `reminders_apply_change` implement approved Reminder create, complete, and due-date update with approval-token checks and read-back verification. `icloud-drive apply` / `icloud_drive_apply_change` implement approved iCloud Drive create-text with approval-token checks, exclusive create, and read-back verification. `calendar apply` / `calendar_apply_change` implement approved Calendar create-event with approval-token checks, explicit calendar title, EventKit apply, and read-back verification. `contacts apply` / `contacts_apply_change` implement approved Contacts create-contact with approval-token checks, Contacts.framework apply, and read-back verification.
 
 ## Principle
 
@@ -31,8 +31,9 @@ Start with low-risk local writes through public Apple APIs or user-visible app a
 | 3 | Reminders | Update due date | Swift EventKit helper | Implemented; EventKit read-back |
 | 4 | iCloud Drive | Create text file | Implemented; local filesystem with parent handle | Implemented; iCloud Drive metadata, content hash, and text content |
 | 5 | Calendar | Create timed event | Implemented; Swift EventKit helper | Implemented; EventKit read-back |
-| 6 | Notes | Create note | Notes.app automation | Notes metadata search and exact content |
-| 7 | Mail | Create draft only | Mail.app automation | Mail metadata search for draft |
+| 6 | Contacts | Create contact | Implemented; Swift Contacts.framework helper | Implemented; Contacts.framework read-back |
+| 7 | Notes | Create note | Notes.app automation | Notes metadata search and exact content |
+| 8 | Mail | Create draft only | Mail.app automation | Mail metadata search for draft |
 
 No first-tranche tool should delete, send, archive, move, overwrite, bulk edit, or manage account state.
 
@@ -40,7 +41,7 @@ No first-tranche tool should delete, send, archive, move, overwrite, bulk edit, 
 
 These need separate design documents:
 
-- Contact create/update through Contacts.framework.
+- Contact update/delete/merge/move/group membership, notes, image data, postal addresses, birthdays, relationships, social profiles, instant messages, and bulk operations through Contacts.framework.
 - Calendar update/delete/move/recurrence/attendees/alarms/all-day/default-calendar guessing.
 - Reminder delete, uncomplete, list/account management, attachments, URLs, and rich-content mutation.
 - Note append/update with rich-text conversion.

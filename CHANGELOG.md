@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604130000 - 2026-06-04
+
+### Added
+
+- Approved Contacts create-contact apply through `local-apple-data contacts apply` and MCP `contacts_apply_change`.
+- Non-mutating Contacts create-contact planning through `local-apple-data contacts plan` and MCP `contacts_plan_change`.
+- Approval-token, explicit-confirmation, bounded labeled email/phone/URL, idempotency, and read-back verification checks for Contacts create-contact apply.
+- Synthetic adapter, CLI, MCP annotation, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the approved Contacts apply surface.
+
+### Security
+
+- `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, and `contacts_apply_change` are the only non-read-only MCP tools and are annotated non-destructive, idempotent, and closed-world.
+- Contacts update, delete, merge, move, group membership, postal addresses, birthdays, relationships, social profiles, notes, image data, and bulk operations remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604120000 - 2026-06-04
 
 ### Added

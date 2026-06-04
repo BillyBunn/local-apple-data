@@ -17,11 +17,11 @@ This project provides a privacy-gated CLI and MCP server for locally synced:
 - Apple Photos
 - iCloud Drive local files and folders
 
-The current release is local-only and read-mostly. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply, and each requires a matching plan approval token plus explicit confirmation. The plugin does not use the Gmail connector, Gmail API, IMAP credentials, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
+The current release is local-only and read-mostly. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply, and each requires a matching plan approval token plus explicit confirmation. The plugin does not use the Gmail connector, Gmail API, IMAP credentials, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
 
 ## Current Status
 
-The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, and Calendar apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, or Calendar apply operation generated from a matching plan.
+The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, and Contacts apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, or Contacts apply operation generated from a matching plan.
 
 Implemented now:
 
@@ -44,6 +44,8 @@ Implemented now:
 - `local-apple-data calendar plan --json --operation create --title <title> --calendar-title <calendar> --start-date <ISO> --end-date <ISO>` for non-mutating future timed-event create previews with idempotency and approval metadata
 - `local-apple-data calendar apply --json --operation create --title <title> --calendar-title <calendar> --start-date <ISO> --end-date <ISO> --approval-token <token> --confirm-apply` for the approved Calendar create-event path, with EventKit apply and read-back verification
 - `local-apple-data contacts search/get` commands for local Contacts by name or organization through Contacts.framework
+- `local-apple-data contacts plan --json --operation create --contact-type person --given-name <name> --family-name <name>` for non-mutating future contact-create previews with idempotency and approval metadata
+- `local-apple-data contacts apply --json --operation create --contact-type person --given-name <name> --family-name <name> --approval-token <token> --confirm-apply` for the approved Contacts create-contact path, with Contacts.framework apply and read-back verification
 - `local-apple-data photos search/get/export` commands for local Photos asset metadata by original filename, exact asset/resource metadata, and exact-handle asset export to a caller-selected output directory through PhotoKit
 - `local-apple-data reminders search/due` metadata commands
 - `local-apple-data reminders eventkit-search` for local Reminders title metadata through EventKit
@@ -51,7 +53,7 @@ Implemented now:
 - `local-apple-data reminders plan --json --operation create|complete|update-due-date ...` for non-mutating future-change previews with idempotency and approval metadata
 - `local-apple-data reminders apply --json --operation create|complete|update-due-date ... --approval-token <token> --confirm-apply` for the approved Reminders create/complete/due-date update path, with EventKit apply and read-back verification
 - Highest-version Mail store discovery without exposing raw local store paths in normal output
-- `local-apple-data-mcp` stdio MCP server with read-only tools plus the approved non-destructive `reminders_apply_change` and `icloud_drive_apply_change` write tools
+- `local-apple-data-mcp` stdio MCP server with read-only tools plus the approved non-destructive `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, and `contacts_apply_change` write tools
 - MCP runner script that avoids package builds during normal plugin startup
 - Codex skill under `skills/local-apple-data/`
 - Local plugin manifest under `.codex-plugin/plugin.json`
@@ -77,7 +79,7 @@ Implemented now:
 - Repo-local redaction scanner under `scripts/redaction_scan.py`
 - Release-readiness auditor under `scripts/audit_release_readiness.py`
 - Mutation-gate auditor under `scripts/audit_mutation_gates.py` so write-like CLI/MCP surfaces cannot appear without explicit gates
-- Write-design gate auditor under `scripts/audit_write_design_gates.py` so first-tranche write tools stay machine-checkable and limited to the approved Reminders, iCloud Drive, and Calendar apply surfaces
+- Write-design gate auditor under `scripts/audit_write_design_gates.py` so first-tranche write tools stay machine-checkable and limited to the approved Reminders, iCloud Drive, Calendar, and Contacts apply surfaces
 - Surface-contract auditor under `scripts/audit_surface_contract.py` so MCP tools, CLI commands, health surfaces, access requirements, and the capability matrix stay aligned
 - MCP client config renderer for generic stdio, Claude Code, Cursor, and OpenClaw under `scripts/render_mcp_client_config.py`
 - Public release tree builder under `scripts/build_public_release_tree.py`
@@ -88,8 +90,8 @@ Implemented now:
 
 Deferred:
 
-- Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create-text apply surface, and Calendar create-event apply surface
-- Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts/Photos/Messages/Voice Memos mutation, Reminders delete/bulk/list/account mutation, iCloud Drive append/overwrite/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, attachments, Contact notes/image data, unsupported/binary iCloud Drive content extraction, and durable content caches
+- Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create-text apply surface, Calendar create-event apply surface, and Contacts create-contact apply surface
+- Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Photos/Messages/Voice Memos mutation, Reminders delete/bulk/list/account mutation, iCloud Drive append/overwrite/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, attachments, unsupported/binary iCloud Drive content extraction, and durable content caches
 
 The v1.1 design gate for exact-handle Mail content retrieval is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`.
 The v1.2 Notes content and broader local Apple data expansion plan is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`.
@@ -100,6 +102,7 @@ The future write-tool roadmap is documented in `docs/WRITE_TOOL_ROADMAP.md`.
 The first Reminders write design gate is documented in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 The first iCloud Drive write design gate is documented in `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`.
 The first Calendar write design gate is documented in `docs/V1_13_CALENDAR_WRITE_DESIGN.md`.
+The first Contacts write design gate is documented in `docs/V1_14_CONTACTS_WRITE_DESIGN.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.
@@ -149,6 +152,8 @@ uv run local-apple-data calendar plan --json --operation create --title '<event 
 uv run local-apple-data calendar apply --json --operation create --title '<event title>' --calendar-title '<target calendar>' --start-date '<ISO timestamp>' --end-date '<ISO timestamp>' --approval-token '<calendar-apply:v1:...>' --confirm-apply
 uv run local-apple-data contacts search --json --query '<name or organization text>'
 uv run local-apple-data contacts get --json --handle '<contacts:contact:v1:...>'
+uv run local-apple-data contacts plan --json --operation create --contact-type person --given-name '<given>' --family-name '<family>' --email 'work=<email>'
+uv run local-apple-data contacts apply --json --operation create --contact-type person --given-name '<given>' --family-name '<family>' --email 'work=<email>' --approval-token '<contacts-apply:v1:...>' --confirm-apply
 uv run local-apple-data photos search --json --query '<original filename text>'
 uv run local-apple-data photos get --json --handle '<photos:asset:v1:...>'
 uv run local-apple-data photos export --json --handle '<photos:asset:v1:...>' --output-dir /tmp/local-apple-data-exports

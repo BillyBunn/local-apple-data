@@ -117,8 +117,13 @@ SURFACE_CONTRACTS = (
         label="Contacts",
         cli_group="contacts",
         cli_subparser="contacts_subparsers",
-        cli_commands=("search", "get"),
-        mcp_tools=("contacts_search", "contacts_get"),
+        cli_commands=("search", "get", "plan", "apply"),
+        mcp_tools=(
+            "contacts_search",
+            "contacts_get",
+            "contacts_plan_change",
+            "contacts_apply_change",
+        ),
     ),
     SurfaceContract(
         name="photos",

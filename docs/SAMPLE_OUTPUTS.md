@@ -102,7 +102,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 35,
+  "tool_count": 37,
   "mail_content_status": "ok",
   "notes_content_status": "ok",
   "icloud_drive_content_status": "ok",
@@ -118,6 +118,11 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "calendar_apply_status": "ok",
   "calendar_apply_mutation_applied": true,
   "contacts_detail_status": "ok",
+  "contacts_plan_status": "ok",
+  "contacts_plan_mutation_applied": false,
+  "contacts_plan_apply_available": true,
+  "contacts_apply_status": "ok",
+  "contacts_apply_mutation_applied": true,
   "photos_detail_status": "ok",
   "photos_export_status": "ok",
   "messages_transcript_status": "ok",
@@ -130,6 +135,72 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "reminders_plan_apply_available": true,
   "reminders_apply_status": "ok",
   "reminders_apply_mutation_applied": true
+}
+```
+
+## Contacts Plan
+
+```json
+{
+  "status": "ok",
+  "source": "contacts",
+  "mode": "plan",
+  "mutation_applied": false,
+  "apply_available": true,
+  "preview": {
+    "operation": "create",
+    "target": {
+      "container": "default_contacts_container"
+    },
+    "proposed": {
+      "contact_type": "person",
+      "given_name": "Synthetic",
+      "family_name": "Created",
+      "organization_name": "Example Org",
+      "email_count": 1,
+      "phone_count": 1,
+      "url_count": 1,
+      "note_status": "blocked",
+      "image_data": "blocked"
+    },
+    "idempotency_key": "contacts-plan:v1:<hash>",
+    "approval": {
+      "required_for_apply": true,
+      "apply_tool_available": true,
+      "approval_fingerprint": "<hash>",
+      "approval_token_format": "contacts-apply:v1:<approval_fingerprint>"
+    }
+  },
+  "warnings": []
+}
+```
+
+## Contacts Apply
+
+```json
+{
+  "status": "ok",
+  "source": "contacts",
+  "mode": "apply",
+  "operation": "create",
+  "mutation_applied": true,
+  "apply_available": true,
+  "idempotency_key": "contacts-plan:v1:<hash>",
+  "approval": {
+    "approval_fingerprint": "<hash>",
+    "approval_token_verified": true
+  },
+  "read_back": {
+    "handle": "<opaque contacts:contact:v1 handle>",
+    "display_name": "Synthetic Created",
+    "contact_type": "person",
+    "given_name": "Synthetic",
+    "family_name": "Created",
+    "email_count": 1,
+    "phone_count": 1,
+    "note_status": "requires_entitlement"
+  },
+  "warnings": []
 }
 ```
 

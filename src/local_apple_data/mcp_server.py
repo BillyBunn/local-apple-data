@@ -12,7 +12,12 @@ from .adapters.calendar import (
     plan_calendar_change,
     search_calendar_events,
 )
-from .adapters.contacts import get_contact, search_contacts
+from .adapters.contacts import (
+    apply_contact_change,
+    get_contact,
+    plan_contact_change,
+    search_contacts,
+)
 from .adapters.icloud_drive import (
     apply_icloud_drive_change,
     get_icloud_drive_content,
@@ -47,7 +52,7 @@ INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
     "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
-    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply, and each requires a matching plan approval token plus explicit confirmation."
+    "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply, and each requires a matching plan approval token plus explicit confirmation."
 )
 
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
@@ -399,6 +404,78 @@ def contacts_get(
             handle,
             max_chars=max_chars,
             max_scan_contacts=max_scan_contacts,
+        ),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def contacts_plan_change(
+    operation: str,
+    contact_type: str = "person",
+    given_name: str = "",
+    family_name: str = "",
+    organization_name: str = "",
+    department_name: str = "",
+    job_title: str = "",
+    nickname: str = "",
+    email_addresses: list[dict[str, str]] | None = None,
+    phone_numbers: list[dict[str, str]] | None = None,
+    url_addresses: list[dict[str, str]] | None = None,
+) -> dict[str, Any]:
+    """Plan a future Contacts contact creation without applying it."""
+
+    return _record(
+        "contacts_plan_change",
+        plan_contact_change(
+            operation,
+            contact_type=contact_type,
+            given_name=given_name,
+            family_name=family_name,
+            organization_name=organization_name,
+            department_name=department_name,
+            job_title=job_title,
+            nickname=nickname,
+            email_addresses=email_addresses,
+            phone_numbers=phone_numbers,
+            url_addresses=url_addresses,
+        ),
+    )
+
+
+@mcp.tool(annotations=WRITE_ANNOTATIONS)
+def contacts_apply_change(
+    operation: str,
+    approval_token: str,
+    contact_type: str = "person",
+    given_name: str = "",
+    family_name: str = "",
+    organization_name: str = "",
+    department_name: str = "",
+    job_title: str = "",
+    nickname: str = "",
+    email_addresses: list[dict[str, str]] | None = None,
+    phone_numbers: list[dict[str, str]] | None = None,
+    url_addresses: list[dict[str, str]] | None = None,
+    confirm_apply: bool = False,
+) -> dict[str, Any]:
+    """Apply an approved Contacts contact creation and read back details."""
+
+    return _record(
+        "contacts_apply_change",
+        apply_contact_change(
+            operation,
+            contact_type=contact_type,
+            given_name=given_name,
+            family_name=family_name,
+            organization_name=organization_name,
+            department_name=department_name,
+            job_title=job_title,
+            nickname=nickname,
+            email_addresses=email_addresses,
+            phone_numbers=phone_numbers,
+            url_addresses=url_addresses,
+            approval_token=approval_token,
+            confirm_apply=confirm_apply,
         ),
     )
 

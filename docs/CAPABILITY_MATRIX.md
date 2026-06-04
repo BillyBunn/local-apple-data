@@ -1,8 +1,8 @@
 # Capability Matrix
 
-This matrix describes the current public surface and the intended approval gates for future expansion. The plugin is local-only and metadata-first. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply.
+This matrix describes the current public surface and the intended approval gates for future expansion. The plugin is local-only and metadata-first. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply.
 
-For install instructions, see `docs/INSTALL.md`. For macOS support and permission behavior, see `docs/MACOS_SUPPORT.md`. For future write sequencing, see `docs/WRITE_TOOL_ROADMAP.md`, `docs/V1_11_REMINDERS_WRITE_DESIGN.md`, `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`, and `docs/V1_13_CALENDAR_WRITE_DESIGN.md`.
+For install instructions, see `docs/INSTALL.md`. For macOS support and permission behavior, see `docs/MACOS_SUPPORT.md`. For future write sequencing, see `docs/WRITE_TOOL_ROADMAP.md`, `docs/V1_11_REMINDERS_WRITE_DESIGN.md`, `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`, `docs/V1_13_CALENDAR_WRITE_DESIGN.md`, and `docs/V1_14_CONTACTS_WRITE_DESIGN.md`.
 
 | Surface | Local source | Search/list support | Exact detail support | Write support | Permissions | Current limits |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -14,7 +14,7 @@ For install instructions, see `docs/INSTALL.md`. For macOS support and permissio
 | iCloud Drive | Local filesystem under iCloud Drive | Filename metadata | Supported text-file content by `icloud:file:v1:` handle | Approved create-text file after plan approval token and explicit confirmation | Local file access | No binary/document extraction, hidden files, symlinks, raw paths, broad content search, append, overwrite, delete, or broad folder writes |
 | Calendar | EventKit helper | Event title metadata | Event detail by `calendar:event:v1:` handle | Approved timed-event create after plan approval token and explicit confirmation | Calendar permission | No broad dumps, attendees/URLs, raw EventKit IDs, recurrence, alarms, all-day events, update, delete, or default-calendar guessing |
 | Reminders | EventKit helper plus legacy SQLite metadata | Title/due metadata | Notes by `reminders:reminder:eventkit:v1:` handle | Approved create, complete, and due-date apply after plan approval token and explicit confirmation | Reminders permission | EventKit exact handles only for notes and apply targets; no broad dumps, raw EventKit IDs, delete, bulk, list/account, URL, attachment, or rich-content mutation |
-| Contacts | Contacts.framework helper | Name/organization metadata | Contact detail by `contacts:contact:v1:` handle | Not implemented | Contacts permission | No contact notes entitlement, image bytes, broad dumps, raw identifiers, or mutation |
+| Contacts | Contacts.framework helper | Name/organization metadata | Contact detail by `contacts:contact:v1:` handle | Approved create-contact after plan approval token and explicit confirmation | Contacts permission | No contact notes entitlement, image bytes, broad dumps, raw identifiers, update, delete, merge, group membership, postal addresses, birthdays, relationships, or bulk mutation |
 | Photos | PhotoKit helper | Original-filename metadata | Asset/resource metadata and caller-selected asset export by `photos:asset:v1:` handle | Not implemented | Photos permission | No inline asset bytes, thumbnails, raw identifiers, broad dumps, network iCloud fetch, or mutation |
 
 ## Handle Policy

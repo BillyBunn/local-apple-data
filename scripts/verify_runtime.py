@@ -19,7 +19,12 @@ from local_apple_data.adapters.calendar import (
     plan_calendar_change,
     search_calendar_events,
 )
-from local_apple_data.adapters.contacts import get_contact, search_contacts
+from local_apple_data.adapters.contacts import (
+    apply_contact_change,
+    get_contact,
+    plan_contact_change,
+    search_contacts,
+)
 from local_apple_data.adapters.icloud_drive import (
     apply_icloud_drive_change,
     get_icloud_drive_content,
@@ -687,6 +692,49 @@ def _contacts_runner(payload: dict[str, Any], _timeout: float) -> dict[str, Any]
             },
             "warnings": [],
         }
+    if payload["command"] == "contacts_apply_change":
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "contacts",
+            "authorization_status": "authorized",
+            "contact": {
+                "contact_id": "runtime-created-contact-1",
+                "display_name": "Synthetic runtime created contact",
+                "contact_type": payload["contact_type"],
+                "given_name": payload["given_name"],
+                "family_name": payload["family_name"],
+                "nickname": payload["nickname"],
+                "organization_name": payload["organization_name"],
+                "department_name": payload["department_name"],
+                "job_title": payload["job_title"],
+                "email_count": len(payload["email_addresses"]),
+                "phone_count": len(payload["phone_numbers"]),
+                "postal_address_count": 0,
+                "url_count": len(payload["url_addresses"]),
+                "social_profile_count": 0,
+                "instant_message_count": 0,
+                "relation_count": 0,
+                "dates_count": 0,
+                "birthday_present": False,
+                "image_available": False,
+                "note_status": "requires_entitlement",
+                "name_prefix": "",
+                "middle_name": "",
+                "previous_family_name": "",
+                "name_suffix": "",
+                "email_addresses": payload["email_addresses"],
+                "phone_numbers": payload["phone_numbers"],
+                "postal_addresses": [],
+                "url_addresses": payload["url_addresses"],
+                "birthday": {},
+                "dates": [],
+                "social_profiles": [],
+                "instant_message_addresses": [],
+                "contact_relations": [],
+            },
+            "warnings": [],
+        }
     raise RuntimeError("unexpected contacts helper command")
 
 
@@ -702,6 +750,62 @@ def _contacts_content_smoke() -> dict[str, Any]:
         "contacts_note_status": content["result"]["note_status"],
         "contacts_legacy_content_status": legacy_content["status"],
         "contacts_legacy_content_warning": legacy_content["warnings"][0]["code"],
+    }
+
+
+def _contacts_plan_apply_smoke() -> dict[str, Any]:
+    plan = plan_contact_change(
+        "create",
+        contact_type="person",
+        given_name="Synthetic",
+        family_name="Runtime Created",
+        organization_name="Synthetic Org",
+        job_title="Verifier",
+        email_addresses=[{"label": "work", "value": "synthetic-runtime@example.invalid"}],
+        phone_numbers=[{"label": "mobile", "value": "+1 555 0102"}],
+        url_addresses=[{"label": "work", "value": "https://example.invalid/runtime"}],
+    )
+    token = "contacts-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    missing_confirmation = apply_contact_change(
+        "create",
+        contact_type="person",
+        given_name="Synthetic",
+        family_name="Runtime Created",
+        organization_name="Synthetic Org",
+        job_title="Verifier",
+        email_addresses=[{"label": "work", "value": "synthetic-runtime@example.invalid"}],
+        phone_numbers=[{"label": "mobile", "value": "+1 555 0102"}],
+        url_addresses=[{"label": "work", "value": "https://example.invalid/runtime"}],
+        approval_token=token,
+        contacts_runner=_contacts_runner,
+    )
+    result = apply_contact_change(
+        "create",
+        contact_type="person",
+        given_name="Synthetic",
+        family_name="Runtime Created",
+        organization_name="Synthetic Org",
+        job_title="Verifier",
+        email_addresses=[{"label": "work", "value": "synthetic-runtime@example.invalid"}],
+        phone_numbers=[{"label": "mobile", "value": "+1 555 0102"}],
+        url_addresses=[{"label": "work", "value": "https://example.invalid/runtime"}],
+        approval_token=token,
+        confirm_apply=True,
+        contacts_runner=_contacts_runner,
+    )
+    return {
+        "contacts_plan_status": plan["status"],
+        "contacts_plan_mode": plan["mode"],
+        "contacts_plan_mutation_applied": plan["mutation_applied"],
+        "contacts_plan_apply_available": plan["apply_available"],
+        "contacts_plan_idempotency_key": plan["preview"]["idempotency_key"].startswith(
+            "contacts-plan:v1:"
+        ),
+        "contacts_apply_status": result["status"],
+        "contacts_apply_mode": result["mode"],
+        "contacts_apply_mutation_applied": result["mutation_applied"],
+        "contacts_apply_read_back_given_name": result["read_back"]["given_name"],
+        "contacts_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
     }
 
 
@@ -961,7 +1065,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 35,
+        "tool_count": 37,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1051,6 +1155,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "contacts_note_status": "requires_entitlement",
         "contacts_legacy_content_status": "error",
         "contacts_legacy_content_warning": "invalid_handle",
+        "contacts_plan_status": "ok",
+        "contacts_plan_mode": "plan",
+        "contacts_plan_mutation_applied": False,
+        "contacts_plan_apply_available": True,
+        "contacts_plan_idempotency_key": True,
+        "contacts_apply_status": "ok",
+        "contacts_apply_mode": "apply",
+        "contacts_apply_mutation_applied": True,
+        "contacts_apply_read_back_given_name": "Synthetic",
+        "contacts_apply_missing_confirmation": "missing_apply_confirmation",
         "photos_opaque_handle": True,
         "photos_detail_status": "ok",
         "photos_resource_count": 1,
@@ -1104,6 +1218,7 @@ def main() -> None:
         summary.update(_calendar_content_smoke())
         summary.update(_calendar_plan_apply_smoke())
         summary.update(_contacts_content_smoke())
+        summary.update(_contacts_plan_apply_smoke())
         summary.update(_photos_content_smoke(tmp_path))
         summary.update(_reminders_content_smoke())
         summary.update(_reminders_plan_smoke())

@@ -23,7 +23,10 @@ def test_plugin_manifest_wires_skill_and_mcp() -> None:
     assert "MCP" in manifest["interface"]["capabilities"]
     assert "iCloud Drive" in manifest["description"]
     assert "Calendar" in manifest["description"]
-    assert "approved Reminders, iCloud Drive, and Calendar apply" in manifest["description"]
+    assert (
+        "approved Reminders, iCloud Drive, Calendar, and Contacts apply"
+        in manifest["description"]
+    )
 
 
 def test_mcp_manifest_uses_local_server_entrypoint() -> None:
@@ -53,6 +56,8 @@ def test_skill_metadata_mentions_local_mcp_dependency() -> None:
     assert "calendar_plan_change" in skill
     assert "calendar_apply_change" in skill
     assert "contacts_get" in skill
+    assert "contacts_plan_change" in skill
+    assert "contacts_apply_change" in skill
     assert "hide_my_email_get_alias" in skill
     assert "icloud_drive_get_content" in skill
     assert "icloud_drive_plan_change" in skill
@@ -88,6 +93,7 @@ def test_public_release_docs_are_present() -> None:
         "docs/V1_11_REMINDERS_WRITE_DESIGN.md",
         "docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md",
         "docs/V1_13_CALENDAR_WRITE_DESIGN.md",
+        "docs/V1_14_CONTACTS_WRITE_DESIGN.md",
         "docs/WRITE_TOOL_ROADMAP.md",
         "docs/PUBLISHING.md",
     ]

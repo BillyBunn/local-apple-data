@@ -51,15 +51,15 @@ def _make_minimal_project(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (root / "README.md").write_text(
-        "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply.\n",
+        "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
-        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, and `calendar_apply_change`.\n",
+        "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, and `contacts_apply_change`.\n",
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply are the only approved write surfaces.\n",
+        "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply are the only approved write surfaces.\n",
         encoding="utf-8",
     )
     for contract in write_design_gate.REQUIRED_DESIGN_DOCS.values():
@@ -79,7 +79,7 @@ def _write_surface_contract_files(root: Path) -> None:
         "from mcp.server.fastmcp import FastMCP",
         "READ_ONLY_ANNOTATIONS = object()",
         "WRITE_ANNOTATIONS = object()",
-        'INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, and Calendar create-event apply."',
+        'INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply."',
         'mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)',
     ]
     for tool in tools:
@@ -87,6 +87,7 @@ def _write_surface_contract_files(root: Path) -> None:
             "WRITE_ANNOTATIONS"
             if tool in {
                 "calendar_apply_change",
+                "contacts_apply_change",
                 "icloud_drive_apply_change",
                 "reminders_apply_change",
             }

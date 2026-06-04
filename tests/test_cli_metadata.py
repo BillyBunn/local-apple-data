@@ -497,3 +497,104 @@ def test_cli_calendar_plan_and_apply_create(monkeypatch, capsys) -> None:
     assert parsed["status"] == "ok"
     assert parsed["mode"] == "apply"
     assert parsed["mutation_applied"] is True
+
+
+def test_cli_contacts_plan_and_apply_create(monkeypatch, capsys) -> None:
+    plan_exit_code = main(
+        [
+            "contacts",
+            "plan",
+            "--json",
+            "--operation",
+            "create",
+            "--contact-type",
+            "person",
+            "--given-name",
+            "Synthetic",
+            "--family-name",
+            "Created",
+            "--organization-name",
+            "Example Org",
+            "--job-title",
+            "Tester",
+            "--email",
+            "work=synthetic@example.invalid",
+            "--phone",
+            "mobile=+1 555 0101",
+            "--url",
+            "work=https://example.invalid/contact",
+        ]
+    )
+    assert plan_exit_code == 0
+    plan = json.loads(capsys.readouterr().out)
+    token = "contacts-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def fake_apply_contact_change(operation: str, **kwargs):
+        assert operation == "create"
+        assert kwargs["contact_type"] == "person"
+        assert kwargs["given_name"] == "Synthetic"
+        assert kwargs["family_name"] == "Created"
+        assert kwargs["organization_name"] == "Example Org"
+        assert kwargs["job_title"] == "Tester"
+        assert kwargs["email_addresses"] == [
+            {"label": "work", "value": "synthetic@example.invalid"}
+        ]
+        assert kwargs["phone_numbers"] == [{"label": "mobile", "value": "+1 555 0101"}]
+        assert kwargs["url_addresses"] == [
+            {"label": "work", "value": "https://example.invalid/contact"}
+        ]
+        assert kwargs["approval_token"] == token
+        assert kwargs["confirm_apply"] is True
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "contacts",
+            "privacy": {"content_inspected": True, "output_tier": "mutation"},
+            "mode": "apply",
+            "operation": "create",
+            "mutation_applied": True,
+            "apply_available": True,
+            "read_back": {"given_name": "Synthetic", "family_name": "Created"},
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(
+        "local_apple_data.cli.apply_contact_change",
+        fake_apply_contact_change,
+    )
+
+    apply_exit_code = main(
+        [
+            "contacts",
+            "apply",
+            "--json",
+            "--operation",
+            "create",
+            "--contact-type",
+            "person",
+            "--given-name",
+            "Synthetic",
+            "--family-name",
+            "Created",
+            "--organization-name",
+            "Example Org",
+            "--job-title",
+            "Tester",
+            "--email",
+            "work=synthetic@example.invalid",
+            "--phone",
+            "mobile=+1 555 0101",
+            "--url",
+            "work=https://example.invalid/contact",
+            "--approval-token",
+            token,
+            "--confirm-apply",
+        ]
+    )
+
+    assert apply_exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "apply"
+    assert parsed["mutation_applied"] is True
