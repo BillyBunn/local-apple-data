@@ -51,9 +51,9 @@ APPROVED_PREVIEW_TOOLS: tuple[str, ...] = (
     "reminders_plan_change",
 )
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply",
     "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, `mail_apply_change`, `photos apply`, and `photos_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply are the only approved write surfaces",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply are the only approved write surfaces",
 }
 REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
@@ -93,7 +93,7 @@ REQUIRED_DESIGN_DOCS = {
             "idempotency",
             "redaction",
             "Synthetic Tests Required",
-            "The current release allows only this iCloud Drive create-text apply surface.",
+            "The v1.12 release allowed only this iCloud Drive create-text apply surface.",
         ),
     },
     "calendar_write_v1": {
@@ -196,6 +196,27 @@ REQUIRED_DESIGN_DOCS = {
             "redaction",
             "Synthetic Tests Required",
             "The current release allows only this Photos import apply surface.",
+        ),
+    },
+    "icloud_drive_append_write_v1": {
+        "path": "docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md",
+        "phrases": (
+            "Status: Apply-capable implementation.",
+            "Approved write tools: `local-apple-data icloud-drive apply` and `icloud_drive_apply_change`.",
+            "`local-apple-data icloud-drive plan` and `icloud_drive_plan_change`",
+            "No new write tool names are approved or exposed by this document.",
+            "preview",
+            "apply",
+            "read_back",
+            "mutation_applied:false",
+            "approval token",
+            "exact opaque `icloud:file:v1:` handle",
+            "expected-current-SHA-256",
+            "drift refusal",
+            "idempotency",
+            "redaction",
+            "Synthetic Tests Required",
+            "The current release allows iCloud Drive create-text and append-text apply only.",
         ),
     },
 }

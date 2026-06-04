@@ -17,7 +17,7 @@ This project provides a privacy-gated CLI and MCP server for locally synced:
 - Apple Photos
 - iCloud Drive local files and folders
 
-The current release is local-only and read-mostly. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation. The plugin does not use the Gmail connector, Gmail API, IMAP credentials, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
+The current release is local-only and read-mostly. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply, and each requires a matching plan approval token plus explicit confirmation. The plugin does not use the Gmail connector, Gmail API, IMAP credentials, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
 
 ## Current Status
 
@@ -44,6 +44,8 @@ Implemented now:
 - `local-apple-data icloud-drive content --json --handle <icloud:file:v1:...> --max-chars 4000` for exact-handle local iCloud Drive text-file content
 - `local-apple-data icloud-drive plan --json --operation create-text --parent-handle <icloud:file:v1:...> --filename <name.md> --content-text <text>` for non-mutating future text-file create previews with idempotency and approval metadata
 - `local-apple-data icloud-drive apply --json --operation create-text --parent-handle <icloud:file:v1:...> --filename <name.md> --content-text <text> --approval-token <token> --confirm-apply` for the approved iCloud Drive create-text path, with exclusive create and read-back verification
+- `local-apple-data icloud-drive plan --json --operation append-text --handle <icloud:file:v1:...> --expected-current-sha256 <sha256> --content-text <text>` for non-mutating future text append previews with expected-current-content binding
+- `local-apple-data icloud-drive apply --json --operation append-text --handle <icloud:file:v1:...> --expected-current-sha256 <sha256> --content-text <text> --approval-token <token> --confirm-apply` for the approved iCloud Drive append-text path, with drift refusal and read-back hash verification
 - `local-apple-data calendar search/get` commands for local Calendar events by title through EventKit
 - `local-apple-data calendar plan --json --operation create --title <title> --calendar-title <calendar> --start-date <ISO> --end-date <ISO>` for non-mutating future timed-event create previews with idempotency and approval metadata
 - `local-apple-data calendar apply --json --operation create --title <title> --calendar-title <calendar> --start-date <ISO> --end-date <ISO> --approval-token <token> --confirm-apply` for the approved Calendar create-event path, with EventKit apply and read-back verification
@@ -96,8 +98,8 @@ Implemented now:
 
 Deferred:
 
-- Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, Notes create-note apply surface, Mail create-draft apply surface, and Photos import apply surface
-- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes append/update/delete/move/folder-account/rich-text/attachment mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages/Voice Memos mutation, Reminders delete/bulk/list/account mutation, iCloud Drive append/overwrite/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, attachments, unsupported/binary iCloud Drive content extraction, and durable content caches
+- Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create/append-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, Notes create-note apply surface, Mail create-draft apply surface, and Photos import apply surface
+- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes append/update/delete/move/folder-account/rich-text/attachment mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages/Voice Memos mutation, Reminders delete/bulk/list/account mutation, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, attachments, unsupported/binary iCloud Drive content extraction, and durable content caches
 
 The v1.1 design gate for exact-handle Mail content retrieval is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`.
 The v1.2 Notes content and broader local Apple data expansion plan is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`.
@@ -112,6 +114,7 @@ The first Contacts write design gate is documented in `docs/V1_14_CONTACTS_WRITE
 The first Notes write design gate is documented in `docs/V1_15_NOTES_WRITE_DESIGN.md`.
 The first Mail draft write design gate is documented in `docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md`.
 The first Photos import write design gate is documented in `docs/V1_17_PHOTOS_IMPORT_WRITE_DESIGN.md`.
+The first iCloud Drive append-text write design gate is documented in `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.
@@ -157,6 +160,8 @@ uv run local-apple-data icloud-drive search --json --query '<filename text>'
 uv run local-apple-data icloud-drive content --json --handle '<icloud:file:v1:...>' --max-chars 4000
 uv run local-apple-data icloud-drive plan --json --operation create-text --parent-handle '<icloud:file:v1:...>' --filename '<new-file.md>' --content-text '<text>'
 uv run local-apple-data icloud-drive apply --json --operation create-text --parent-handle '<icloud:file:v1:...>' --filename '<new-file.md>' --content-text '<text>' --approval-token '<icloud-drive-apply:v1:...>' --confirm-apply
+uv run local-apple-data icloud-drive plan --json --operation append-text --handle '<icloud:file:v1:...>' --expected-current-sha256 '<sha256-from-content>' --content-text '<text>'
+uv run local-apple-data icloud-drive apply --json --operation append-text --handle '<icloud:file:v1:...>' --expected-current-sha256 '<sha256-from-content>' --content-text '<text>' --approval-token '<icloud-drive-apply:v1:...>' --confirm-apply
 uv run local-apple-data calendar search --json --query '<event title text>'
 uv run local-apple-data calendar get --json --handle '<calendar:event:v1:...>' --max-chars 4000
 uv run local-apple-data calendar plan --json --operation create --title '<event title>' --calendar-title '<target calendar>' --start-date '<ISO timestamp>' --end-date '<ISO timestamp>'

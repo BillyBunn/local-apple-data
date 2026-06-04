@@ -42,7 +42,7 @@ def test_mutation_gate_audit_flags_mcp_write_tool(tmp_path: Path) -> None:
         """
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def reminders_create() -> dict:
@@ -65,7 +65,7 @@ def test_mutation_gate_audit_flags_non_readonly_mcp_annotation(tmp_path: Path) -
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
 WRITE_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=WRITE_ANNOTATIONS)
 def reminders_search() -> dict:
@@ -104,7 +104,7 @@ def _minimal_project(tmp_path: Path) -> Path:
     root.joinpath("docs").mkdir()
 
     (root / "README.md").write_text(
-        "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply.\n",
+        "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply.\n",
         encoding="utf-8",
     )
     (root / "docs/MUTATION_GATES.md").write_text(
@@ -112,7 +112,7 @@ def _minimal_project(tmp_path: Path) -> Path:
         encoding="utf-8",
     )
     (root / "docs/WRITE_TOOL_ROADMAP.md").write_text(
-        "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply are the only approved write surfaces.\n",
+        "Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply are the only approved write surfaces.\n",
         encoding="utf-8",
     )
     (root / ".codex-plugin/plugin.json").write_text(
@@ -123,7 +123,7 @@ def _minimal_project(tmp_path: Path) -> Path:
         """
 from mcp.server.fastmcp import FastMCP
 READ_ONLY_ANNOTATIONS = object()
-INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply."
+INSTRUCTIONS = "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create-note apply, Mail create-draft apply, and Photos import apply."
 mcp = FastMCP("local-apple-data", instructions=INSTRUCTIONS)
 @mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
 def reminders_search() -> dict:

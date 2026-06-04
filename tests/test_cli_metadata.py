@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from pathlib import Path
@@ -465,6 +466,93 @@ def test_cli_icloud_drive_plan_and_apply_create_text(
     assert (root / "Packets" / "new-note.md").read_text(encoding="utf-8") == (
         "Synthetic CLI iCloud text."
     )
+
+
+def test_cli_icloud_drive_plan_and_apply_append_text(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    root = tmp_path / "CloudDocs"
+    _icloud_root(root)
+
+    search_exit_code = main(
+        [
+            "icloud-drive",
+            "search",
+            "--json",
+            "--query",
+            "synthetic-packet",
+            "--root",
+            str(root),
+        ]
+    )
+    assert search_exit_code == 0
+    handle = json.loads(capsys.readouterr().out)["results"][0]["handle"]
+
+    content_exit_code = main(
+        [
+            "icloud-drive",
+            "content",
+            "--json",
+            "--handle",
+            handle,
+            "--root",
+            str(root),
+        ]
+    )
+    assert content_exit_code == 0
+    current_sha = json.loads(capsys.readouterr().out)["result"]["content_sha256"]
+
+    plan_exit_code = main(
+        [
+            "icloud-drive",
+            "plan",
+            "--json",
+            "--operation",
+            "append-text",
+            "--handle",
+            handle,
+            "--expected-current-sha256",
+            current_sha,
+            "--content-text",
+            "\nSynthetic CLI append.",
+        ]
+    )
+    assert plan_exit_code == 0
+    plan = json.loads(capsys.readouterr().out)
+    token = "icloud-drive-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    apply_exit_code = main(
+        [
+            "icloud-drive",
+            "apply",
+            "--json",
+            "--operation",
+            "append-text",
+            "--handle",
+            handle,
+            "--expected-current-sha256",
+            current_sha,
+            "--content-text",
+            "\nSynthetic CLI append.",
+            "--approval-token",
+            token,
+            "--confirm-apply",
+            "--root",
+            str(root),
+        ]
+    )
+
+    expected = "Synthetic iCloud content.\nSynthetic CLI append."
+    assert apply_exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["operation"] == "append_text"
+    assert parsed["mutation_applied"] is True
+    assert parsed["read_back"]["content_sha256"] == hashlib.sha256(expected.encode("utf-8")).hexdigest()
+    assert (root / "synthetic-packet.md").read_text(encoding="utf-8") == expected
 
 
 def test_cli_calendar_search_and_get_use_exact_handle(

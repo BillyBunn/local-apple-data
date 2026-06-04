@@ -156,4 +156,4 @@ Before exposure, the iCloud Drive write implementation must add:
 
 ## Current Release Gate
 
-The current release allows only this iCloud Drive create-text apply surface. iCloud Drive append, overwrite, rename, move, copy, delete, binary/document generation, broad folder writes, raw path writes, and every other mutation class remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+The v1.12 release allowed only this iCloud Drive create-text apply surface. iCloud Drive append-text is governed separately by `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`. iCloud Drive overwrite, rename, move, copy, delete, binary/document generation, broad folder writes, raw path writes, and every other mutation class remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

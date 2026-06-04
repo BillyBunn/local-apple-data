@@ -2,7 +2,7 @@
 
 The current plugin is local-only and read-mostly. Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, `notes_apply_change`, `mail apply`, `mail_apply_change`, `photos apply`, and `photos_apply_change`.
 
-Those tools are limited to Reminders create, complete, and due-date update through the plan/apply/read-back contract in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`, iCloud Drive create-text through the plan/apply/read-back contract in `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`, Calendar create-event through the plan/apply/read-back contract in `docs/V1_13_CALENDAR_WRITE_DESIGN.md`, Contacts create-contact through the plan/apply/read-back contract in `docs/V1_14_CONTACTS_WRITE_DESIGN.md`, Notes create-note through the plan/apply/read-back contract in `docs/V1_15_NOTES_WRITE_DESIGN.md`, Mail create-draft through the plan/apply/read-back contract in `docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md`, and Photos import through the plan/apply/read-back contract in `docs/V1_17_PHOTOS_IMPORT_WRITE_DESIGN.md`. All other write tools remain intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
+Those tools are limited to Reminders create, complete, and due-date update through the plan/apply/read-back contract in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`, iCloud Drive create-text through the plan/apply/read-back contract in `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`, iCloud Drive append-text through the plan/apply/read-back contract in `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`, Calendar create-event through the plan/apply/read-back contract in `docs/V1_13_CALENDAR_WRITE_DESIGN.md`, Contacts create-contact through the plan/apply/read-back contract in `docs/V1_14_CONTACTS_WRITE_DESIGN.md`, Notes create-note through the plan/apply/read-back contract in `docs/V1_15_NOTES_WRITE_DESIGN.md`, Mail create-draft through the plan/apply/read-back contract in `docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md`, and Photos import through the plan/apply/read-back contract in `docs/V1_17_PHOTOS_IMPORT_WRITE_DESIGN.md`. All other write tools remain intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
 
 For sequencing and later candidates, see `docs/WRITE_TOOL_ROADMAP.md`.
 
@@ -25,7 +25,7 @@ The current `reminders plan` / `icloud-drive plan` / `calendar plan` / `contacts
 
 The current `reminders apply` CLI command and `reminders_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, operation-specific expected state, EventKit apply, and read-back verification. MCP annotations mark `reminders_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
 
-The current `icloud-drive apply` CLI command and `icloud_drive_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, exact opaque parent folder handle, exclusive create, and read-back verification. MCP annotations mark `icloud_drive_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
+The current `icloud-drive apply` CLI command and `icloud_drive_apply_change` MCP tool are mutating tools. For create-text they require a matching approval token from the plan fingerprint, explicit confirmation, exact opaque parent folder handle, exclusive create, and read-back verification. For append-text they require a matching approval token, explicit confirmation, exact opaque file handle, expected current content SHA-256, drift refusal, bounded UTF-8 append, and read-back hash verification. MCP annotations mark `icloud_drive_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
 
 The current `calendar apply` CLI command and `calendar_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, explicit target calendar title, EventKit apply, and read-back verification. MCP annotations mark `calendar_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
 
@@ -49,7 +49,7 @@ The current `photos apply` CLI command and `photos_apply_change` MCP tool are mu
 | Photos | Import one image or video asset | PhotoKit change requests | Approved. Confirm caller-selected source file, inferred media type, file size/hash, approval token, and explicit confirmation before apply; no edits, delete, album targeting, hidden/favorite/metadata mutation, network fetch, or bulk operations |
 | Messages | None in first write phase | Messages.app automation later | Sending/editing must remain outside the plugin until identity/account confirmation is solved |
 | Hide My Email | None | No approved local public API | Authoritative inventory or mutation requires a new source review and explicit approval |
-| iCloud Drive | Create text file | Local filesystem | Approved. Confirm exact parent folder by opaque handle, filename, content hash, approval token, and explicit confirmation before apply; no append/overwrite/delete |
+| iCloud Drive | Create text file; append text to an exact text file | Local filesystem | Approved. Confirm exact parent folder or file by opaque handle, filename or expected current SHA-256, content hash, approval token, and explicit confirmation before apply; no overwrite/rename/move/copy/delete |
 
 ## Default Refusals
 
@@ -65,7 +65,7 @@ Outside the approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail dr
 - Calendar update, delete, move, recurrence, attendees, invitations, URLs, alarms, attachments, travel time, availability changes, all-day events, default-calendar guessing, or bulk operations.
 - Contacts update, delete, merge, move, group membership, postal addresses, birthdays, dates, relationships, social profiles, instant messaging addresses, notes, image data, custom labels beyond bounded local labels, or bulk operations.
 - Reminders bulk mutation, list/account management, attachment mutation, URL/rich-content mutation, delete, or uncomplete.
-- iCloud Drive append, overwrite, rename, move, copy, delete, binary/document writes, raw path writes, hidden-file writes, symlink/package traversal, or broad folder writes.
+- iCloud Drive overwrite, rename, move, copy, delete, binary/document writes, raw path writes, hidden-file writes, symlink/package traversal, or broad folder writes.
 - Bulk mutation.
 - Mutation through iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, OAuth, IMAP, or connector fallbacks.
 

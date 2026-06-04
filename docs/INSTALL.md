@@ -147,7 +147,7 @@ openclaw mcp set local-apple-data \
 openclaw mcp doctor local-apple-data --probe
 ```
 
-Use tool filters if a client should remain strictly read-only. The current release exposes seven approved write tools: `reminders_apply_change` for Reminders create/complete/due-date apply, `icloud_drive_apply_change` for iCloud Drive create-text apply, `calendar_apply_change` for Calendar create-event apply, `contacts_apply_change` for Contacts create-contact apply, `notes_apply_change` for Notes create-note apply, `mail_apply_change` for Mail create-draft apply, and `photos_apply_change` for Photos import apply after plan approval-token and explicit-confirmation checks.
+Use tool filters if a client should remain strictly read-only. The current release exposes seven approved write tools: `reminders_apply_change` for Reminders create/complete/due-date apply, `icloud_drive_apply_change` for iCloud Drive create/append-text apply, `calendar_apply_change` for Calendar create-event apply, `contacts_apply_change` for Contacts create-contact apply, `notes_apply_change` for Notes create-note apply, `mail_apply_change` for Mail create-draft apply, and `photos_apply_change` for Photos import apply after plan approval-token and explicit-confirmation checks.
 
 ## First Smoke
 

@@ -372,8 +372,10 @@ def _icloud_drive_plan_command(args: argparse.Namespace) -> int:
     payload = plan_icloud_drive_change(
         args.operation,
         parent_handle=args.parent_handle or "",
+        handle=args.handle or "",
         filename=args.filename or "",
         content_text=args.content_text or "",
+        expected_current_sha256=args.expected_current_sha256 or "",
     )
     log_result("icloud_drive.plan", payload)
     _print_json(payload)
@@ -385,8 +387,10 @@ def _icloud_drive_apply_command(args: argparse.Namespace) -> int:
         apply_icloud_drive_change(
             args.operation,
             parent_handle=args.parent_handle or "",
+            handle=args.handle or "",
             filename=args.filename or "",
             content_text=args.content_text or "",
+            expected_current_sha256=args.expected_current_sha256 or "",
             approval_token=args.approval_token or "",
             confirm_apply=args.confirm_apply,
             root=Path(args.root).expanduser(),
@@ -395,8 +399,10 @@ def _icloud_drive_apply_command(args: argparse.Namespace) -> int:
         else apply_icloud_drive_change(
             args.operation,
             parent_handle=args.parent_handle or "",
+            handle=args.handle or "",
             filename=args.filename or "",
             content_text=args.content_text or "",
+            expected_current_sha256=args.expected_current_sha256 or "",
             approval_token=args.approval_token or "",
             confirm_apply=args.confirm_apply,
         )
@@ -1149,57 +1155,77 @@ def build_parser() -> argparse.ArgumentParser:
 
     icloud_drive_plan = icloud_drive_subparsers.add_parser(
         "plan",
-        help="Plan a future iCloud Drive text-file creation without applying it.",
+        help="Plan a future iCloud Drive text-file change without applying it.",
     )
     icloud_drive_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
     icloud_drive_plan.add_argument(
         "--operation",
         required=True,
-        choices=["create-text", "create_text"],
+        choices=["create-text", "create_text", "append-text", "append_text"],
         help="Future iCloud Drive operation to plan. No mutation is applied.",
     )
     icloud_drive_plan.add_argument(
         "--parent-handle",
-        required=True,
-        help="Opaque iCloud Drive directory handle from search output.",
+        default="",
+        help="Opaque iCloud Drive directory handle from search output for create-text.",
+    )
+    icloud_drive_plan.add_argument(
+        "--handle",
+        default="",
+        help="Opaque iCloud Drive file handle from search output for append-text.",
     )
     icloud_drive_plan.add_argument(
         "--filename",
-        required=True,
+        default="",
         help="New text filename to create inside the selected directory.",
     )
     icloud_drive_plan.add_argument(
         "--content-text",
         required=True,
-        help="Text content for the new file, capped at 12000 characters.",
+        help="Text content for the new file or append, capped at 12000 characters.",
+    )
+    icloud_drive_plan.add_argument(
+        "--expected-current-sha256",
+        default="",
+        help="Current normalized content SHA-256 required for append-text.",
     )
     icloud_drive_plan.set_defaults(func=_icloud_drive_plan_command)
 
     icloud_drive_apply = icloud_drive_subparsers.add_parser(
         "apply",
-        help="Apply an approved iCloud Drive text-file creation and read back metadata.",
+        help="Apply an approved iCloud Drive text-file change and read back metadata.",
     )
     icloud_drive_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
     icloud_drive_apply.add_argument(
         "--operation",
         required=True,
-        choices=["create-text", "create_text"],
+        choices=["create-text", "create_text", "append-text", "append_text"],
         help="Approved iCloud Drive operation to apply.",
     )
     icloud_drive_apply.add_argument(
         "--parent-handle",
-        required=True,
-        help="Opaque iCloud Drive directory handle from search output.",
+        default="",
+        help="Opaque iCloud Drive directory handle from search output for create-text.",
+    )
+    icloud_drive_apply.add_argument(
+        "--handle",
+        default="",
+        help="Opaque iCloud Drive file handle from search output for append-text.",
     )
     icloud_drive_apply.add_argument(
         "--filename",
-        required=True,
+        default="",
         help="New text filename to create inside the selected directory.",
     )
     icloud_drive_apply.add_argument(
         "--content-text",
         required=True,
-        help="Text content for the new file, capped at 12000 characters.",
+        help="Text content for the new file or append, capped at 12000 characters.",
+    )
+    icloud_drive_apply.add_argument(
+        "--expected-current-sha256",
+        default="",
+        help="Current normalized content SHA-256 required for append-text.",
     )
     icloud_drive_apply.add_argument(
         "--approval-token",

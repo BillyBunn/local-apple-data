@@ -18,7 +18,7 @@ DEFAULT_CONTENT_CHARS = 4000
 MAX_CONTENT_CHARS = 12000
 MAX_PREVIEW_FILENAME_CHARS = 255
 MAX_SCAN_ENTRIES = 20000
-PLAN_OPERATIONS = {"create_text"}
+PLAN_OPERATIONS = {"create_text", "append_text"}
 APPROVAL_TOKEN_PREFIX = "icloud-drive-apply:v1:"
 TEXT_SUFFIXES = {
     ".css",
@@ -255,6 +255,7 @@ def get_icloud_drive_content(
         {
             "content_text": content_text,
             "content_chars": len(content_text),
+            "content_sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(),
             "truncated": truncated,
         }
     )
@@ -281,49 +282,104 @@ def plan_icloud_drive_change(
     operation: str,
     *,
     parent_handle: str = "",
+    handle: str = "",
     filename: str = "",
     content_text: str = "",
+    expected_current_sha256: str = "",
 ) -> dict[str, Any]:
     normalized_operation = operation.strip().replace("-", "_")
     warnings: list[dict[str, str]] = []
     if normalized_operation not in PLAN_OPERATIONS:
-        warnings.append(_warning("invalid_operation", "Expected operation create_text."))
-    if not is_opaque_handle(parent_handle.strip(), "icloud:file"):
+        warnings.append(_warning("invalid_operation", "Expected operation create_text or append_text."))
+
+    normalized_parent_handle = parent_handle.strip()
+    normalized_handle = handle.strip()
+    if normalized_operation == "create_text" and not is_opaque_handle(
+        normalized_parent_handle,
+        "icloud:file",
+    ):
         warnings.append(
             _warning(
                 "invalid_parent_handle",
                 "Expected icloud:file:v1 opaque directory handle from iCloud Drive search output.",
             )
         )
+    if normalized_operation == "append_text" and not is_opaque_handle(
+        normalized_handle,
+        "icloud:file",
+    ):
+        warnings.append(
+            _warning(
+                "invalid_handle",
+                "Expected icloud:file:v1 opaque file handle from iCloud Drive search output.",
+            )
+        )
+    if normalized_operation == "create_text" and normalized_handle:
+        warnings.append(
+            _warning(
+                "unexpected_handle",
+                "Create-text planning requires a parent handle, not a file handle.",
+            )
+        )
+    if normalized_operation == "append_text" and (normalized_parent_handle or filename.strip()):
+        warnings.append(
+            _warning(
+                "unexpected_create_target",
+                "Append-text planning requires a file handle, not a parent handle or filename.",
+            )
+        )
 
-    normalized_filename, filename_warning = _normalize_create_filename(filename)
-    if filename_warning is not None:
-        warnings.append(filename_warning)
+    normalized_filename = ""
+    if normalized_operation == "create_text":
+        normalized_filename, filename_warning = _normalize_create_filename(filename)
+        if filename_warning is not None:
+            warnings.append(filename_warning)
 
     normalized_content, content_warning = _normalize_create_text(content_text)
     if content_warning is not None:
         warnings.append(content_warning)
 
+    normalized_expected_sha = ""
+    if normalized_operation == "append_text":
+        normalized_expected_sha, sha_warning = _normalize_sha256(expected_current_sha256)
+        if sha_warning is not None:
+            warnings.append(sha_warning)
+
     if warnings:
         return _plan_error(warnings)
 
-    target = {
-        "parent_handle": parent_handle.strip(),
-        "filename": normalized_filename,
-    }
-    proposed = {
-        "kind": "file",
-        "content_type": "text",
-        "content_chars": len(normalized_content),
-        "extension": Path(normalized_filename).suffix.lower() or None,
-    }
+    if normalized_operation == "create_text":
+        target = {
+            "parent_handle": normalized_parent_handle,
+            "filename": normalized_filename,
+        }
+        proposed = {
+            "kind": "file",
+            "content_type": "text",
+            "content_chars": len(normalized_content),
+            "extension": Path(normalized_filename).suffix.lower() or None,
+        }
+    else:
+        target = {
+            "handle": normalized_handle,
+            "expected_current_sha256": normalized_expected_sha,
+        }
+        proposed = {
+            "kind": "file",
+            "content_type": "text",
+            "append_chars": len(normalized_content),
+            "append_content_sha256": hashlib.sha256(normalized_content.encode("utf-8")).hexdigest(),
+            "overwrite": "blocked",
+            "delete": "blocked",
+        }
     fingerprint_payload = {
         "operation": normalized_operation,
         "target": target,
-        "proposed": {
-            **proposed,
-            "content_sha256": hashlib.sha256(normalized_content.encode("utf-8")).hexdigest(),
-        },
+        "proposed": _fingerprint_proposed(
+            normalized_operation,
+            proposed,
+            normalized_content,
+        ),
     }
     idempotency_key = _plan_idempotency_key(fingerprint_payload)
     approval_fingerprint = _approval_fingerprint(
@@ -362,8 +418,10 @@ def apply_icloud_drive_change(
     operation: str,
     *,
     parent_handle: str = "",
+    handle: str = "",
     filename: str = "",
     content_text: str = "",
+    expected_current_sha256: str = "",
     approval_token: str = "",
     confirm_apply: bool = False,
     root: Path = DEFAULT_ICLOUD_DRIVE_ROOT,
@@ -372,8 +430,10 @@ def apply_icloud_drive_change(
     plan = plan_icloud_drive_change(
         operation,
         parent_handle=parent_handle,
+        handle=handle,
         filename=filename,
         content_text=content_text,
+        expected_current_sha256=expected_current_sha256,
     )
     if plan.get("status") != "ok":
         return _apply_error(_safe_warnings(plan), plan=plan)
@@ -395,6 +455,16 @@ def apply_icloud_drive_change(
             [_warning("icloud_drive_unavailable", "iCloud Drive root is missing or not writable.")],
             plan=plan,
             status="degraded",
+        )
+
+    normalized_operation = str(preview["operation"])
+    if normalized_operation == "append_text":
+        return _apply_append_text(
+            preview,
+            root=root,
+            max_scan_entries=max_scan_entries,
+            content_text=content_text,
+            approval_fingerprint=approval["approval_fingerprint"],
         )
 
     parent = _resolve_handle(parent_handle.strip(), root, max_scan_entries=max_scan_entries)
@@ -424,6 +494,7 @@ def apply_icloud_drive_change(
                 root=root,
                 idempotency_key=preview["idempotency_key"],
                 approval_fingerprint=approval["approval_fingerprint"],
+                operation=normalized_operation,
                 mutation_applied=False,
                 warnings=[_warning("already_applied", "iCloud Drive file already exists with matching content.")],
             )
@@ -449,6 +520,7 @@ def apply_icloud_drive_change(
         root=root,
         idempotency_key=preview["idempotency_key"],
         approval_fingerprint=approval["approval_fingerprint"],
+        operation=normalized_operation,
         mutation_applied=True,
         warnings=[],
     )
@@ -584,6 +656,103 @@ def _normalize_create_text(value: str) -> tuple[str, dict[str, str] | None]:
     return normalized, None
 
 
+def _normalize_sha256(value: str) -> tuple[str, dict[str, str] | None]:
+    normalized = value.strip().lower()
+    if not normalized:
+        return "", _warning("missing_required_field", "Missing required field: expected_current_sha256.")
+    if not re.fullmatch(r"[0-9a-f]{64}", normalized):
+        return "", _warning("invalid_expected_sha256", "expected_current_sha256 must be a 64-character SHA-256 hex digest.")
+    return normalized, None
+
+
+def _fingerprint_proposed(
+    operation: str,
+    proposed: dict[str, Any],
+    normalized_content: str,
+) -> dict[str, Any]:
+    if operation == "create_text":
+        return {
+            **proposed,
+            "content_sha256": hashlib.sha256(normalized_content.encode("utf-8")).hexdigest(),
+        }
+    return proposed
+
+
+def _apply_append_text(
+    preview: dict[str, Any],
+    *,
+    root: Path,
+    max_scan_entries: int,
+    content_text: str,
+    approval_fingerprint: str,
+) -> dict[str, Any]:
+    target = _resolve_handle(
+        str(preview["target"]["handle"]),
+        root,
+        max_scan_entries=max_scan_entries,
+    )
+    if target is None or not target.is_file():
+        return _apply_error(
+            [_warning("target_file_not_found", "iCloud Drive target file was not found.")],
+            plan={"preview": preview},
+            status="not_found",
+        )
+    try:
+        target.relative_to(root.expanduser())
+    except ValueError:
+        return _apply_error(
+            [_warning("target_outside_root", "iCloud Drive target escaped the configured root.")],
+            plan={"preview": preview},
+        )
+    if target.suffix.lower() not in TEXT_SUFFIXES:
+        return _apply_error(
+            [_warning("unsupported_file_type", "iCloud Drive append supports text-like file extensions only.")],
+            plan={"preview": preview},
+        )
+    try:
+        raw = target.read_bytes()
+    except OSError:
+        return _apply_error(
+            [_warning("read_error", "iCloud Drive target file could not be read before append.")],
+            plan={"preview": preview},
+        )
+    if b"\x00" in raw[:4096]:
+        return _apply_error(
+            [_warning("unsupported_file_type", "Binary iCloud Drive files cannot be appended through this tool.")],
+            plan={"preview": preview},
+        )
+
+    existing_text = raw.decode("utf-8", errors="replace").replace("\r\n", "\n").replace("\r", "\n")
+    current_sha = hashlib.sha256(existing_text.encode("utf-8")).hexdigest()
+    expected_sha = str(preview["target"]["expected_current_sha256"])
+    if current_sha != expected_sha:
+        return _apply_error(
+            [_warning("current_content_changed", "iCloud Drive target content hash did not match the approved plan.")],
+            plan={"preview": preview},
+        )
+
+    normalized_content, content_warning = _normalize_create_text(content_text)
+    if content_warning is not None:
+        return _apply_error([content_warning], plan={"preview": preview})
+    try:
+        with target.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(normalized_content)
+    except OSError:
+        return _apply_error(
+            [_warning("append_error", "iCloud Drive text could not be appended safely.")],
+            plan={"preview": preview},
+        )
+    return _apply_success(
+        target,
+        root=root,
+        idempotency_key=preview["idempotency_key"],
+        approval_fingerprint=approval_fingerprint,
+        operation="append_text",
+        mutation_applied=True,
+        warnings=[],
+    )
+
+
 def _plan_error(warnings: list[dict[str, str]]) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -628,6 +797,7 @@ def _apply_success(
     root: Path,
     idempotency_key: str,
     approval_fingerprint: str,
+    operation: str,
     mutation_applied: bool,
     warnings: list[dict[str, str]],
 ) -> dict[str, Any]:
@@ -648,7 +818,7 @@ def _apply_success(
         "source": "icloud_drive",
         "privacy": _mutation_privacy(content_inspected=True),
         "mode": "apply",
-        "operation": "create_text",
+        "operation": operation,
         "mutation_applied": mutation_applied,
         "apply_available": True,
         "idempotency_key": idempotency_key,

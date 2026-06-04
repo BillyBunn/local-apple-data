@@ -571,6 +571,7 @@ def _icloud_drive_content_smoke(tmp_path: Path) -> dict[str, Any]:
         "icloud_opaque_handle": handle.startswith("icloud:file:v1:"),
         "icloud_content_status": content["status"],
         "icloud_content_chars": content["result"]["content_chars"],
+        "icloud_content_sha256_present": bool(content["result"]["content_sha256"]),
         "icloud_legacy_content_status": legacy_content["status"],
         "icloud_legacy_content_warning": legacy_content["warnings"][0]["code"],
     }
@@ -606,6 +607,33 @@ def _icloud_drive_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
         approval_token=token,
         root=root,
     )
+    created_handle = result["read_back"]["handle"]
+    created_sha = result["read_back"]["content_sha256"]
+    append_plan = plan_icloud_drive_change(
+        "append_text",
+        handle=created_handle,
+        expected_current_sha256=created_sha,
+        content_text="\nSynthetic appended runtime content.",
+    )
+    append_token = "icloud-drive-apply:v1:" + append_plan["preview"]["approval"]["approval_fingerprint"]
+    append_result = apply_icloud_drive_change(
+        "append_text",
+        handle=created_handle,
+        expected_current_sha256=created_sha,
+        content_text="\nSynthetic appended runtime content.",
+        approval_token=append_token,
+        confirm_apply=True,
+        root=root,
+    )
+    stale_append = apply_icloud_drive_change(
+        "append_text",
+        handle=created_handle,
+        expected_current_sha256=created_sha,
+        content_text="\nSynthetic appended runtime content.",
+        approval_token=append_token,
+        confirm_apply=True,
+        root=root,
+    )
     return {
         "icloud_plan_status": plan["status"],
         "icloud_plan_mode": plan["mode"],
@@ -619,6 +647,12 @@ def _icloud_drive_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
         "icloud_apply_mutation_applied": result["mutation_applied"],
         "icloud_apply_read_back_name": result["read_back"]["name"],
         "icloud_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
+        "icloud_append_plan_status": append_plan["status"],
+        "icloud_append_plan_mode": append_plan["mode"],
+        "icloud_append_apply_status": append_result["status"],
+        "icloud_append_apply_mutation_applied": append_result["mutation_applied"],
+        "icloud_append_apply_sha_changed": append_result["read_back"]["content_sha256"] != created_sha,
+        "icloud_append_stale_warning": stale_append["warnings"][0]["code"],
     }
 
 

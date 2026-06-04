@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604170000 - 2026-06-04
+
+### Added
+
+- Approved iCloud Drive append-text apply through the existing `local-apple-data icloud-drive apply` and MCP `icloud_drive_apply_change` surfaces.
+- Non-mutating iCloud Drive append-text planning through `local-apple-data icloud-drive plan` and MCP `icloud_drive_plan_change`.
+- Exact-file-handle, expected-current-SHA-256, approval-token, explicit-confirmation, bounded UTF-8 append, drift-refusal, and read-back hash verification checks for iCloud Drive append-text apply.
+- Synthetic adapter, CLI, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the expanded iCloud Drive text apply surface.
+
+### Security
+
+- `icloud_drive_apply_change` remains non-destructive, idempotent, and closed-world at the MCP annotation level; append-text refuses to apply when the current content hash no longer matches the approved plan.
+- iCloud Drive overwrite, rename, move, copy, delete, binary/document writes, raw path writes, hidden-file writes, symlink/package traversal, and broad folder writes remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604160000 - 2026-06-04
 
 ### Added

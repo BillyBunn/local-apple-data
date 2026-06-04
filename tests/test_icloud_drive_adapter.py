@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from local_apple_data.adapters.icloud_drive import (
@@ -87,6 +88,7 @@ def test_get_icloud_drive_content_by_handle(tmp_path: Path) -> None:
     assert result["privacy"]["content_inspected"] is True
     assert result["result"]["content_text"] == "# Synthetic Packet\nLine two\n"
     assert result["result"]["content_chars"] == len(result["result"]["content_text"])
+    assert result["result"]["content_sha256"] == _content_sha("# Synthetic Packet\nLine two\n")
     assert result["result"]["truncated"] is False
 
 
@@ -141,6 +143,11 @@ def _approval_token(plan: dict) -> str:
     return f"icloud-drive-apply:v1:{fingerprint}"
 
 
+def _content_sha(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def test_plan_icloud_drive_change_create_text_returns_preview_only(tmp_path: Path) -> None:
     root = tmp_path / "CloudDocs"
     _make_icloud_root(root)
@@ -170,6 +177,35 @@ def test_plan_icloud_drive_change_create_text_returns_preview_only(tmp_path: Pat
     )
 
 
+def test_plan_icloud_drive_change_append_text_returns_preview_only(tmp_path: Path) -> None:
+    root = tmp_path / "CloudDocs"
+    _make_icloud_root(root)
+    handle = search_icloud_drive_metadata("review", root=root)["results"][0]["handle"]
+    current_sha = _content_sha("# Synthetic Packet\nLine two\n")
+
+    result = plan_icloud_drive_change(
+        "append-text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        content_text="\nAppended synthetic note.\n",
+    )
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["output_tier"] == "preview"
+    assert result["mutation_applied"] is False
+    assert result["apply_available"] is True
+    preview = result["preview"]
+    assert preview["operation"] == "append_text"
+    assert preview["target"] == {
+        "handle": handle,
+        "expected_current_sha256": current_sha,
+    }
+    assert preview["proposed"]["append_chars"] == 26
+    assert preview["proposed"]["append_content_sha256"] == _content_sha("\nAppended synthetic note.\n")
+    assert preview["proposed"]["overwrite"] == "blocked"
+    assert preview["idempotency_key"].startswith("icloud-drive-plan:v1:")
+
+
 def test_plan_icloud_drive_change_rejects_raw_path_filename(tmp_path: Path) -> None:
     root = tmp_path / "CloudDocs"
     _make_icloud_root(root)
@@ -183,6 +219,24 @@ def test_plan_icloud_drive_change_rejects_raw_path_filename(tmp_path: Path) -> N
 
     assert result["status"] == "error"
     assert result["warnings"][0]["code"] == "invalid_filename"
+
+
+def test_plan_icloud_drive_change_append_text_requires_hash_and_file_handle(tmp_path: Path) -> None:
+    root = tmp_path / "CloudDocs"
+    _make_icloud_root(root)
+
+    result = plan_icloud_drive_change(
+        "append_text",
+        parent_handle=_parent_handle(root),
+        filename="bad.md",
+        content_text="Synthetic append.",
+    )
+
+    codes = {warning["code"] for warning in result["warnings"]}
+    assert result["status"] == "error"
+    assert "invalid_handle" in codes
+    assert "unexpected_create_target" in codes
+    assert "missing_required_field" in codes
 
 
 def test_apply_icloud_drive_change_requires_confirmation(tmp_path: Path) -> None:
@@ -260,6 +314,100 @@ def test_apply_icloud_drive_change_creates_file_and_reads_back(tmp_path: Path) -
     assert result["read_back"]["content_chars"] == 15
     assert (root / "Packets" / "new-note.md").read_text(encoding="utf-8") == "Synthetic text."
     assert "Packets" not in str(result["read_back"])
+
+
+def test_apply_icloud_drive_change_appends_text_and_reads_back(tmp_path: Path) -> None:
+    root = tmp_path / "CloudDocs"
+    _make_icloud_root(root)
+    handle = search_icloud_drive_metadata("review", root=root)["results"][0]["handle"]
+    current_sha = _content_sha("# Synthetic Packet\nLine two\n")
+    append_text = "\nAppended synthetic note.\n"
+    plan = plan_icloud_drive_change(
+        "append_text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        content_text=append_text,
+    )
+
+    result = apply_icloud_drive_change(
+        "append_text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        content_text=append_text,
+        approval_token=_approval_token(plan),
+        confirm_apply=True,
+        root=root,
+    )
+
+    expected = "# Synthetic Packet\nLine two\n\nAppended synthetic note.\n"
+    assert result["status"] == "ok"
+    assert result["mode"] == "apply"
+    assert result["operation"] == "append_text"
+    assert result["mutation_applied"] is True
+    assert result["read_back"]["handle"].startswith("icloud:file:v1:")
+    assert result["read_back"]["name"] == "review-packet.md"
+    assert result["read_back"]["content_chars"] == len(expected)
+    assert result["read_back"]["content_sha256"] == _content_sha(expected)
+    assert (root / "Packets" / "review-packet.md").read_text(encoding="utf-8") == expected
+    assert "Packets" not in str(result["read_back"])
+
+
+def test_apply_icloud_drive_change_append_text_refuses_hash_drift(tmp_path: Path) -> None:
+    root = tmp_path / "CloudDocs"
+    _make_icloud_root(root)
+    handle = search_icloud_drive_metadata("review", root=root)["results"][0]["handle"]
+    current_sha = _content_sha("# Synthetic Packet\nLine two\n")
+    plan = plan_icloud_drive_change(
+        "append_text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        content_text="\nAppended synthetic note.\n",
+    )
+    (root / "Packets" / "review-packet.md").write_text(
+        "Changed synthetic content.\n",
+        encoding="utf-8",
+    )
+
+    result = apply_icloud_drive_change(
+        "append_text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        content_text="\nAppended synthetic note.\n",
+        approval_token=_approval_token(plan),
+        confirm_apply=True,
+        root=root,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "current_content_changed"
+    assert (root / "Packets" / "review-packet.md").read_text(encoding="utf-8") == "Changed synthetic content.\n"
+
+
+def test_apply_icloud_drive_change_append_text_rejects_unsupported_target(tmp_path: Path) -> None:
+    root = tmp_path / "CloudDocs"
+    _make_icloud_root(root)
+    handle = search_icloud_drive_metadata("image", root=root)["results"][0]["handle"]
+    current_sha = hashlib.sha256(b"\x00\x01").hexdigest()
+    plan = plan_icloud_drive_change(
+        "append_text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        content_text="\nAppended synthetic note.\n",
+    )
+
+    result = apply_icloud_drive_change(
+        "append_text",
+        handle=handle,
+        expected_current_sha256=current_sha,
+        content_text="\nAppended synthetic note.\n",
+        approval_token=_approval_token(plan),
+        confirm_apply=True,
+        root=root,
+    )
+
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "unsupported_file_type"
 
 
 def test_apply_icloud_drive_change_is_idempotent_for_matching_existing_file(tmp_path: Path) -> None:
