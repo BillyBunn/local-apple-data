@@ -21,6 +21,7 @@ These examples are synthetic. They are shape examples only and must not be repla
     "hide_my_email": {"status": "ok", "authoritative_inventory": false},
     "voice_memos": {"status": "ok"},
     "safari": {"status": "ok", "schema_check": "not_applicable"},
+    "shortcuts": {"status": "available", "schema_check": "not_applicable"},
     "notes": {"status": "ok", "automation_check": "on_exact_content_call"},
     "calendar": {"status": "checked_on_tool_call", "permission_check": "non_prompting_eventkit", "prompts": false},
     "reminders": {"status": "ok", "eventkit_check": "on_tool_call"},
@@ -76,6 +77,42 @@ These examples are synthetic. They are shape examples only and must not be repla
     "kind": "bookmark",
     "url_domain": "example.com",
     "url": "https://example.com/private/path?example=1"
+  },
+  "warnings": []
+}
+```
+
+## Shortcuts Search
+
+```json
+{
+  "status": "ok",
+  "source": "shortcuts",
+  "results": [
+    {
+      "handle": "<opaque shortcuts:item:v1 handle>",
+      "title": "Synthetic Shortcut",
+      "kind": "shortcut",
+      "identifier_present": true,
+      "shortcut_body_returned": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Shortcuts Exact Item
+
+```json
+{
+  "status": "ok",
+  "source": "shortcuts",
+  "result": {
+    "handle": "<opaque shortcuts:item:v1 handle>",
+    "title": "Synthetic Shortcut",
+    "kind": "shortcut",
+    "identifier_present": true,
+    "shortcut_body_returned": false
   },
   "warnings": []
 }

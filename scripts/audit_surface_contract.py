@@ -86,6 +86,14 @@ SURFACE_CONTRACTS = (
         mcp_tools=("safari_search", "safari_get_item"),
     ),
     SurfaceContract(
+        name="shortcuts",
+        label="Shortcuts",
+        cli_group="shortcuts",
+        cli_subparser="shortcuts_subparsers",
+        cli_commands=("search", "get"),
+        mcp_tools=("shortcuts_search", "shortcuts_get_item"),
+    ),
+    SurfaceContract(
         name="notes",
         label="Notes",
         cli_group="notes",

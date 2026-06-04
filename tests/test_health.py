@@ -9,7 +9,7 @@ from local_apple_data.health import DEFAULT_STORE_PATHS, build_health, health_js
 
 
 def _fake_which(name: str) -> str | None:
-    if name in {"uv", "swift", "sqlite3"}:
+    if name in {"uv", "swift", "sqlite3", "shortcuts"}:
         return f"/fake/bin/{name}"
     return None
 
@@ -172,6 +172,8 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["surfaces"]["hide_my_email"]["authoritative_inventory"] is False
     assert health["surfaces"]["safari"]["status"] == "ok"
     assert health["surfaces"]["safari"]["schema_check"] == "not_applicable"
+    assert health["surfaces"]["shortcuts"]["status"] == "available"
+    assert health["surfaces"]["shortcuts"]["tool_check"] == "shortcuts_cli"
     assert health["surfaces"]["icloud_drive"]["status"] == "ok"
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
     assert health["surfaces"]["calendar"]["prompts"] is False
@@ -194,6 +196,12 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
         and requirement["prompts"] is False
         for requirement in health["access_requirements"]
     )
+    assert any(
+        requirement["surface"] == "shortcuts"
+        and requirement["check_mode"] == "cli_availability_without_listing"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
     assert "warnings" in health
 
 
@@ -202,6 +210,27 @@ def test_build_health_degrades_for_missing_store(tmp_path: Path) -> None:
 
     assert health["status"] == "degraded"
     assert {warning["code"] for warning in health["warnings"]} == {"store_missing"}
+
+
+def test_build_health_converts_schema_exceptions_to_safe_warnings(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    _make_schema_stores(tmp_path)
+
+    def fail_schema(**_kwargs):
+        raise RuntimeError("raw local schema failure")
+
+    monkeypatch.setattr("local_apple_data.health.check_voice_memos_schema", fail_schema)
+
+    health = build_health(home=tmp_path, which=_fake_which)
+
+    assert health["status"] == "degraded"
+    assert health["schema_checks"]["voice_memos"]["status"] == "degraded"
+    assert health["schema_checks"]["voice_memos"]["warnings"][0]["code"] == (
+        "voice_memos_schema_unavailable"
+    )
+    assert "raw local schema failure" not in str(health)
 
 
 def test_build_health_discovers_latest_mail_store(tmp_path: Path) -> None:

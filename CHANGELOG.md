@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260605000000 - 2026-06-04
+
+### Added
+
+- Read-only Apple Shortcuts shortcut/folder metadata search through `local-apple-data shortcuts search` and MCP `shortcuts_search`.
+- Exact selected Shortcuts metadata retrieval through `local-apple-data shortcuts get` and MCP `shortcuts_get_item`.
+- Synthetic Shortcuts CLI runner, adapter, CLI, MCP, health, runtime, surface-contract, and redaction coverage for the Shortcuts metadata surface.
+
+### Security
+
+- Shortcuts search returns names and opaque handles only; raw Shortcuts identifiers are not returned.
+- The Shortcuts surface does not run, open, view, sign, export, or return shortcut bodies/action graphs.
+- Shortcut creation, update, delete, duplication, import, signing, dynamic run tools, folder-scoped handles, Shortcuts SQLite scraping, and mutation remain blocked.
+
 ## 0.1.0+codex.20260604235900 - 2026-06-04
 
 ### Added

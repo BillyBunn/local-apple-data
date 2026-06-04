@@ -77,6 +77,11 @@ from local_apple_data.adapters.reminders import (
     search_reminders_eventkit,
 )
 from local_apple_data.adapters.safari import get_safari_item, search_safari_items
+from local_apple_data.adapters.shortcuts import (
+    ShortcutCommandResult,
+    get_shortcuts_item,
+    search_shortcuts_items,
+)
 from local_apple_data.adapters.voice_memos import (
     export_voice_memo_audio,
     get_voice_memo_recording,
@@ -410,6 +415,10 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
                     {"query": "%"},
                 )
                 wildcard_safari = await session.call_tool("safari_search", {"query": "Safari"})
+                wildcard_shortcuts = await session.call_tool(
+                    "shortcuts_search",
+                    {"query": "Shortcuts"},
+                )
                 wildcard_notes = await session.call_tool("notes_search", {"query": "%"})
                 wildcard_icloud = await session.call_tool("icloud_drive_search", {"query": "%"})
                 wildcard_calendar = await session.call_tool("calendar_search", {"query": "%"})
@@ -432,6 +441,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
         "wildcard_hide_my_email": _payload(wildcard_hide_my_email)["warnings"][0]["code"],
         "wildcard_voice_memos": _payload(wildcard_voice_memos)["warnings"][0]["code"],
         "wildcard_safari": _payload(wildcard_safari)["warnings"][0]["code"],
+        "wildcard_shortcuts": _payload(wildcard_shortcuts)["warnings"][0]["code"],
         "wildcard_notes": _payload(wildcard_notes)["warnings"][0]["code"],
         "wildcard_icloud": _payload(wildcard_icloud)["warnings"][0]["code"],
         "wildcard_calendar": _payload(wildcard_calendar)["warnings"][0]["code"],
@@ -616,6 +626,40 @@ def _safari_smoke(tmp_path: Path) -> dict[str, Any]:
         "safari_reading_list_kind": reading["results"][0]["kind"],
         "safari_legacy_detail_status": legacy_detail["status"],
         "safari_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
+    }
+
+
+def _shortcuts_runner(command: list[str], _timeout: float) -> ShortcutCommandResult:
+    if command == ["shortcuts", "list", "--show-identifiers"]:
+        return ShortcutCommandResult(
+            0,
+            "Runtime Shortcut (11111111-1111-1111-1111-111111111111)\n",
+        )
+    if command == ["shortcuts", "list", "--folders", "--show-identifiers"]:
+        return ShortcutCommandResult(
+            0,
+            "Runtime Folder (22222222-2222-2222-2222-222222222222)\n",
+        )
+    return ShortcutCommandResult(1, "", "unexpected command")
+
+
+def _shortcuts_smoke() -> dict[str, Any]:
+    search = search_shortcuts_items("Runtime Shortcut", runner=_shortcuts_runner)
+    handle = search["results"][0]["handle"]
+    detail = get_shortcuts_item(handle, runner=_shortcuts_runner)
+    legacy_detail = get_shortcuts_item("shortcuts:item:1", runner=_shortcuts_runner)
+    folder = search_shortcuts_items("Runtime Folder", kind="folder", runner=_shortcuts_runner)
+    return {
+        "shortcuts_opaque_handle": handle.startswith("shortcuts:item:v1:"),
+        "shortcuts_search_status": search["status"],
+        "shortcuts_identifier_returned": "11111111-1111-1111-1111-111111111111" in str(search),
+        "shortcuts_body_returned": search["results"][0]["shortcut_body_returned"],
+        "shortcuts_detail_status": detail["status"],
+        "shortcuts_detail_kind": detail["result"]["kind"],
+        "shortcuts_folder_status": folder["status"],
+        "shortcuts_folder_kind": folder["results"][0]["kind"],
+        "shortcuts_legacy_detail_status": legacy_detail["status"],
+        "shortcuts_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
     }
 
 
@@ -1734,7 +1778,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 53,
+        "tool_count": 55,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1743,6 +1787,7 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "wildcard_hide_my_email": "broad_query",
         "wildcard_voice_memos": "broad_query",
         "wildcard_safari": "broad_query",
+        "wildcard_shortcuts": "broad_query",
         "wildcard_notes": "broad_query",
         "wildcard_icloud": "broad_query",
         "wildcard_calendar": "broad_query",
@@ -1838,6 +1883,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "safari_reading_list_kind": "reading_list",
         "safari_legacy_detail_status": "error",
         "safari_legacy_detail_warning": "invalid_handle",
+        "shortcuts_opaque_handle": True,
+        "shortcuts_search_status": "ok",
+        "shortcuts_identifier_returned": False,
+        "shortcuts_body_returned": False,
+        "shortcuts_detail_status": "ok",
+        "shortcuts_detail_kind": "shortcut",
+        "shortcuts_folder_status": "ok",
+        "shortcuts_folder_kind": "folder",
+        "shortcuts_legacy_detail_status": "error",
+        "shortcuts_legacy_detail_warning": "invalid_handle",
         "notes_opaque_handle": True,
         "notes_content_status": "ok",
         "notes_content_chars": 31,
@@ -1980,6 +2035,7 @@ def main() -> None:
         summary.update(_hide_my_email_smoke(tmp_path))
         summary.update(_voice_memos_content_smoke(tmp_path))
         summary.update(_safari_smoke(tmp_path))
+        summary.update(_shortcuts_smoke())
         summary.update(_notes_content_smoke(tmp_path))
         summary.update(_notes_attachment_smoke(tmp_path))
         summary.update(_notes_plan_apply_smoke(tmp_path))

@@ -11,6 +11,7 @@ This project provides a privacy-gated CLI and MCP server for locally synced:
 - Inferred Hide My Email aliases observed in local Mail address metadata
 - Voice Memos synced locally through Voice Memos.app
 - Safari bookmarks and Reading List items synced locally through Safari/iCloud
+- Apple Shortcuts shortcut and folder metadata through the local `shortcuts` CLI
 - Apple Notes
 - Apple Calendar
 - Apple Reminders
@@ -22,12 +23,12 @@ The current release is local-only and read-mostly. The only apply-capable mutati
 
 ## Current Status
 
-The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, or Messages send-text apply operation generated from a matching plan.
+The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, or Messages send-text apply operation generated from a matching plan.
 
 Implemented now:
 
 - Repo guidance and privacy model
-- `local-apple-data health --json` with redacted broad-surface readiness summaries, schema-only Mail/Messages/Voice Memos/Notes/Reminders checks, Safari bookmarks and iCloud Drive root checks, and non-prompting access requirements for framework-backed surfaces
+- `local-apple-data health --json` with redacted broad-surface readiness summaries, schema-only Mail/Messages/Voice Memos/Notes/Reminders checks, Safari bookmarks and iCloud Drive root checks, Shortcuts CLI availability, and non-prompting access requirements for framework-backed surfaces
 - `local-apple-data doctor --json` with redacted non-mutating remediation guidance
 - `local-apple-data mail search/get` metadata commands
 - Metadata-only `content_status` hints in Mail search results so agents can prefer locally retrievable messages before exact content calls
@@ -44,6 +45,7 @@ Implemented now:
 - `local-apple-data hide-my-email search/get` commands for inferred Hide My Email aliases observed in local Mail address metadata
 - `local-apple-data voice-memos search/get/export` commands for local Voice Memos title/filename metadata, exact existing embedded transcripts, and exact-handle `.m4a` export to a caller-selected output directory
 - `local-apple-data safari search/get` commands for local Safari bookmarks and Reading List title/URL metadata plus exact selected URL detail by opaque handle
+- `local-apple-data shortcuts search/get` commands for local Apple Shortcuts shortcut/folder name metadata by opaque handle, without running, opening, signing, exporting, or returning shortcut bodies
 - `local-apple-data notes search/get` metadata commands
 - `local-apple-data notes content --json --handle <notes:note:v2:...> --max-chars 4000 --offset 0` for exact-handle local Notes plain-text content, with `next_offset` pagination for long imported notes
 - `local-apple-data notes attachments --json --handle <notes:note:v2:...>` for exact selected-note attachment metadata with opaque `notes:attachment:v1:` handles
@@ -79,7 +81,7 @@ Implemented now:
 - Local plugin manifest under `.codex-plugin/plugin.json`
 - Bundled MCP config under `.mcp.json`
 - Redacted command event logging
-- Opaque signed handles for exact Mail/Messages/Voice Memos/Safari/Notes/Calendar/Contacts/Photos/Reminders/iCloud Drive metadata fetches
+- Opaque signed handles for exact Mail/Messages/Voice Memos/Safari/Shortcuts/Notes/Calendar/Contacts/Photos/Reminders/iCloud Drive metadata fetches
 - Exact Mail content retrieval through the same opaque `mail:message:v2:` handles
 - Exact Messages chat transcript retrieval through opaque `messages:chat:v1:` handles, using local text plus bounded `attributedBody` plaintext fallback when available
 - Exact Messages attachment metadata/export through opaque `messages:chat:v1:` and `messages:attachment:v1:` handles
@@ -87,6 +89,7 @@ Implemented now:
 - Exact Voice Memos transcript retrieval through opaque `voice_memos:recording:v1:` handles when Apple-generated local transcript data is embedded in the selected `.m4a`
 - Exact Voice Memos audio export through opaque `voice_memos:recording:v1:` handles to a caller-selected output directory without returning audio bytes inline
 - Exact Safari bookmark and Reading List URL detail retrieval through opaque `safari:item:v1:` handles without returning full URLs in search results
+- Exact Shortcuts shortcut/folder metadata retrieval through opaque `shortcuts:item:v1:` handles without returning raw identifiers or shortcut bodies
 - Exact iCloud Drive text-file retrieval through opaque `icloud:file:v1:` handles
 - Exact Calendar event detail retrieval through opaque `calendar:event:v1:` handles
 - Exact Contact detail retrieval through opaque `contacts:contact:v1:` handles
@@ -113,7 +116,7 @@ Implemented now:
 Deferred:
 
 - Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create/append-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, Notes create/append-text apply surface, Mail create-draft apply surface, Photos import apply surface, and Messages send-text apply surface
-- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages direct-recipient send/new-chat/SMS-fallback selection/edit/delete/reaction/tapback/file-send/other mutation, broad Messages attachment export, Messages attachment mutation, Voice Memos mutation or attachments, Safari history/open-tabs/passwords/private-browsing data/bookmark mutation, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
+- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages direct-recipient send/new-chat/SMS-fallback selection/edit/delete/reaction/tapback/file-send/other mutation, broad Messages attachment export, Messages attachment mutation, Voice Memos mutation or attachments, Safari history/open-tabs/passwords/private-browsing data/bookmark mutation, Shortcuts run/open/view/sign/export/body/action-graph/mutation, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
 
 The v1.1 design gate for exact-handle Mail content retrieval is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`.
 The v1.2 Notes content and broader local Apple data expansion plan is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`.
@@ -179,6 +182,8 @@ uv run local-apple-data voice-memos get --json --handle '<voice_memos:recording:
 uv run local-apple-data voice-memos export --json --handle '<voice_memos:recording:v1:...>' --output-dir /tmp/local-apple-data-exports
 uv run local-apple-data safari search --json --query '<bookmark title or URL text>'
 uv run local-apple-data safari get --json --handle '<safari:item:v1:...>'
+uv run local-apple-data shortcuts search --json --query '<shortcut or folder name text>'
+uv run local-apple-data shortcuts get --json --handle '<shortcuts:item:v1:...>'
 uv run local-apple-data notes search --json --query '<title or snippet text>'
 uv run local-apple-data notes content --json --handle '<notes:note:v2:...>' --max-chars 4000 --offset 0
 uv run local-apple-data notes attachments --json --handle '<notes:note:v2:...>'

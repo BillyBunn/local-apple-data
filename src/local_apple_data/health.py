@@ -32,7 +32,7 @@ DEFAULT_STORE_PATHS = {
 }
 
 REQUIRED_TOOLS = ("uv", "swift", "sqlite3")
-OPTIONAL_TOOLS = ("node", "npm")
+OPTIONAL_TOOLS = ("node", "npm", "shortcuts")
 
 ACCESS_REQUIREMENTS = [
     {
@@ -68,6 +68,13 @@ ACCESS_REQUIREMENTS = [
         "permission_class": "Full Disk Access may be required",
         "status": "covered_by_store_check",
         "check_mode": "plist_readability",
+        "prompts": False,
+    },
+    {
+        "surface": "shortcuts",
+        "permission_class": "Shortcuts CLI",
+        "status": "covered_by_tool_check",
+        "check_mode": "cli_availability_without_listing",
         "prompts": False,
     },
     {
@@ -186,6 +193,28 @@ def _skipped_schema_check(source: str, code: str) -> dict[str, Any]:
     }
 
 
+def _schema_error_check(source: str, code: str, tables: list[str]) -> dict[str, Any]:
+    return {
+        "status": "degraded",
+        "source": source,
+        "schema_fingerprint": None,
+        "tables_checked": tables,
+        "warnings": [{"code": code, "message": "Schema check failed safely."}],
+    }
+
+
+def _safe_schema_check(
+    source: str,
+    code: str,
+    tables: list[str],
+    check: Callable[[], dict[str, Any]],
+) -> dict[str, Any]:
+    try:
+        return check()
+    except Exception:
+        return _schema_error_check(source, code, tables)
+
+
 def _store_by_name(stores: list[dict[str, Any]], name: str) -> dict[str, Any] | None:
     for store in stores:
         if store["name"] == name:
@@ -209,6 +238,10 @@ def _store_status(stores: list[dict[str, Any]], name: str) -> str:
     return "ok"
 
 
+def _tool_available(tools: list[dict[str, Any]], name: str) -> bool:
+    return any(tool["name"] == name and tool["available"] for tool in tools)
+
+
 def _schema_status(schema_checks: dict[str, dict[str, Any]], source: str) -> str:
     check = schema_checks.get(source)
     return str(check.get("status", "unknown")) if check else "not_checked"
@@ -217,6 +250,7 @@ def _schema_status(schema_checks: dict[str, dict[str, Any]], source: str) -> str
 def _surface_summary(
     stores: list[dict[str, Any]],
     schema_checks: dict[str, dict[str, Any]],
+    optional_tools: list[dict[str, Any]],
 ) -> dict[str, dict[str, Any]]:
     mail_status = _schema_status(schema_checks, "mail")
     return {
@@ -246,6 +280,12 @@ def _surface_summary(
             "status": _store_status(stores, "safari_bookmarks"),
             "store_status": _store_status(stores, "safari_bookmarks"),
             "schema_check": "not_applicable",
+        },
+        "shortcuts": {
+            "status": "available" if _tool_available(optional_tools, "shortcuts") else "missing",
+            "tool_check": "shortcuts_cli",
+            "schema_check": "not_applicable",
+            "prompts": False,
         },
         "notes": {
             "status": _schema_status(schema_checks, "notes"),
@@ -301,19 +341,52 @@ def build_health(
         for name, relative_path in store_paths.items()
     ]
     schema_checks = {
-        "mail": check_mail_schema(db_path=home / store_paths["mail_envelope_index"])
+        "mail": _safe_schema_check(
+            "mail",
+            "mail_schema_unavailable",
+            ["messages", "subjects", "mailboxes"],
+            lambda: check_mail_schema(db_path=home / store_paths["mail_envelope_index"]),
+        )
         if "mail_envelope_index" in store_paths and _store_available(stores, "mail_envelope_index")
         else _skipped_schema_check("mail", "mail_schema_skipped"),
-        "messages": check_messages_schema(db_path=home / store_paths["messages_store"])
+        "messages": _safe_schema_check(
+            "messages",
+            "messages_schema_unavailable",
+            [
+                "chat",
+                "message",
+                "chat_message_join",
+                "chat_handle_join",
+                "handle",
+                "attachment",
+                "message_attachment_join",
+            ],
+            lambda: check_messages_schema(db_path=home / store_paths["messages_store"]),
+        )
         if "messages_store" in store_paths and _store_available(stores, "messages_store")
         else _skipped_schema_check("messages", "messages_schema_skipped"),
-        "voice_memos": check_voice_memos_schema(db_path=home / store_paths["voice_memos_store"])
+        "voice_memos": _safe_schema_check(
+            "voice_memos",
+            "voice_memos_schema_unavailable",
+            ["ZCLOUDRECORDING"],
+            lambda: check_voice_memos_schema(db_path=home / store_paths["voice_memos_store"]),
+        )
         if "voice_memos_store" in store_paths and _store_available(stores, "voice_memos_store")
         else _skipped_schema_check("voice_memos", "voice_memos_schema_skipped"),
-        "notes": check_notes_schema(db_path=home / store_paths["notes_store"])
+        "notes": _safe_schema_check(
+            "notes",
+            "notes_schema_unavailable",
+            ["ZICCLOUDSYNCINGOBJECT"],
+            lambda: check_notes_schema(db_path=home / store_paths["notes_store"]),
+        )
         if "notes_store" in store_paths and _store_available(stores, "notes_store")
         else _skipped_schema_check("notes", "notes_schema_skipped"),
-        "reminders": check_reminders_schema(store_dir=home / store_paths["reminders_stores"])
+        "reminders": _safe_schema_check(
+            "reminders",
+            "reminders_schema_unavailable",
+            ["ZREMCDREMINDER", "ZREMCDBASELIST"],
+            lambda: check_reminders_schema(store_dir=home / store_paths["reminders_stores"]),
+        )
         if "reminders_stores" in store_paths and _store_available(stores, "reminders_stores")
         else _skipped_schema_check("reminders", "reminders_schema_skipped"),
     }
@@ -367,7 +440,7 @@ def build_health(
             "required": required_tools,
             "optional": optional_tools,
         },
-        "surfaces": _surface_summary(stores, schema_checks),
+        "surfaces": _surface_summary(stores, schema_checks, optional_tools),
         "stores": stores,
         "schema_checks": schema_checks,
         "access_requirements": ACCESS_REQUIREMENTS,

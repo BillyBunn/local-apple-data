@@ -6,7 +6,7 @@ This project handles local personal-data surfaces. The default is metadata-first
 
 1. Health: tool availability, macOS version, and store presence/readability only.
 2. Metadata: bounded subjects/titles/snippets and Mail content-availability hints only when the user asks for the workflow.
-3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List URLs, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `safari:item:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
+3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List URLs, Shortcuts metadata, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `safari:item:v1:`, `shortcuts:item:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
 4. Attachments: exact selected Mail, Messages, and Notes attachment metadata/export only, using the selected parent item handle plus selected attachment handle where required. Broad attachment export, inline bytes, source paths, remote fetches, and attachment mutation remain blocked.
 5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating iCloud Drive append-text planning for exact requested file handles plus expected current content hash, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, non-mutating Notes create-note planning for bounded title/body input, non-mutating Notes append-text planning for exact requested note handles plus expected current content hash, non-mutating Mail create-draft planning for bounded recipient/subject/body input, non-mutating Photos import planning for caller-selected image/video source files, and non-mutating Messages send-text planning for exact existing chat handles plus bounded body preview.
 6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply; all other mutation requires a separate design and approval phase.
@@ -24,6 +24,7 @@ Do not persist any of the following in logs, docs, prompts, fixtures, tests, com
 - Voice Memos transcript text outside exact selected responses
 - Voice Memos audio bytes in chat, source recording paths, and raw recording identifiers
 - Full Safari URLs outside exact selected responses
+- Raw Shortcuts identifiers or shortcut bodies/action graphs
 - Note bodies
 - Note planned titles, body previews, handles, or approval fingerprints outside transient preview/apply responses
 - Calendar event notes and locations
@@ -37,6 +38,7 @@ Do not persist any of the following in logs, docs, prompts, fixtures, tests, com
 - Reminder planning titles or notes outside transient preview responses
 - iCloud Drive file contents or raw local paths
 - Safari history, open tabs, private browsing data, passwords, cookies, sessions, autofill, keychain data, or browser caches
+- Shortcuts run/open/view/sign/export, shortcut body/action graph reads, dynamic run tools, or Shortcuts mutation
 - iCloud Drive planned filenames, content, handles, content hashes, or approval fingerprints outside transient preview/apply responses
 - Attachment content
 - Attachment source media paths
@@ -46,7 +48,7 @@ Do not persist any of the following in logs, docs, prompts, fixtures, tests, com
 - Raw database rows
 - Credentials, tokens, app passwords, cookies, OAuth artifacts, keychain data, or environment secrets
 
-Opaque search-result handles are allowed. Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive handles are signed with a local secret so exact metadata fetches cannot be performed with guessed database row IDs, raw framework identifiers, raw alias identifiers, recording identifiers, or direct local paths. The same handles gate exact content/detail retrieval. The handle secret lives under the local plugin state directory and must not be printed or copied into durable docs.
+Opaque search-result handles are allowed. Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive handles are signed with a local secret so exact metadata fetches cannot be performed with guessed database row IDs, raw framework identifiers, raw alias identifiers, recording identifiers, Shortcuts identifiers, or direct local paths. The same handles gate exact content/detail retrieval. The handle secret lives under the local plugin state directory and must not be printed or copied into durable docs.
 
 ## Allowed In Phase 0
 
@@ -95,7 +97,7 @@ Ask the local operator before:
 - Adding direct network mail access
 - Adding authoritative Hide My Email inventory or Hide My Email creation/deactivation/deletion
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
-- Adding new content classes beyond exact-handle Mail content/attachment export, Messages chat transcripts/attachment export, inferred Hide My Email aliases, Voice Memos existing embedded transcripts/audio export, Safari bookmark/Reading List URL detail, Notes content/attachment export, Calendar event detail, Contact detail, Photos asset/resource metadata/export, Reminder notes, and supported iCloud Drive text-file retrieval
+- Adding new content classes beyond exact-handle Mail content/attachment export, Messages chat transcripts/attachment export, inferred Hide My Email aliases, Voice Memos existing embedded transcripts/audio export, Safari bookmark/Reading List URL detail, Shortcuts metadata, Notes content/attachment export, Calendar event detail, Contact detail, Photos asset/resource metadata/export, Reminder notes, and supported iCloud Drive text-file retrieval
 
 ## v1.11 Reminders Planning And Apply
 
@@ -510,6 +512,20 @@ The v1.25 implementation:
 - Does not return full URLs during search.
 - Reads and returns the full URL only for exact selected handles.
 - Rejects raw identifiers, fabricated handles, Safari history, open tabs, private browsing data, passwords, cookies, browser caches, page content, mutations, background indexing, and durable content caches.
+- Keeps automated tests synthetic-only.
+
+## v1.26 Shortcuts Metadata
+
+The implemented v1.26 phase adds read-only Apple Shortcuts shortcut/folder name metadata search plus exact-handle metadata detail. It is not permission to run, open, view, sign, export, inspect, or mutate shortcuts.
+
+The v1.26 implementation:
+
+- Requires a `shortcuts:item:v1:` handle returned by `shortcuts search` before exact metadata detail.
+- Searches local Shortcuts through Apple's `shortcuts list --show-identifiers` and `shortcuts list --folders --show-identifiers` commands, with empty and broad queries rejected before invoking the CLI.
+- Returns title, kind, identifier-presence, and opaque handle during search.
+- Does not return raw Shortcuts identifiers, shortcut bodies, action graphs, source paths, icons, colors, URL schemes, or generated dynamic run tools.
+- Refuses folder-scoped searches so handles always resolve from the same global metadata flow.
+- Rejects fabricated handles, shortcut run/open/view/sign/export/body/action-graph/mutation, Shortcuts SQLite scraping, private iCloud APIs, browser/keychain access, background indexing, and durable content caches.
 - Keeps automated tests synthetic-only.
 
 ## v1.10 Hide My Email Inferred Alias Retrieval

@@ -73,6 +73,7 @@ from .adapters.voice_memos import (
     search_voice_memos,
 )
 from .adapters.safari import get_safari_item, search_safari_items
+from .adapters.shortcuts import get_shortcuts_item, search_shortcuts_items
 from .doctor import build_doctor
 from .health import build_health
 from .redacted_log import log_result
@@ -81,7 +82,7 @@ from .redacted_log import log_result
 INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
-    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
+    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
     "Mail, Messages, and Notes attachment export are exact-handle only and never return attachment bytes inline. "
     "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, and each requires a matching plan approval token plus explicit confirmation."
 )
@@ -385,6 +386,36 @@ def safari_get_item(handle: str, max_scan_items: int = 20000) -> dict[str, Any]:
     return _record(
         "safari_get_item",
         get_safari_item(handle, max_scan_items=max_scan_items),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def shortcuts_search(
+    query: str,
+    limit: int = 20,
+    kind: str = "all",
+    max_scan_items: int = 5000,
+) -> dict[str, Any]:
+    """Search Apple Shortcuts shortcut/folder metadata, capped and read-only."""
+
+    return _record(
+        "shortcuts_search",
+        search_shortcuts_items(
+            query,
+            limit=limit,
+            kind=kind,
+            max_scan_items=max_scan_items,
+        ),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def shortcuts_get_item(handle: str, max_scan_items: int = 5000) -> dict[str, Any]:
+    """Get exact Apple Shortcuts metadata by opaque handle, capped and read-only."""
+
+    return _record(
+        "shortcuts_get_item",
+        get_shortcuts_item(handle, max_scan_items=max_scan_items),
     )
 
 

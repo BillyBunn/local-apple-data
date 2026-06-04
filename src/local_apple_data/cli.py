@@ -73,6 +73,7 @@ from .adapters.voice_memos import (
     search_voice_memos,
 )
 from .adapters.safari import get_safari_item, search_safari_items
+from .adapters.shortcuts import get_shortcuts_item, search_shortcuts_items
 from .doctor import build_doctor
 from .health import build_health
 from .redacted_log import log_result
@@ -377,6 +378,25 @@ def _safari_get_command(args: argparse.Namespace) -> int:
         kwargs["bookmarks_path"] = Path(args.bookmarks_path).expanduser()
     payload = get_safari_item(args.handle, **kwargs)
     log_result("safari.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _shortcuts_search_command(args: argparse.Namespace) -> int:
+    payload = search_shortcuts_items(
+        args.query,
+        limit=args.limit,
+        kind=args.kind,
+        max_scan_items=args.max_scan_items,
+    )
+    log_result("shortcuts.search", payload)
+    _print_json(payload)
+    return 0
+
+
+def _shortcuts_get_command(args: argparse.Namespace) -> int:
+    payload = get_shortcuts_item(args.handle, max_scan_items=args.max_scan_items)
+    log_result("shortcuts.get", payload)
     _print_json(payload)
     return 0
 
@@ -1344,6 +1364,59 @@ def build_parser() -> argparse.ArgumentParser:
     )
     safari_get.add_argument("--bookmarks-path", help=argparse.SUPPRESS)
     safari_get.set_defaults(func=_safari_get_command)
+
+    shortcuts = subparsers.add_parser(
+        "shortcuts",
+        help="Apple Shortcuts metadata commands.",
+    )
+    shortcuts_subparsers = shortcuts.add_subparsers(
+        dest="shortcuts_command",
+        required=True,
+    )
+
+    shortcuts_search = shortcuts_subparsers.add_parser(
+        "search",
+        help="Search Shortcuts shortcut and folder metadata by name.",
+    )
+    shortcuts_search.add_argument("--json", action="store_true", help="Emit JSON output.")
+    shortcuts_search.add_argument("--query", required=True, help="Shortcut or folder name query text.")
+    shortcuts_search.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum results, capped at 50.",
+    )
+    shortcuts_search.add_argument(
+        "--kind",
+        choices=["all", "shortcut", "folder"],
+        default="all",
+        help="Optional Shortcuts item kind filter.",
+    )
+    shortcuts_search.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum Shortcuts items to scan.",
+    )
+    shortcuts_search.set_defaults(func=_shortcuts_search_command)
+
+    shortcuts_get = shortcuts_subparsers.add_parser(
+        "get",
+        help="Get exact Shortcuts metadata by handle.",
+    )
+    shortcuts_get.add_argument("--json", action="store_true", help="Emit JSON output.")
+    shortcuts_get.add_argument(
+        "--handle",
+        required=True,
+        help="Shortcuts item handle from search output.",
+    )
+    shortcuts_get.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum Shortcuts items to scan while resolving the handle.",
+    )
+    shortcuts_get.set_defaults(func=_shortcuts_get_command)
 
     notes = subparsers.add_parser("notes", help="Apple Notes metadata commands.")
     notes_subparsers = notes.add_subparsers(dest="notes_command", required=True)
