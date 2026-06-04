@@ -17,11 +17,11 @@ This project provides a privacy-gated CLI and MCP server for locally synced:
 - Apple Photos
 - iCloud Drive local files and folders
 
-The current release is local-only and read-mostly. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply, and each requires a matching plan approval token plus explicit confirmation. The plugin does not use the Gmail connector, Gmail API, IMAP credentials, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
+The current release is local-only and read-mostly. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply, and each requires a matching plan approval token plus explicit confirmation. The plugin does not use the Gmail connector, Gmail API, IMAP credentials, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or any network mail service.
 
 ## Current Status
 
-The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, and Contacts apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, or Contacts apply operation generated from a matching plan.
+The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, and Notes apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, or Notes apply operation generated from a matching plan.
 
 Implemented now:
 
@@ -36,6 +36,8 @@ Implemented now:
 - `local-apple-data voice-memos search/get/export` commands for local Voice Memos title/filename metadata, exact existing embedded transcripts, and exact-handle `.m4a` export to a caller-selected output directory
 - `local-apple-data notes search/get` metadata commands
 - `local-apple-data notes content --json --handle <notes:note:v2:...> --max-chars 4000 --offset 0` for exact-handle local Notes plain-text content, with `next_offset` pagination for long imported notes
+- `local-apple-data notes plan --json --operation create --title <title> --body-text <text>` for non-mutating future note-create previews with idempotency and approval metadata
+- `local-apple-data notes apply --json --operation create --title <title> --body-text <text> --approval-token <token> --confirm-apply` for the approved Notes create-note path, with Notes.app automation and exact-content read-back verification
 - `local-apple-data icloud-drive search/get` metadata commands for local iCloud Drive items by filename
 - `local-apple-data icloud-drive content --json --handle <icloud:file:v1:...> --max-chars 4000` for exact-handle local iCloud Drive text-file content
 - `local-apple-data icloud-drive plan --json --operation create-text --parent-handle <icloud:file:v1:...> --filename <name.md> --content-text <text>` for non-mutating future text-file create previews with idempotency and approval metadata
@@ -53,7 +55,7 @@ Implemented now:
 - `local-apple-data reminders plan --json --operation create|complete|update-due-date ...` for non-mutating future-change previews with idempotency and approval metadata
 - `local-apple-data reminders apply --json --operation create|complete|update-due-date ... --approval-token <token> --confirm-apply` for the approved Reminders create/complete/due-date update path, with EventKit apply and read-back verification
 - Highest-version Mail store discovery without exposing raw local store paths in normal output
-- `local-apple-data-mcp` stdio MCP server with read-only tools plus the approved non-destructive `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, and `contacts_apply_change` write tools
+- `local-apple-data-mcp` stdio MCP server with read-only tools plus the approved non-destructive `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, `contacts_apply_change`, and `notes_apply_change` write tools
 - MCP runner script that avoids package builds during normal plugin startup
 - Codex skill under `skills/local-apple-data/`
 - Local plugin manifest under `.codex-plugin/plugin.json`
@@ -79,7 +81,7 @@ Implemented now:
 - Repo-local redaction scanner under `scripts/redaction_scan.py`
 - Release-readiness auditor under `scripts/audit_release_readiness.py`
 - Mutation-gate auditor under `scripts/audit_mutation_gates.py` so write-like CLI/MCP surfaces cannot appear without explicit gates
-- Write-design gate auditor under `scripts/audit_write_design_gates.py` so first-tranche write tools stay machine-checkable and limited to the approved Reminders, iCloud Drive, Calendar, and Contacts apply surfaces
+- Write-design gate auditor under `scripts/audit_write_design_gates.py` so first-tranche write tools stay machine-checkable and limited to the approved Reminders, iCloud Drive, Calendar, Contacts, and Notes apply surfaces
 - Surface-contract auditor under `scripts/audit_surface_contract.py` so MCP tools, CLI commands, health surfaces, access requirements, and the capability matrix stay aligned
 - MCP client config renderer for generic stdio, Claude Code, Cursor, and OpenClaw under `scripts/render_mcp_client_config.py`
 - Public release tree builder under `scripts/build_public_release_tree.py`
@@ -90,8 +92,8 @@ Implemented now:
 
 Deferred:
 
-- Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create-text apply surface, Calendar create-event apply surface, and Contacts create-contact apply surface
-- Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Photos/Messages/Voice Memos mutation, Reminders delete/bulk/list/account mutation, iCloud Drive append/overwrite/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, attachments, unsupported/binary iCloud Drive content extraction, and durable content caches
+- Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, and Notes create-note apply surface
+- Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes append/update/delete/move/folder-account/rich-text/attachment mutation, Photos/Messages/Voice Memos mutation, Reminders delete/bulk/list/account mutation, iCloud Drive append/overwrite/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, attachments, unsupported/binary iCloud Drive content extraction, and durable content caches
 
 The v1.1 design gate for exact-handle Mail content retrieval is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`.
 The v1.2 Notes content and broader local Apple data expansion plan is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`.
@@ -103,6 +105,7 @@ The first Reminders write design gate is documented in `docs/V1_11_REMINDERS_WRI
 The first iCloud Drive write design gate is documented in `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`.
 The first Calendar write design gate is documented in `docs/V1_13_CALENDAR_WRITE_DESIGN.md`.
 The first Contacts write design gate is documented in `docs/V1_14_CONTACTS_WRITE_DESIGN.md`.
+The first Notes write design gate is documented in `docs/V1_15_NOTES_WRITE_DESIGN.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.
@@ -142,6 +145,8 @@ uv run local-apple-data voice-memos get --json --handle '<voice_memos:recording:
 uv run local-apple-data voice-memos export --json --handle '<voice_memos:recording:v1:...>' --output-dir /tmp/local-apple-data-exports
 uv run local-apple-data notes search --json --query '<title or snippet text>'
 uv run local-apple-data notes content --json --handle '<notes:note:v2:...>' --max-chars 4000 --offset 0
+uv run local-apple-data notes plan --json --operation create --title '<note title>' --body-text '<plain text>'
+uv run local-apple-data notes apply --json --operation create --title '<note title>' --body-text '<plain text>' --approval-token '<notes-apply:v1:...>' --confirm-apply
 uv run local-apple-data icloud-drive search --json --query '<filename text>'
 uv run local-apple-data icloud-drive content --json --handle '<icloud:file:v1:...>' --max-chars 4000
 uv run local-apple-data icloud-drive plan --json --operation create-text --parent-handle '<icloud:file:v1:...>' --filename '<new-file.md>' --content-text '<text>'

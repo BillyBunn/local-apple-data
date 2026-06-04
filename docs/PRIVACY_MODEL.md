@@ -1,6 +1,6 @@
 # Privacy Model
 
-This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply through plan/apply/read-back gates.
+This project handles local personal-data surfaces. The default is metadata-first and read-only for discovery/content retrieval, with content retrieval exposed only through exact opaque handles and bounded output. The only approved mutation surfaces are Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply through plan/apply/read-back gates.
 
 ## Data Tiers
 
@@ -8,8 +8,8 @@ This project handles local personal-data surfaces. The default is metadata-first
 2. Metadata: bounded subjects/titles/snippets and Mail content-availability hints only when the user asks for the workflow.
 3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
 4. Attachments: metadata only until a later approved phase.
-5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating Calendar create-event planning for explicit target calendar titles, and non-mutating Contacts create-contact planning for bounded contact fields.
-6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply; all other mutation requires a separate design and approval phase.
+5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows, non-mutating iCloud Drive create-text planning for exact requested parent folder handles, non-mutating Calendar create-event planning for explicit target calendar titles, non-mutating Contacts create-contact planning for bounded contact fields, and non-mutating Notes create-note planning for bounded title/body input.
+6. Mutation: approved only for Reminders create/complete/due-date apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply; all other mutation requires a separate design and approval phase.
 
 ## Never Persist
 
@@ -21,6 +21,7 @@ Do not persist any of the following in logs, docs, prompts, fixtures, tests, com
 - Voice Memos transcript text outside exact selected responses
 - Voice Memos audio bytes in chat, source recording paths, and raw recording identifiers
 - Note bodies
+- Note planned titles, body previews, handles, or approval fingerprints outside transient preview/apply responses
 - Calendar event notes and locations
 - Calendar planned titles, calendar names, locations, notes, handles, or approval fingerprints outside transient preview/apply responses
 - Contact email addresses, phone numbers, postal addresses, URLs, relations, and dates
@@ -83,7 +84,7 @@ Ask the local operator before:
 - Editing Codex config
 - Editing launchd jobs
 - Editing OpenClaw runtime state
-- Mutating Mail, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders, iCloud Drive, Calendar, and Contacts apply gates
+- Mutating Mail, Notes, Reminders, Gmail, or iCloud state outside the approved Reminders, iCloud Drive, Calendar, Contacts, and Notes apply gates
 - Adding direct network mail access
 - Adding authoritative Hide My Email inventory or Hide My Email creation/deactivation/deletion
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
@@ -273,6 +274,30 @@ The v1.14 apply implementation:
 - Recomputes the plan before applying.
 - Applies through Contacts.framework only after those checks.
 - Returns bounded read-back contact detail through the existing Contacts detail shape.
+- Keeps automated tests synthetic-only.
+
+## v1.15 Notes Create Apply
+
+The implemented v1.15 phase adds non-mutating Notes create-note planning and the approved apply-capable mutation surface for creating one plaintext note through Notes.app automation. It is not permission to append, update, delete, move, target folders/accounts, mutate rich text, create attachments, mutate locked/shared notes, manage Recently Deleted, or run bulk Notes operations.
+
+The v1.15 planning implementation:
+
+- Exposes `local-apple-data notes plan` and MCP `notes_plan_change`.
+- Returns `mode: "plan"`, `mutation_applied:false`, and `apply_available:true`.
+- Validates requested create operations without calling Notes.app, reading Notes data, or writing Notes.
+- Requires a bounded non-empty title and caps body text at 12000 normalized characters.
+- Returns deterministic idempotency keys and approval fingerprints for the apply gate.
+- Keeps automated tests synthetic-only.
+- Keeps redacted event logs free of planned titles, body previews, handles, and approval fingerprints.
+
+The v1.15 apply implementation:
+
+- Exposes `local-apple-data notes apply` and MCP `notes_apply_change`.
+- Requires the matching `notes-apply:v1:<approval_fingerprint>` token.
+- Requires explicit confirmation.
+- Recomputes the plan before applying.
+- Applies through Notes.app automation only after those checks.
+- Returns read-back content through the existing exact-handle Notes content shape.
 - Keeps automated tests synthetic-only.
 
 ## v1.7 Photos Asset Detail Retrieval

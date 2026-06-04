@@ -67,8 +67,14 @@ SURFACE_CONTRACTS = (
         label="Notes",
         cli_group="notes",
         cli_subparser="notes_subparsers",
-        cli_commands=("search", "get", "content"),
-        mcp_tools=("notes_search", "notes_get_metadata", "notes_get_content"),
+        cli_commands=("search", "get", "content", "plan", "apply"),
+        mcp_tools=(
+            "notes_search",
+            "notes_get_metadata",
+            "notes_get_content",
+            "notes_plan_change",
+            "notes_apply_change",
+        ),
     ),
     SurfaceContract(
         name="icloud_drive",

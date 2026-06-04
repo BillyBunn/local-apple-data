@@ -37,12 +37,14 @@ APPROVED_WRITE_MCP_TOOLS = {
     "calendar_apply_change",
     "contacts_apply_change",
     "icloud_drive_apply_change",
+    "notes_apply_change",
     "reminders_apply_change",
 }
 APPROVED_WRITE_CLI_HANDLERS = {
     "calendar_apply",
     "contacts_apply",
     "icloud_drive_apply",
+    "notes_apply",
     "reminders_apply",
 }
 MANIFEST_WRITE_CAPABILITIES = {
@@ -56,10 +58,10 @@ MANIFEST_WRITE_CAPABILITIES = {
     "Write",
 }
 REQUIRED_MUTATION_GATE_TEXT = {
-    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply",
-    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, and `contacts_apply_change`",
-    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply are the only approved write surfaces",
-    "src/local_apple_data/mcp_server.py": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, and Contacts create-contact apply",
+    "README.md": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply",
+    "docs/MUTATION_GATES.md": "Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, and `notes_apply_change`",
+    "docs/WRITE_TOOL_ROADMAP.md": "Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply are the only approved write surfaces",
+    "src/local_apple_data/mcp_server.py": "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create-text apply, Calendar create-event apply, Contacts create-contact apply, and Notes create-note apply",
 }
 
 

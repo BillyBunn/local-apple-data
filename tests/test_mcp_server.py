@@ -26,8 +26,10 @@ from local_apple_data.mcp_server import (
     mail_get_content,
     mail_get_metadata,
     messages_get_chat,
+    notes_apply_change,
     notes_get_content,
     notes_get_metadata,
+    notes_plan_change,
     photos_export_asset,
     photos_get_asset,
     reminders_apply_change,
@@ -68,6 +70,14 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     voice_memos_export_result = voice_memos_export_audio("bad-handle", str(tmp_path / "exports"))
     notes_result = notes_get_metadata("bad-handle")
     notes_content_result = notes_get_content("bad-handle")
+    notes_plan_result = notes_plan_change("create", title="", body_text="Synthetic body.")
+    notes_apply_result = notes_apply_change(
+        "create",
+        title="Synthetic note",
+        body_text="Synthetic body.",
+        approval_token="notes-apply:v1:bad",
+        confirm_apply=True,
+    )
     icloud_result = icloud_drive_get_metadata("bad-handle")
     icloud_content_result = icloud_drive_get_content("bad-handle")
     icloud_plan_result = icloud_drive_plan_change(
@@ -142,6 +152,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert notes_result["status"] == "error"
     assert notes_content_result["status"] == "error"
     assert notes_content_result["warnings"][0]["code"] == "invalid_handle"
+    assert notes_plan_result["status"] == "error"
+    assert notes_plan_result["warnings"][0]["code"] == "missing_title"
+    assert notes_apply_result["status"] == "error"
+    assert notes_apply_result["warnings"][0]["code"] == "invalid_approval_token"
     assert icloud_result["status"] == "error"
     assert icloud_result["warnings"][0]["code"] == "invalid_handle"
     assert icloud_content_result["status"] == "error"
@@ -206,6 +220,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "notes_search",
                     "notes_get_metadata",
                     "notes_get_content",
+                    "notes_plan_change",
+                    "notes_apply_change",
                     "icloud_drive_search",
                     "icloud_drive_get_metadata",
                     "icloud_drive_get_content",
@@ -237,6 +253,7 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                             "icloud_drive_apply_change",
                             "calendar_apply_change",
                             "contacts_apply_change",
+                            "notes_apply_change",
                         }:
                             assert tool.annotations.readOnlyHint is False
                         else:

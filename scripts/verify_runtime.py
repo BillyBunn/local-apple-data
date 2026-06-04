@@ -41,7 +41,12 @@ from local_apple_data.adapters.mail import (
     search_mail_metadata,
 )
 from local_apple_data.adapters.messages import get_message_chat, search_message_chats
-from local_apple_data.adapters.notes import get_notes_content, search_notes_metadata
+from local_apple_data.adapters.notes import (
+    apply_notes_change,
+    get_notes_content,
+    plan_notes_change,
+    search_notes_metadata,
+)
 from local_apple_data.adapters.photos import export_photo_asset, get_photo_asset, search_photos
 from local_apple_data.adapters.reminders import (
     apply_reminder_change,
@@ -363,6 +368,61 @@ def _notes_content_smoke(tmp_path: Path) -> dict[str, Any]:
         "notes_paged_next_offset": paged["result"]["next_offset"],
         "notes_legacy_content_status": legacy_content["status"],
         "notes_legacy_content_warning": legacy_content["warnings"][0]["code"],
+    }
+
+
+def _notes_plan_apply_smoke(tmp_path: Path) -> dict[str, Any]:
+    db_path = tmp_path / "notes-plan-apply.sqlite"
+    _make_notes_db(db_path)
+    title = "Synthetic runtime planned note"
+    body_text = "Synthetic runtime note body."
+    plan = plan_notes_change("create", title=title, body_text=body_text)
+    token = "notes-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    missing_confirmation = apply_notes_change(
+        "create",
+        title=title,
+        body_text=body_text,
+        approval_token=token,
+        confirm_apply=False,
+        db_path=db_path,
+        script_runner=lambda _script, _timeout: "",
+    )
+
+    def runner(script: str, _timeout: float) -> str:
+        if "make new note" in script:
+            with sqlite3.connect(db_path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO ZICCLOUDSYNCINGOBJECT
+                      (Z_PK, ZTITLE1, ZTITLE, ZSNIPPET, ZCREATIONDATE1, ZMODIFICATIONDATE1,
+                       ZISPASSWORDPROTECTED, ZMARKEDFORDELETION, ZNOTEDATA)
+                      VALUES (85, 'Synthetic runtime planned note', 'Synthetic runtime planned note',
+                              'Synthetic runtime note body.', 30, 30, 0, 0, 2)
+                    """
+                )
+            return "x-coredata://11111111-2222-3333-4444-555555555555/ICNote/p85"
+        return "<h1>Synthetic runtime planned note</h1><p>Synthetic runtime note body.</p>"
+
+    result = apply_notes_change(
+        "create",
+        title=title,
+        body_text=body_text,
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+    )
+    return {
+        "notes_plan_status": plan["status"],
+        "notes_plan_mode": plan["mode"],
+        "notes_plan_mutation_applied": plan["mutation_applied"],
+        "notes_plan_apply_available": plan["apply_available"],
+        "notes_plan_idempotency_key": plan["preview"]["idempotency_key"].startswith("notes-plan:v1:"),
+        "notes_apply_status": result["status"],
+        "notes_apply_mode": result["mode"],
+        "notes_apply_mutation_applied": result["mutation_applied"],
+        "notes_apply_read_back_title": result["read_back"]["title"],
+        "notes_apply_missing_confirmation": missing_confirmation["warnings"][0]["code"],
     }
 
 
@@ -1065,7 +1125,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 37,
+        "tool_count": 39,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1119,6 +1179,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "notes_paged_next_offset": 10,
         "notes_legacy_content_status": "error",
         "notes_legacy_content_warning": "invalid_handle",
+        "notes_plan_status": "ok",
+        "notes_plan_mode": "plan",
+        "notes_plan_mutation_applied": False,
+        "notes_plan_apply_available": True,
+        "notes_plan_idempotency_key": True,
+        "notes_apply_status": "ok",
+        "notes_apply_mode": "apply",
+        "notes_apply_mutation_applied": True,
+        "notes_apply_read_back_title": "Synthetic runtime planned note",
+        "notes_apply_missing_confirmation": "missing_apply_confirmation",
         "icloud_opaque_handle": True,
         "icloud_content_status": "ok",
         "icloud_content_chars": 33,
@@ -1213,6 +1283,7 @@ def main() -> None:
         summary.update(_hide_my_email_smoke(tmp_path))
         summary.update(_voice_memos_content_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))
+        summary.update(_notes_plan_apply_smoke(tmp_path))
         summary.update(_icloud_drive_content_smoke(tmp_path))
         summary.update(_icloud_drive_plan_apply_smoke(tmp_path))
         summary.update(_calendar_content_smoke())

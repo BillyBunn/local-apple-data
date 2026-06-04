@@ -74,6 +74,65 @@ These examples are synthetic. They are shape examples only and must not be repla
 }
 ```
 
+## Notes Plan
+
+```json
+{
+  "status": "ok",
+  "source": "notes",
+  "mode": "plan",
+  "mutation_applied": false,
+  "apply_available": true,
+  "preview": {
+    "operation": "create",
+    "target": {
+      "account": "default",
+      "folder": "default"
+    },
+    "proposed": {
+      "kind": "note",
+      "format": "plaintext",
+      "title": "Synthetic planned note",
+      "body_chars": 20,
+      "body_preview_text": "Synthetic note body.",
+      "body_preview_chars": 20,
+      "body_preview_truncated": false
+    },
+    "idempotency_key": "notes-plan:v1:<hash>",
+    "approval": {
+      "required_for_apply": true,
+      "apply_tool_available": true,
+      "approval_fingerprint": "<hash>",
+      "approval_token_format": "notes-apply:v1:<approval_fingerprint>"
+    }
+  },
+  "warnings": []
+}
+```
+
+## Notes Apply
+
+```json
+{
+  "status": "ok",
+  "source": "notes",
+  "mode": "apply",
+  "mutation_applied": true,
+  "idempotency_key": "notes-plan:v1:<hash>",
+  "approval": {
+    "approval_fingerprint": "<hash>",
+    "approval_token_verified": true
+  },
+  "read_back": {
+    "handle": "<opaque notes:note:v2 handle>",
+    "title": "Synthetic planned note",
+    "content_chars": 42,
+    "truncated": false
+  },
+  "warnings": []
+}
+```
+
 ## Hide My Email Search
 
 ```json
@@ -102,9 +161,14 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 37,
+  "tool_count": 39,
   "mail_content_status": "ok",
   "notes_content_status": "ok",
+  "notes_plan_status": "ok",
+  "notes_plan_mutation_applied": false,
+  "notes_plan_apply_available": true,
+  "notes_apply_status": "ok",
+  "notes_apply_mutation_applied": true,
   "icloud_drive_content_status": "ok",
   "icloud_plan_status": "ok",
   "icloud_plan_mutation_applied": false,

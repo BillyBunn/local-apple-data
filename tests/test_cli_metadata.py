@@ -214,6 +214,68 @@ def test_cli_notes_content_uses_exact_handle(tmp_path: Path, monkeypatch, capsys
     assert parsed["result"]["content_text"] == "Synthetic note content."
 
 
+def test_cli_notes_plan_and_apply_create(monkeypatch, capsys) -> None:
+    plan_exit_code = main(
+        [
+            "notes",
+            "plan",
+            "--json",
+            "--operation",
+            "create",
+            "--title",
+            "Synthetic planned note",
+            "--body-text",
+            "Synthetic note body.",
+        ]
+    )
+    assert plan_exit_code == 0
+    plan = json.loads(capsys.readouterr().out)
+    token = "notes-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def fake_apply_notes_change(operation: str, **kwargs):
+        assert operation == "create"
+        assert kwargs["title"] == "Synthetic planned note"
+        assert kwargs["body_text"] == "Synthetic note body."
+        assert kwargs["approval_token"] == token
+        assert kwargs["confirm_apply"] is True
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "notes",
+            "privacy": {"content_inspected": True, "output_tier": "mutation"},
+            "mode": "apply",
+            "mutation_applied": True,
+            "read_back": {"title": "Synthetic planned note"},
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("local_apple_data.cli.apply_notes_change", fake_apply_notes_change)
+
+    apply_exit_code = main(
+        [
+            "notes",
+            "apply",
+            "--json",
+            "--operation",
+            "create",
+            "--title",
+            "Synthetic planned note",
+            "--body-text",
+            "Synthetic note body.",
+            "--approval-token",
+            token,
+            "--confirm-apply",
+        ]
+    )
+
+    assert apply_exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "apply"
+    assert parsed["mutation_applied"] is True
+
+
 def test_cli_icloud_drive_content_uses_exact_handle(
     tmp_path: Path,
     monkeypatch,

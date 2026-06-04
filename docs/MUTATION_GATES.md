@@ -1,8 +1,8 @@
 # Mutation Gates
 
-The current plugin is local-only and read-mostly. Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, and `contacts_apply_change`.
+The current plugin is local-only and read-mostly. Approved write tools: `reminders apply`, `reminders_apply_change`, `icloud-drive apply`, `icloud_drive_apply_change`, `calendar apply`, `calendar_apply_change`, `contacts apply`, `contacts_apply_change`, `notes apply`, and `notes_apply_change`.
 
-Those tools are limited to Reminders create, complete, and due-date update through the plan/apply/read-back contract in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`, iCloud Drive create-text through the plan/apply/read-back contract in `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`, Calendar create-event through the plan/apply/read-back contract in `docs/V1_13_CALENDAR_WRITE_DESIGN.md`, and Contacts create-contact through the plan/apply/read-back contract in `docs/V1_14_CONTACTS_WRITE_DESIGN.md`. All other write tools remain intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
+Those tools are limited to Reminders create, complete, and due-date update through the plan/apply/read-back contract in `docs/V1_11_REMINDERS_WRITE_DESIGN.md`, iCloud Drive create-text through the plan/apply/read-back contract in `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`, Calendar create-event through the plan/apply/read-back contract in `docs/V1_13_CALENDAR_WRITE_DESIGN.md`, Contacts create-contact through the plan/apply/read-back contract in `docs/V1_14_CONTACTS_WRITE_DESIGN.md`, and Notes create-note through the plan/apply/read-back contract in `docs/V1_15_NOTES_WRITE_DESIGN.md`. All other write tools remain intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
 
 For sequencing and later candidates, see `docs/WRITE_TOOL_ROADMAP.md`.
 
@@ -21,7 +21,7 @@ Every mutating tool must satisfy all of these before exposure through CLI or MCP
 - Tests using synthetic fixtures or mocked Apple framework helpers only.
 - Redaction scan and runtime smoke passing before install.
 
-The current `reminders plan` / `icloud-drive plan` / `calendar plan` / `contacts plan` CLI commands and `reminders_plan_change` / `icloud_drive_plan_change` / `calendar_plan_change` / `contacts_plan_change` MCP tools are not mutating tools. They return `mutation_applied:false`, `apply_available:true`, and approval metadata only.
+The current `reminders plan` / `icloud-drive plan` / `calendar plan` / `contacts plan` / `notes plan` CLI commands and `reminders_plan_change` / `icloud_drive_plan_change` / `calendar_plan_change` / `contacts_plan_change` / `notes_plan_change` MCP tools are not mutating tools. They return `mutation_applied:false`, `apply_available:true`, and approval metadata only.
 
 The current `reminders apply` CLI command and `reminders_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, operation-specific expected state, EventKit apply, and read-back verification. MCP annotations mark `reminders_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
 
@@ -31,13 +31,15 @@ The current `calendar apply` CLI command and `calendar_apply_change` MCP tool ar
 
 The current `contacts apply` CLI command and `contacts_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, Contacts.framework apply, and read-back verification. MCP annotations mark `contacts_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
 
+The current `notes apply` CLI command and `notes_apply_change` MCP tool are mutating tools. They require a matching approval token from the plan fingerprint, explicit confirmation, Notes.app automation, and exact-content read-back verification. MCP annotations mark `notes_apply_change` as non-read-only, non-destructive, idempotent, and closed-world.
+
 ## First Candidate Write Surfaces
 
 | Surface | Candidate operations | Preferred API | Extra approval checks |
 | --- | --- | --- | --- |
 | Reminders | Create reminder, complete reminder, update due date | EventKit helper | Approved. Confirm target list, title, due date, completion state, approval token, and explicit confirmation before apply |
 | Calendar | Create timed event | EventKit helper | Approved. Confirm exact calendar title, title, start/end timestamps, approval token, and explicit confirmation before apply; no attendees, recurrence, alarms, all-day events, update, or delete |
-| Notes | Create note, append to note | Notes.app automation or local app bridge | Confirm account/folder, exact note handle for append, and plain-text/HTML conversion |
+| Notes | Create note | Notes.app automation | Approved. Confirm title, body length/preview, approval token, and explicit confirmation before apply; no append, update, delete, move, rich text, attachments, folder/account targeting, or bulk operations |
 | Mail | Create draft only | Mail.app automation | Confirm sender account, recipients, subject, and draft-only behavior; no send in plugin v1 |
 | Contacts | Create contact | Contacts.framework helper | Approved. Confirm contact type, name or organization, labeled fields, approval token, and explicit confirmation before apply; no update, delete, notes, image data, postal addresses, birthdays, group membership, or bulk operations |
 | Photos | None in first write phase | PhotoKit change requests later | Exact read-only asset export is implemented; edits/import/delete need a separate mutation design |
@@ -47,12 +49,13 @@ The current `contacts apply` CLI command and `contacts_apply_change` MCP tool ar
 
 ## Default Refusals
 
-Outside the approved Reminders, iCloud Drive, Calendar, and Contacts apply gates, the plugin must refuse:
+Outside the approved Reminders, iCloud Drive, Calendar, Contacts, and Notes apply gates, the plugin must refuse:
 
 - Sending mail or messages.
 - Deleting, archiving, moving, or marking Mail/Messages.
 - Creating, deleting, deactivating, or managing Hide My Email aliases.
 - Deleting Calendar events, Contacts, Photos, Notes, Reminders, Voice Memos, or iCloud Drive files.
+- Notes append, update, delete, move, folder/account targeting, rich-text editing, checklist state, attachments, locked/shared-note mutation, Recently Deleted management, or bulk operations.
 - Calendar update, delete, move, recurrence, attendees, invitations, URLs, alarms, attachments, travel time, availability changes, all-day events, default-calendar guessing, or bulk operations.
 - Contacts update, delete, merge, move, group membership, postal addresses, birthdays, dates, relationships, social profiles, instant messaging addresses, notes, image data, custom labels beyond bounded local labels, or bulk operations.
 - Reminders bulk mutation, list/account management, attachment mutation, URL/rich-content mutation, delete, or uncomplete.

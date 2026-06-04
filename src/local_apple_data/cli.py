@@ -28,7 +28,13 @@ from .adapters.icloud_drive import (
 from .adapters.hide_my_email import get_hide_my_email_alias, search_hide_my_email_aliases
 from .adapters.mail import get_mail_content, get_mail_metadata, search_mail_metadata
 from .adapters.messages import get_message_chat, search_message_chats
-from .adapters.notes import get_notes_content, get_notes_metadata, search_notes_metadata
+from .adapters.notes import (
+    apply_notes_change,
+    get_notes_content,
+    get_notes_metadata,
+    plan_notes_change,
+    search_notes_metadata,
+)
 from .adapters.photos import export_photo_asset, get_photo_asset, search_photos
 from .adapters.reminders import (
     apply_reminder_change,
@@ -245,6 +251,34 @@ def _notes_content_command(args: argparse.Namespace) -> int:
         else get_notes_content(args.handle, max_chars=args.max_chars, offset=args.offset)
     )
     log_result("notes.content", payload)
+    _print_json(payload)
+    return 0
+
+
+def _notes_plan_command(args: argparse.Namespace) -> int:
+    payload = plan_notes_change(
+        args.operation,
+        title=args.title,
+        body_text=args.body_text or "",
+    )
+    log_result("notes.plan", payload)
+    _print_json(payload)
+    return 0
+
+
+def _notes_apply_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {}
+    if args.db:
+        kwargs["db_path"] = Path(args.db).expanduser()
+    payload = apply_notes_change(
+        args.operation,
+        title=args.title,
+        body_text=args.body_text or "",
+        approval_token=args.approval_token or "",
+        confirm_apply=args.confirm_apply,
+        **kwargs,
+    )
+    log_result("notes.apply", payload)
     _print_json(payload)
     return 0
 
@@ -848,6 +882,55 @@ def build_parser() -> argparse.ArgumentParser:
     )
     notes_content.add_argument("--db", help=argparse.SUPPRESS)
     notes_content.set_defaults(func=_notes_content_command)
+
+    notes_plan = notes_subparsers.add_parser(
+        "plan",
+        help="Preview an approved Notes create operation without writing.",
+    )
+    notes_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
+    notes_plan.add_argument(
+        "--operation",
+        required=True,
+        choices=["create"],
+        help="Notes operation to preview.",
+    )
+    notes_plan.add_argument("--title", required=True, help="New note title.")
+    notes_plan.add_argument(
+        "--body-text",
+        default="",
+        help="Plain-text body for the new note, capped at 12000 characters.",
+    )
+    notes_plan.set_defaults(func=_notes_plan_command)
+
+    notes_apply = notes_subparsers.add_parser(
+        "apply",
+        help="Apply an approved Notes create operation after plan approval.",
+    )
+    notes_apply.add_argument("--json", action="store_true", help="Emit JSON output.")
+    notes_apply.add_argument(
+        "--operation",
+        required=True,
+        choices=["create"],
+        help="Notes operation to apply.",
+    )
+    notes_apply.add_argument("--title", required=True, help="New note title.")
+    notes_apply.add_argument(
+        "--body-text",
+        default="",
+        help="Plain-text body for the new note, capped at 12000 characters.",
+    )
+    notes_apply.add_argument(
+        "--approval-token",
+        required=True,
+        help="Approval token returned by notes plan.",
+    )
+    notes_apply.add_argument(
+        "--confirm-apply",
+        action="store_true",
+        help="Required explicit confirmation before writing Notes data.",
+    )
+    notes_apply.add_argument("--db", help=argparse.SUPPRESS)
+    notes_apply.set_defaults(func=_notes_apply_command)
 
     icloud_drive = subparsers.add_parser(
         "icloud-drive",

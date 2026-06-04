@@ -45,6 +45,7 @@ SYNC_FILES = [
     "docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md",
     "docs/V1_13_CALENDAR_WRITE_DESIGN.md",
     "docs/V1_14_CONTACTS_WRITE_DESIGN.md",
+    "docs/V1_15_NOTES_WRITE_DESIGN.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "scripts/audit_release_readiness.py",
     "scripts/audit_mutation_gates.py",

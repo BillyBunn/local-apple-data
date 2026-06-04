@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604140000 - 2026-06-04
+
+### Added
+
+- Approved Notes create-note apply through `local-apple-data notes apply` and MCP `notes_apply_change`.
+- Non-mutating Notes create-note planning through `local-apple-data notes plan` and MCP `notes_plan_change`.
+- Approval-token, explicit-confirmation, bounded title/body, idempotency, Notes.app automation, and exact-content read-back verification checks for Notes create-note apply.
+- Synthetic adapter, CLI, MCP annotation, runtime, mutation-gate, write-design, surface-contract, and redacted-log coverage for the approved Notes apply surface.
+
+### Security
+
+- `reminders_apply_change`, `icloud_drive_apply_change`, `calendar_apply_change`, `contacts_apply_change`, and `notes_apply_change` are the only non-read-only MCP tools and are annotated non-destructive, idempotent, and closed-world.
+- Notes append, update, delete, move, folder/account targeting, rich text, attachments, locked/shared-note mutation, and bulk operations remain blocked by mutation gates.
+
 ## 0.1.0+codex.20260604130000 - 2026-06-04
 
 ### Added

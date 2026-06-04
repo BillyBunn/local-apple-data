@@ -286,3 +286,53 @@ def test_log_result_excludes_contacts_apply_content(
     assert "do-not-log-contact-handle" not in text
     assert "do-not-log-fingerprint" not in text
     assert "do not log warning" not in text
+
+
+def test_log_result_excludes_notes_apply_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "notes",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "apply",
+        "privacy": {
+            "output_tier": "mutation",
+            "content_inspected": True,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "preview": {
+            "proposed": {
+                "title": "do not log note title",
+                "body_preview_text": "do not log note body",
+            },
+            "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
+        },
+        "approval": {
+            "approval_fingerprint": "do-not-log-fingerprint",
+            "approval_token_verified": True,
+        },
+        "read_back": {
+            "handle": "do-not-log-note-handle",
+            "title": "do not log note title",
+            "content_text": "do not log note body",
+        },
+        "warnings": [{"code": "already_applied", "message": "do not log warning"}],
+    }
+
+    log_result("notes.apply", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "notes.apply"
+    assert event["privacy"]["output_tier"] == "mutation"
+    assert event["warning_codes"] == ["already_applied"]
+    assert "do not log note title" not in text
+    assert "do not log note body" not in text
+    assert "do-not-log-note-handle" not in text
+    assert "do-not-log-fingerprint" not in text
+    assert "do not log warning" not in text

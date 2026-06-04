@@ -6,9 +6,11 @@ from pathlib import Path
 
 from local_apple_data.handles import make_int_handle
 from local_apple_data.adapters.notes import (
+    apply_notes_change,
     check_notes_schema,
     get_notes_content,
     get_notes_metadata,
+    plan_notes_change,
     search_notes_metadata,
 )
 
@@ -187,6 +189,157 @@ def test_get_notes_content_supports_offset_for_long_notes(tmp_path: Path) -> Non
     assert result["result"]["content_total_chars"] == 16
     assert result["result"]["next_offset"] == 10
     assert result["result"]["truncated"] is True
+
+
+def _notes_token(plan: dict) -> str:
+    return "notes-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+
+def test_plan_notes_change_create_returns_preview_only() -> None:
+    result = plan_notes_change(
+        "create",
+        title="Synthetic planning note",
+        body_text="Line one\nLine two",
+    )
+
+    assert result["status"] == "ok"
+    assert result["mode"] == "plan"
+    assert result["mutation_applied"] is False
+    assert result["apply_available"] is True
+    preview = result["preview"]
+    assert preview["operation"] == "create"
+    assert preview["target"] == {"account": "default", "folder": "default"}
+    assert preview["proposed"]["title"] == "Synthetic planning note"
+    assert preview["proposed"]["body_chars"] == 17
+    assert preview["approval"]["approval_token_format"].startswith("notes-apply:v1:")
+
+
+def test_plan_notes_change_requires_title() -> None:
+    result = plan_notes_change("create", title=" ", body_text="Body")
+
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "missing_title"
+
+
+def test_apply_notes_change_requires_confirmation(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+    plan = plan_notes_change("create", title="Synthetic create note", body_text="Body")
+
+    result = apply_notes_change(
+        "create",
+        title="Synthetic create note",
+        body_text="Body",
+        approval_token=_notes_token(plan),
+        confirm_apply=False,
+        db_path=db_path,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "missing_apply_confirmation"
+
+
+def test_apply_notes_change_rejects_wrong_approval_token(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+
+    result = apply_notes_change(
+        "create",
+        title="Synthetic create note",
+        body_text="Body",
+        approval_token="notes-apply:v1:bad",
+        confirm_apply=True,
+        db_path=db_path,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "invalid_approval_token"
+
+
+def test_apply_notes_change_creates_note_and_reads_back(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+    plan = plan_notes_change(
+        "create",
+        title="Synthetic create note",
+        body_text="Created body",
+    )
+
+    def runner(script: str, timeout: float) -> str:
+        assert timeout == 10.0
+        if "make new note" in script:
+            with sqlite3.connect(db_path) as connection:
+                connection.execute(
+                    """
+                    INSERT INTO ZICCLOUDSYNCINGOBJECT
+                      (Z_PK, ZTITLE1, ZTITLE, ZSNIPPET, ZCREATIONDATE1, ZMODIFICATIONDATE1,
+                       ZISPASSWORDPROTECTED, ZMARKEDFORDELETION, ZNOTEDATA)
+                      VALUES (30, 'Synthetic create note', 'Synthetic create note',
+                              'Created body', 300, 300, 0, 0, 4)
+                    """
+                )
+            return "x-coredata://11111111-2222-3333-4444-555555555555/ICNote/p30"
+        assert "ICNote/p30" in script
+        return "<h1>Synthetic create note</h1><p>Created body</p>"
+
+    result = apply_notes_change(
+        "create",
+        title="Synthetic create note",
+        body_text="Created body",
+        approval_token=_notes_token(plan),
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+    )
+
+    assert result["status"] == "ok"
+    assert result["mode"] == "apply"
+    assert result["mutation_applied"] is True
+    assert result["approval"]["approval_token_verified"] is True
+    assert result["read_back"]["title"] == "Synthetic create note"
+    assert result["read_back"]["content_text"] == "Synthetic create note\nCreated body"
+
+
+def test_apply_notes_change_is_idempotent_for_matching_existing_note(tmp_path: Path) -> None:
+    db_path = tmp_path / "notes.sqlite"
+    _make_notes_db(db_path)
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            """
+            INSERT INTO ZICCLOUDSYNCINGOBJECT
+              (Z_PK, ZTITLE1, ZTITLE, ZSNIPPET, ZCREATIONDATE1, ZMODIFICATIONDATE1,
+               ZISPASSWORDPROTECTED, ZMARKEDFORDELETION, ZNOTEDATA)
+              VALUES (30, 'Synthetic existing note', 'Synthetic existing note',
+                      'Existing body', 300, 300, 0, 0, 4)
+            """
+        )
+    plan = plan_notes_change(
+        "create",
+        title="Synthetic existing note",
+        body_text="Existing body",
+    )
+
+    def runner(script: str, _timeout: float) -> str:
+        assert "make new note" not in script
+        assert "ICNote/p30" in script
+        return "<h1>Synthetic existing note</h1><p>Existing body</p>"
+
+    result = apply_notes_change(
+        "create",
+        title="Synthetic existing note",
+        body_text="Existing body",
+        approval_token=_notes_token(plan),
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+    )
+
+    assert result["status"] == "ok"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "already_applied"
+    assert result["read_back"]["content_text"] == "Synthetic existing note\nExisting body"
 
 
 def test_get_notes_content_rejects_bad_handle(tmp_path: Path) -> None:
