@@ -21,6 +21,7 @@ from .adapters.photos import export_photo_asset, get_photo_asset, search_photos
 from .adapters.reminders import (
     due_reminders_metadata,
     get_reminder_content,
+    plan_reminder_change,
     search_reminders_eventkit,
     search_reminders_metadata,
 )
@@ -376,6 +377,34 @@ def reminders_get_content(handle: str, max_chars: int = 4000) -> dict[str, Any]:
     return _record(
         "reminders_get_content",
         get_reminder_content(handle, max_chars=max_chars),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def reminders_plan_change(
+    operation: str,
+    title: str = "",
+    list_name: str = "",
+    due_date: str = "",
+    notes: str = "",
+    handle: str = "",
+    expected_title: str = "",
+    expected_completed: str = "",
+) -> dict[str, Any]:
+    """Plan a future Reminder change without reading or mutating Reminders state."""
+
+    return _record(
+        "reminders_plan_change",
+        plan_reminder_change(
+            operation,
+            title=title,
+            list_name=list_name,
+            due_date=due_date,
+            notes=notes,
+            handle=handle,
+            expected_title=expected_title,
+            expected_completed=expected_completed,
+        ),
     )
 
 

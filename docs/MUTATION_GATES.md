@@ -2,7 +2,7 @@
 
 The current plugin is read-only. Write tools are intentionally absent until each mutation class has a separate design, explicit user approval, synthetic tests, and independent read-back verification.
 
-For sequencing and first-tranche candidates, see `docs/WRITE_TOOL_ROADMAP.md`. For the first Reminders write design gate, see `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
+For sequencing and first-tranche candidates, see `docs/WRITE_TOOL_ROADMAP.md`. For the first Reminders write design gate and current preview-only planning tools, see `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 
 ## Global Requirements
 
@@ -18,6 +18,8 @@ Every future mutating tool must satisfy all of these before exposure through CLI
 - MCP annotations marking the tool as non-read-only and destructive when applicable.
 - Tests using synthetic fixtures or mocked Apple framework helpers only.
 - Redaction scan and runtime smoke passing before install.
+
+The current `reminders plan` CLI command and `reminders_plan_change` MCP tool are not mutating tools. They return `mutation_applied:false`, `apply_available:false`, and approval metadata only.
 
 ## First Candidate Write Surfaces
 

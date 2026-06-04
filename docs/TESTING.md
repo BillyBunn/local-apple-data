@@ -6,7 +6,7 @@ For publication gates, use this file together with `docs/CAPABILITY_MATRIX.md`, 
 
 ## Test Layers
 
-- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Contacts and Photos helper responses, synthetic iCloud Drive file retrieval, and reminder due-window caps.
+- Unit tests: adapter query policy, handle generation, handle tamper rejection, warning redaction, Mail path discovery, Mail content-availability hints, synthetic Mail content parsing, synthetic Messages chat transcript retrieval, synthetic Hide My Email alias inference, synthetic Voice Memos transcript extraction, synthetic Notes content retrieval and pagination, synthetic Calendar and Reminders EventKit helper responses, synthetic Contacts and Photos helper responses, synthetic iCloud Drive file retrieval, reminder due-window caps, and non-mutating Reminders plan previews.
 - CLI tests: synthetic Mail/Messages/Hide My Email/Voice Memos/Notes/Calendar/Contacts/Photos/iCloud Drive/Reminders stores or mocked helpers with redacted logs.
 - MCP tests: tool listing and read-only annotations.
 - Runtime smoke: `scripts/verify_runtime.py` exercises the current plugin root through the same MCP runner used by `.mcp.json`, plus synthetic exact-handle Mail, Messages, Hide My Email, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail flows.
@@ -87,6 +87,7 @@ uv run python scripts/verify_cross_agent_sync.py --skip-codex --skip-file-sync -
 - Photos get/export accepts only `photos:asset:v1:` handles, returns exact asset/resource or destination metadata, rejects raw Photos identifiers and fabricated handles, and never returns inline asset bytes.
 - Reminders content accepts only `reminders:reminder:eventkit:v1:` handles, returns bounded exact reminder notes, and rejects raw EventKit identifiers, legacy SQLite reminder handles, and fabricated handles.
 - Reminder notes truncation returns `content_truncated`.
+- Reminders planning returns `mode: "plan"`, `mutation_applied:false`, `apply_available:false`, deterministic idempotency metadata, and requires exact EventKit reminder handles for existing-reminder operations.
 - Health and doctor do not expose full local executable paths.
 - Health and doctor report broad local Apple data readiness without content reads, raw rows, credentials, prompt-triggering framework access, or raw absolute store paths.
 - Health covers schema-only Mail, Messages, Voice Memos, Notes, and Reminders checks plus iCloud Drive root readiness, a normalized per-surface summary, and non-prompting access requirements for Calendar, Contacts, Photos, Reminders, Notes automation, and other framework-backed surfaces.
@@ -218,3 +219,16 @@ The v1.10 Hide My Email phase keeps the same synthetic-first test posture:
 - Private relay aliases are identified as high-confidence Sign in with Apple private relay evidence; iCloud-style aliases are medium-confidence local Mail evidence.
 - Authoritative iCloud inventory, alias creation/deactivation/deletion, private iCloud web/API access, browser sessions, keychain credential access, broad Mail address dumps, and mutation are out of scope.
 - Runtime verification covers synthetic alias success and invalid-handle rejection without touching real Mail address rows.
+
+## v1.11 Acceptance Criteria
+
+The v1.11 Reminders planning phase keeps mutation unavailable:
+
+- `reminders plan` and `reminders_plan_change` return `mode: "plan"`, `mutation_applied:false`, and `apply_available:false`.
+- Create planning requires title and target list name.
+- Existing-reminder planning requires an exact opaque `reminders:reminder:eventkit:v1:` handle.
+- Due-date planning accepts `YYYY-MM-DD` or timezone-aware ISO 8601 and rejects naive timestamps.
+- Planning returns a deterministic `reminders-plan:v1:` idempotency key and approval fingerprint.
+- Logs do not contain planned titles, notes, list names, handles, or approval fingerprints.
+- Runtime verification covers synthetic planning without touching live Reminders.
+- Apply-capable Reminders tools remain absent.

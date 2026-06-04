@@ -20,6 +20,7 @@ from audit_mutation_gates import audit_mutation_gates
 
 
 APPROVED_WRITE_TOOLS: tuple[str, ...] = ()
+APPROVED_PREVIEW_TOOLS: tuple[str, ...] = ("reminders_plan_change",)
 REQUIRED_READ_ONLY_TEXT = {
     "README.md": "The current release is read-only",
     "docs/MUTATION_GATES.md": "The current plugin is read-only",
@@ -29,12 +30,15 @@ REQUIRED_DESIGN_DOCS = {
     "reminders_write_v1": {
         "path": "docs/V1_11_REMINDERS_WRITE_DESIGN.md",
         "phrases": (
-            "Status: Design only.",
+            "Status: Preview-only implementation.",
             "No mutating CLI or MCP tools are approved or exposed by this document.",
+            "`local-apple-data reminders plan` and `reminders_plan_change` only",
             "Future implementation requires explicit approval before any apply-capable tool is exposed.",
             "preview",
             "apply",
             "read_back",
+            "mutation_applied:false",
+            "apply_available:false",
             "EventKit",
             "exact opaque `reminders:reminder:eventkit:v1:` handle",
             "idempotency",
@@ -86,6 +90,7 @@ def audit_write_design_gates(project_root: Path = PROJECT_ROOT) -> dict[str, Any
     _check_mutation_gate(root, findings)
 
     return {
+        "approved_preview_tools": list(APPROVED_PREVIEW_TOOLS),
         "approved_write_tools": list(APPROVED_WRITE_TOOLS),
         "design_docs_checked": design_docs_checked,
         "findings": [finding.to_json(root) for finding in findings],

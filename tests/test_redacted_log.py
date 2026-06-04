@@ -37,3 +37,43 @@ def test_log_result_excludes_query_and_result_content(
     assert "do not log subject" not in text
     assert "do not log message" not in text
 
+
+def test_log_result_excludes_reminder_plan_content(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path))
+    payload = {
+        "schema_version": 1,
+        "source": "reminders",
+        "status": "ok",
+        "result_count": 1,
+        "mode": "plan",
+        "privacy": {
+            "output_tier": "preview",
+            "content_inspected": False,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+        },
+        "preview": {
+            "operation": "create",
+            "target": {"list_name": "do not log list"},
+            "proposed": {
+                "title": "do not log reminder title",
+                "notes_text": "do not log reminder notes",
+            },
+            "approval": {"approval_fingerprint": "do-not-log-fingerprint"},
+        },
+        "warnings": [],
+    }
+
+    log_result("reminders.plan", payload)
+
+    text = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+    event = json.loads(text)
+    assert event["command"] == "reminders.plan"
+    assert event["privacy"]["output_tier"] == "preview"
+    assert "do not log list" not in text
+    assert "do not log reminder title" not in text
+    assert "do not log reminder notes" not in text
+    assert "do-not-log-fingerprint" not in text

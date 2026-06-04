@@ -1,6 +1,6 @@
 {
   "name": "local-apple-data",
-  "version": "0.1.0+codex.20260604080000",
+  "version": "0.1.0+codex.20260604090000",
   "description": "Local-first read-only Apple Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients.",
   "author": {
     "name": "Billy Bunn"
@@ -50,7 +50,8 @@
       "Search local Photos filenames for this phrase.",
       "Export the selected local Photos asset to this output directory.",
       "Search local Reminders for this title.",
-      "Retrieve exact Reminder notes from the selected opaque handle."
+      "Retrieve exact Reminder notes from the selected opaque handle.",
+      "Plan a future Reminder change without applying it."
     ]
   }
 }

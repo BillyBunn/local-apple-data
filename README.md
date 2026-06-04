@@ -44,6 +44,7 @@ Implemented now:
 - `local-apple-data reminders search/due` metadata commands
 - `local-apple-data reminders eventkit-search` for local Reminders title metadata through EventKit
 - `local-apple-data reminders content --json --handle <reminders:reminder:eventkit:v1:...> --max-chars 4000` for exact-handle local Reminder notes
+- `local-apple-data reminders plan --json --operation create|complete|update-due-date ...` for non-mutating future-change previews with idempotency and approval metadata
 - Highest-version Mail store discovery without exposing raw local store paths in normal output
 - `local-apple-data-mcp` stdio MCP server with read-only tools
 - MCP runner script that avoids package builds during normal plugin startup
@@ -143,6 +144,7 @@ uv run local-apple-data photos export --json --handle '<photos:asset:v1:...>' --
 uv run local-apple-data reminders due --json --days 14
 uv run local-apple-data reminders eventkit-search --json --query '<reminder title text>'
 uv run local-apple-data reminders content --json --handle '<reminders:reminder:eventkit:v1:...>' --max-chars 4000
+uv run local-apple-data reminders plan --json --operation create --title '<new reminder title>' --list-name '<target list name>' --due-date '<YYYY-MM-DD>'
 ```
 
 Run the plugin and skill validator scripts too when those local validator helpers are installed in the current Codex skills cache.

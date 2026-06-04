@@ -8,6 +8,7 @@ from local_apple_data.adapters.reminders import (
     check_reminders_schema,
     due_reminders_metadata,
     get_reminder_content,
+    plan_reminder_change,
     search_reminders_eventkit,
     search_reminders_metadata,
 )
@@ -263,3 +264,73 @@ def test_search_reminders_eventkit_degrades_without_access() -> None:
     assert result["status"] == "degraded"
     assert result["authorization_status"] == "denied"
     assert result["warnings"][0]["code"] == "reminders_access_unavailable"
+
+
+def test_plan_reminder_change_create_returns_preview_only() -> None:
+    result = plan_reminder_change(
+        "create",
+        title="Synthetic planned reminder",
+        list_name="Synthetic List",
+        due_date="2026-06-04T17:00:00-07:00",
+        notes="Synthetic note text.",
+    )
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["output_tier"] == "preview"
+    assert result["mutation_applied"] is False
+    assert result["apply_available"] is False
+    preview = result["preview"]
+    assert preview["operation"] == "create"
+    assert preview["target"] == {"list_name": "Synthetic List"}
+    assert preview["proposed"]["title"] == "Synthetic planned reminder"
+    assert preview["proposed"]["due_date"] == "2026-06-05T00:00:00Z"
+    assert preview["proposed"]["notes_chars"] == 20
+    assert preview["idempotency_key"].startswith("reminders-plan:v1:")
+    assert preview["approval"]["required_for_apply"] is True
+    assert preview["approval"]["apply_tool_available"] is False
+
+
+def test_plan_reminder_change_complete_requires_eventkit_handle() -> None:
+    result = plan_reminder_change(
+        "complete",
+        handle="reminders:reminder:v1:0123456789abcdef0123456789abcdef",
+        expected_title="Synthetic planned reminder",
+        expected_completed=False,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "invalid_handle"
+
+
+def test_plan_reminder_change_update_due_date_uses_exact_handle() -> None:
+    search = search_reminders_eventkit("runtime", eventkit_runner=_eventkit_runner)
+    handle = search["results"][0]["handle"]
+
+    result = plan_reminder_change(
+        "update-due-date",
+        handle=handle,
+        expected_title="Synthetic runtime reminder",
+        expected_completed=False,
+        due_date="2026-06-06",
+    )
+
+    assert result["status"] == "ok"
+    preview = result["preview"]
+    assert preview["operation"] == "update_due_date"
+    assert preview["target"]["handle"] == handle
+    assert preview["target"]["expected_title"] == "Synthetic runtime reminder"
+    assert preview["target"]["expected_completed"] is False
+    assert preview["proposed"]["due_date"] == "2026-06-06"
+
+
+def test_plan_reminder_change_rejects_oversized_notes() -> None:
+    result = plan_reminder_change(
+        "create",
+        title="Synthetic planned reminder",
+        list_name="Synthetic List",
+        notes="x" * 12001,
+    )
+
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "input_too_large"

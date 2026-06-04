@@ -137,3 +137,32 @@ def test_cli_reminders_content(monkeypatch, capsys) -> None:
     parsed = json.loads(capsys.readouterr().out)
     assert parsed["status"] == "ok"
     assert parsed["result"]["notes_chars"] == 12
+
+
+def test_cli_reminders_plan(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+
+    exit_code = main(
+        [
+            "reminders",
+            "plan",
+            "--json",
+            "--operation",
+            "create",
+            "--title",
+            "Synthetic CLI planned reminder",
+            "--list-name",
+            "Synthetic List",
+            "--due-date",
+            "2026-06-04",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["mode"] == "plan"
+    assert parsed["mutation_applied"] is False
+    assert parsed["apply_available"] is False
+    assert parsed["preview"]["operation"] == "create"
+    assert parsed["preview"]["proposed"]["title"] == "Synthetic CLI planned reminder"

@@ -102,7 +102,7 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
 ```json
 {
   "status": "ok",
-  "tool_count": 29,
+  "tool_count": 30,
   "mail_content_status": "ok",
   "notes_content_status": "ok",
   "icloud_drive_content_status": "ok",
@@ -114,6 +114,39 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "voice_memos_transcript_status": "ok",
   "voice_memos_export_status": "ok",
   "hide_my_email_detail_status": "ok",
-  "reminders_content_status": "ok"
+  "reminders_content_status": "ok",
+  "reminders_plan_status": "ok",
+  "reminders_plan_mutation_applied": false,
+  "reminders_plan_apply_available": false
+}
+```
+
+## Reminders Plan
+
+```json
+{
+  "status": "ok",
+  "source": "reminders",
+  "mode": "plan",
+  "mutation_applied": false,
+  "apply_available": false,
+  "preview": {
+    "operation": "create",
+    "target": {
+      "list_name": "Synthetic List"
+    },
+    "proposed": {
+      "title": "Synthetic planned reminder",
+      "due_date": "2026-06-04",
+      "notes_present": false
+    },
+    "idempotency_key": "reminders-plan:v1:<hash>",
+    "approval": {
+      "required_for_apply": true,
+      "apply_tool_available": false,
+      "approval_fingerprint": "<hash>"
+    }
+  },
+  "warnings": []
 }
 ```

@@ -8,7 +8,8 @@ This project handles local personal-data surfaces. The default is metadata-first
 2. Metadata: bounded subjects/titles/snippets and Mail content-availability hints only when the user asks for the workflow.
 3. Content/detail/export: exact-handle retrieval for Mail, Messages chats, inferred Hide My Email aliases, Voice Memos, Notes, Calendar events, Contacts, Photos asset/resource metadata, Reminders, and supported iCloud Drive text files after the metadata flow returns a `mail:message:v2:`, `messages:chat:v1:`, `hide_my_email:alias:v1:`, `voice_memos:recording:v1:`, `notes:note:v2:`, `calendar:event:v1:`, `contacts:contact:v1:`, `photos:asset:v1:`, `reminders:reminder:eventkit:v1:`, or `icloud:file:v1:` handle and the user explicitly requests that selected item. Media export tools additionally require a caller-selected output directory and do not return media bytes inline.
 4. Attachments: metadata only until a later approved phase.
-5. Mutation: deferred until a separate design and approval phase.
+5. Preview: non-mutating Reminders future-change planning for exact requested create/complete/update-due-date workflows.
+6. Mutation: deferred until a separate design and approval phase.
 
 ## Never Persist
 
@@ -25,6 +26,7 @@ Do not persist any of the following in logs, docs, prompts, fixtures, tests, com
 - Contact notes and image data
 - Photo asset bytes in chat, thumbnails, raw Photos identifiers, and asset/resource metadata outside exact selected responses
 - Reminder titles or notes
+- Reminder planning titles or notes outside transient preview responses
 - iCloud Drive file contents or raw local paths
 - Attachment content
 - Full email addresses
@@ -83,6 +85,20 @@ Ask the local operator before:
 - Adding authoritative Hide My Email inventory or Hide My Email creation/deactivation/deletion
 - Adding private iCloud web/API access, iCloud.com automation, browser sessions, or keychain credential access
 - Adding new content classes beyond exact-handle Mail, Messages chat transcripts, inferred Hide My Email aliases, Voice Memos existing embedded transcripts/audio export, Notes, Calendar event detail, Contact detail, Photos asset/resource metadata/export, Reminder notes, and supported iCloud Drive text-file retrieval
+
+## v1.11 Reminders Planning
+
+The implemented v1.11 phase adds non-mutating Reminders planning only. It is not permission to apply, create, complete, update, or delete Reminders.
+
+The v1.11 implementation:
+
+- Exposes `local-apple-data reminders plan` and MCP `reminders_plan_change`.
+- Returns `mode: "plan"`, `mutation_applied:false`, and `apply_available:false`.
+- Validates requested create, complete, and update-due-date operations without calling EventKit or writing Reminders.
+- Requires exact opaque `reminders:reminder:eventkit:v1:` handles for existing-reminder operation planning.
+- Returns deterministic idempotency and approval fingerprints for a future apply gate.
+- Keeps automated tests synthetic-only.
+- Keeps redacted event logs free of planned titles, notes, handles, list names, and approval fingerprints.
 
 ## v1.1 Mail Content Retrieval
 

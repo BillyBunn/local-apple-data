@@ -2,6 +2,19 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604090000 - 2026-06-04
+
+### Added
+
+- Preview-only Reminders planning through `local-apple-data reminders plan` and MCP `reminders_plan_change`.
+- Deterministic `reminders-plan:v1:` idempotency keys plus approval fingerprints for future apply-token binding.
+- Synthetic adapter, CLI, MCP, runtime, redacted-log, surface-contract, and packaging coverage for Reminders planning.
+
+### Security
+
+- Reminders planning returns `mutation_applied:false` and `apply_available:false`, does not call EventKit, and does not mutate Reminders.
+- Apply-capable Reminders tools remain absent.
+
 ## 0.1.0+codex.20260604080000 - 2026-06-04
 
 ### Added

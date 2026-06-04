@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -29,8 +30,11 @@ EVENTKIT_HELPER = Path(__file__).resolve().parents[3] / "scripts/eventkit_helper
 EVENTKIT_TIMEOUT_SECONDS = 10.0
 DEFAULT_CONTENT_CHARS = 4000
 MAX_CONTENT_CHARS = 12000
+MAX_PREVIEW_TITLE_CHARS = 512
+MAX_PREVIEW_LIST_CHARS = 512
 DEFAULT_EVENTKIT_SCAN_LIMIT = 10000
 EVENTKIT_REMINDER_HANDLE_PREFIX = "reminders:reminder:eventkit"
+PLAN_OPERATIONS = {"create", "complete", "update_due_date"}
 EventKitRunner = Callable[[dict[str, Any], float], dict[str, Any]]
 
 
@@ -49,6 +53,15 @@ def _content_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "content",
+    }
+
+
+def _preview_privacy() -> dict[str, bool | str]:
+    return {
+        "content_inspected": False,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "preview",
     }
 
 
@@ -500,6 +513,169 @@ def get_reminder_content(
     }
 
 
+def plan_reminder_change(
+    operation: str,
+    *,
+    title: str = "",
+    list_name: str = "",
+    due_date: str = "",
+    notes: str = "",
+    handle: str = "",
+    expected_title: str = "",
+    expected_completed: bool | str | None = None,
+) -> dict[str, Any]:
+    normalized_operation = operation.strip().replace("-", "_")
+    warnings: list[dict[str, str]] = []
+    if normalized_operation not in PLAN_OPERATIONS:
+        warnings.append(
+            _warning(
+                "invalid_operation",
+                "Expected operation create, complete, or update_due_date.",
+            )
+        )
+        return _preview_error(warnings)
+
+    normalized_title, title_warning = _bounded_preview_value(
+        title,
+        field="title",
+        max_chars=MAX_PREVIEW_TITLE_CHARS,
+        required=normalized_operation == "create",
+    )
+    if title_warning is not None:
+        warnings.append(title_warning)
+
+    normalized_list, list_warning = _bounded_preview_value(
+        list_name,
+        field="list_name",
+        max_chars=MAX_PREVIEW_LIST_CHARS,
+        required=normalized_operation == "create",
+    )
+    if list_warning is not None:
+        warnings.append(list_warning)
+
+    normalized_notes, notes_warning = _bounded_preview_value(
+        notes,
+        field="notes",
+        max_chars=MAX_CONTENT_CHARS,
+        required=False,
+    )
+    if notes_warning is not None:
+        warnings.append(notes_warning)
+
+    normalized_expected_title, expected_title_warning = _bounded_preview_value(
+        expected_title,
+        field="expected_title",
+        max_chars=MAX_PREVIEW_TITLE_CHARS,
+        required=normalized_operation in {"complete", "update_due_date"},
+    )
+    if expected_title_warning is not None:
+        warnings.append(expected_title_warning)
+
+    normalized_due_date, due_date_warning = _normalize_due_date(
+        due_date,
+        required=normalized_operation == "update_due_date",
+    )
+    if due_date_warning is not None:
+        warnings.append(due_date_warning)
+
+    normalized_completed, completed_warning = _normalize_expected_completed(expected_completed)
+    if completed_warning is not None:
+        warnings.append(completed_warning)
+
+    normalized_handle = handle.strip()
+    if normalized_operation in {"complete", "update_due_date"} and not is_opaque_handle(
+        normalized_handle,
+        EVENTKIT_REMINDER_HANDLE_PREFIX,
+    ):
+        warnings.append(
+            _warning(
+                "invalid_handle",
+                "Expected reminders:reminder:eventkit:v1 opaque handle from EventKit search output.",
+            )
+        )
+    if normalized_operation == "create" and normalized_handle:
+        warnings.append(
+            _warning(
+                "unexpected_handle",
+                "Create reminder planning requires a target list, not a reminder handle.",
+            )
+        )
+
+    if warnings:
+        return _preview_error(warnings)
+
+    target: dict[str, Any]
+    proposed: dict[str, Any]
+    if normalized_operation == "create":
+        target = {"list_name": normalized_list}
+        proposed = {
+            "title": normalized_title,
+            "due_date": normalized_due_date,
+            "notes_text": normalized_notes,
+            "notes_chars": len(normalized_notes),
+            "notes_present": bool(normalized_notes),
+        }
+    elif normalized_operation == "complete":
+        target = {
+            "handle": normalized_handle,
+            "expected_title": normalized_expected_title,
+            "expected_completed": normalized_completed if normalized_completed is not None else False,
+        }
+        proposed = {
+            "completed": True,
+            "due_date": None,
+            "notes_present": None,
+        }
+    else:
+        target = {
+            "handle": normalized_handle,
+            "expected_title": normalized_expected_title,
+            "expected_completed": normalized_completed,
+        }
+        proposed = {
+            "completed": normalized_completed,
+            "due_date": normalized_due_date,
+            "notes_present": None,
+        }
+
+    fingerprint_payload = {
+        "operation": normalized_operation,
+        "target": target,
+        "proposed": proposed,
+    }
+    idempotency_key = _plan_idempotency_key(fingerprint_payload)
+    approval_fingerprint = _approval_fingerprint(
+        {
+            **fingerprint_payload,
+            "idempotency_key": idempotency_key,
+        }
+    )
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "reminders",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": False,
+        "preview": {
+            "operation": normalized_operation,
+            "target": target,
+            "proposed": proposed,
+            "idempotency_key": idempotency_key,
+            "approval": {
+                "required_for_apply": True,
+                "apply_tool_available": False,
+                "approval_fingerprint": approval_fingerprint,
+            },
+            "read_back_required_after_apply": True,
+        },
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
 def _eventkit_reminders_response(
     *,
     query: str,
@@ -589,6 +765,21 @@ def _resolve_eventkit_reminder_id(handle: str, reminders: Any) -> str | None:
     return None
 
 
+def _preview_error(warnings: list[dict[str, str]]) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "reminders",
+        "privacy": _preview_privacy(),
+        "mode": "plan",
+        "mutation_applied": False,
+        "apply_available": False,
+        "preview": None,
+        "result_count": 0,
+        "warnings": warnings,
+    }
+
+
 def _invalid_eventkit_handle_result() -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -632,6 +823,79 @@ def _safe_warnings(response: dict[str, Any]) -> list[dict[str, str]]:
         if isinstance(code, str) and isinstance(message, str):
             safe.append(_warning(code, message))
     return safe
+
+
+def _bounded_preview_value(
+    value: str,
+    *,
+    field: str,
+    max_chars: int,
+    required: bool,
+) -> tuple[str, dict[str, str] | None]:
+    normalized = value.strip().replace("\r\n", "\n").replace("\r", "\n")
+    if required and not normalized:
+        return "", _warning("missing_required_field", f"Missing required field: {field}.")
+    if len(normalized) > max_chars:
+        return "", _warning("input_too_large", f"Field exceeds maximum length: {field}.")
+    return normalized, None
+
+
+def _normalize_due_date(
+    value: str,
+    *,
+    required: bool,
+) -> tuple[str | None, dict[str, str] | None]:
+    stripped = value.strip()
+    if not stripped:
+        if required:
+            return None, _warning("missing_required_field", "Missing required field: due_date.")
+        return None, None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", stripped):
+        return stripped, None
+    try:
+        parsed = datetime.fromisoformat(stripped.replace("Z", "+00:00"))
+    except ValueError:
+        return None, _warning(
+            "invalid_due_date",
+            "Due date must be YYYY-MM-DD or ISO 8601 with a timezone.",
+        )
+    if parsed.tzinfo is None:
+        return None, _warning(
+            "invalid_due_date",
+            "Due date timestamps must include a timezone.",
+        )
+    return parsed.astimezone(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"), None
+
+
+def _normalize_expected_completed(
+    value: bool | str | None,
+) -> tuple[bool | None, dict[str, str] | None]:
+    if value is None or value == "":
+        return None, None
+    if isinstance(value, bool):
+        return value, None
+    lowered = value.strip().casefold()
+    if lowered == "true":
+        return True, None
+    if lowered == "false":
+        return False, None
+    return None, _warning(
+        "invalid_expected_completed",
+        "Expected completed state must be true or false.",
+    )
+
+
+def _plan_idempotency_key(payload: dict[str, Any]) -> str:
+    digest = hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+    return f"reminders-plan:v1:{digest}"
+
+
+def _approval_fingerprint(payload: dict[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json(payload).encode("utf-8")).hexdigest()[:32]
+
+
+def _canonical_json(payload: dict[str, Any]) -> str:
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
 
 
 def _bounded_text(text: str, max_chars: int) -> tuple[str, bool]:

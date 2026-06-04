@@ -24,6 +24,7 @@ from local_apple_data.mcp_server import (
     photos_export_asset,
     photos_get_asset,
     reminders_get_content,
+    reminders_plan_change,
     voice_memos_export_audio,
     voice_memos_get_recording,
 )
@@ -61,6 +62,11 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     photo_result = photos_get_asset("bad-handle")
     photo_export_result = photos_export_asset("bad-handle", str(tmp_path / "exports"))
     reminder_result = reminders_get_content("bad-handle")
+    reminder_plan_result = reminders_plan_change(
+        "complete",
+        handle="bad-handle",
+        expected_title="Synthetic reminder",
+    )
 
     assert mail_result["status"] == "error"
     assert mail_content_result["status"] == "error"
@@ -90,6 +96,8 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert photo_export_result["warnings"][0]["code"] == "invalid_handle"
     assert reminder_result["status"] == "error"
     assert reminder_result["warnings"][0]["code"] == "invalid_handle"
+    assert reminder_plan_result["status"] == "error"
+    assert reminder_plan_result["warnings"][0]["code"] == "invalid_handle"
 
 
 def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
@@ -138,6 +146,7 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "reminders_due",
                     "reminders_eventkit_search",
                     "reminders_get_content",
+                    "reminders_plan_change",
                 }.issubset(names)
                 for tool in tools.tools:
                     if tool.name in names:

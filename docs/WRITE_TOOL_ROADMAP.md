@@ -4,6 +4,8 @@ The current release is read-only. This roadmap defines the sequence and engineer
 
 Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`.
 
+Current progress: `reminders plan` and `reminders_plan_change` implement preview-only planning. They do not call EventKit, write Reminders, or expose apply-capable tools.
+
 ## Principle
 
 Write support must be boring, narrow, and independently verifiable. A write tool should never be the first way an agent discovers state. The agent must search or fetch current state first, present a preview, apply only after explicit approval, and then read back through an independent path.
@@ -12,7 +14,7 @@ Write support must be boring, narrow, and independently verifiable. A write tool
 
 Every mutation class should expose three layers:
 
-- `preview`: validate inputs and return the planned change without touching Apple data.
+- `preview`: validate inputs and return the planned change without touching Apple data. Reminders preview-only planning is implemented as `reminders plan` / `reminders_plan_change`.
 - `apply`: perform the exact approved change.
 - `read_back`: verify the resulting state through the normal read-only adapter.
 

@@ -21,6 +21,7 @@ from .adapters.photos import export_photo_asset, get_photo_asset, search_photos
 from .adapters.reminders import (
     due_reminders_metadata,
     get_reminder_content,
+    plan_reminder_change,
     search_reminders_eventkit,
     search_reminders_metadata,
 )
@@ -400,6 +401,22 @@ def _reminders_eventkit_search_command(args: argparse.Namespace) -> int:
 def _reminders_content_command(args: argparse.Namespace) -> int:
     payload = get_reminder_content(args.handle, max_chars=args.max_chars)
     log_result("reminders.content", payload)
+    _print_json(payload)
+    return 0
+
+
+def _reminders_plan_command(args: argparse.Namespace) -> int:
+    payload = plan_reminder_change(
+        args.operation,
+        title=args.title or "",
+        list_name=args.list_name or "",
+        due_date=args.due_date or "",
+        notes=args.notes or "",
+        handle=args.handle or "",
+        expected_title=args.expected_title or "",
+        expected_completed=args.expected_completed,
+    )
+    log_result("reminders.plan", payload)
     _print_json(payload)
     return 0
 
@@ -1006,6 +1023,48 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum notes characters to return, capped at 12000.",
     )
     reminders_content.set_defaults(func=_reminders_content_command)
+
+    reminders_plan = reminders_subparsers.add_parser(
+        "plan",
+        help="Plan a future Reminder change without applying it.",
+    )
+    reminders_plan.add_argument("--json", action="store_true", help="Emit JSON output.")
+    reminders_plan.add_argument(
+        "--operation",
+        required=True,
+        choices=["create", "complete", "update-due-date", "update_due_date"],
+        help="Future Reminder operation to plan. No mutation is applied.",
+    )
+    reminders_plan.add_argument(
+        "--title",
+        help="Reminder title for create planning.",
+    )
+    reminders_plan.add_argument(
+        "--list-name",
+        help="Target Reminders list name for create planning.",
+    )
+    reminders_plan.add_argument(
+        "--due-date",
+        help="YYYY-MM-DD or timezone-aware ISO 8601 due date for create/update planning.",
+    )
+    reminders_plan.add_argument(
+        "--notes",
+        help="Optional Reminder notes for create planning, capped at 12000 characters.",
+    )
+    reminders_plan.add_argument(
+        "--handle",
+        help="Reminder EventKit handle for complete or update-due-date planning.",
+    )
+    reminders_plan.add_argument(
+        "--expected-title",
+        help="Expected current title from a recent read-only result.",
+    )
+    reminders_plan.add_argument(
+        "--expected-completed",
+        choices=["true", "false"],
+        help="Expected current completion state from a recent read-only result.",
+    )
+    reminders_plan.set_defaults(func=_reminders_plan_command)
 
     return parser
 

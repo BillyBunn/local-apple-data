@@ -23,6 +23,7 @@ def test_current_project_write_design_gate_audit_passes() -> None:
     assert payload["status"] == "ok"
     assert payload["write_design_gate"] is True
     assert payload["design_docs_checked"] >= 1
+    assert payload["approved_preview_tools"] == ["reminders_plan_change"]
     assert payload["approved_write_tools"] == []
     assert payload["findings"] == []
 
@@ -40,7 +41,13 @@ def test_write_design_gate_flags_missing_design_doc(tmp_path: Path) -> None:
 def test_write_design_gate_flags_incomplete_design_doc(tmp_path: Path) -> None:
     root = _minimal_project(tmp_path)
     path = root / "docs/V1_11_REMINDERS_WRITE_DESIGN.md"
-    path.write_text(path.read_text(encoding="utf-8").replace("Status: Design only.", "Status: Draft."), encoding="utf-8")
+    path.write_text(
+        path.read_text(encoding="utf-8").replace(
+            "Status: Preview-only implementation.",
+            "Status: Draft.",
+        ),
+        encoding="utf-8",
+    )
 
     payload = audit_write_design_gates.audit_write_design_gates(root)
 

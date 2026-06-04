@@ -33,6 +33,7 @@ from local_apple_data.adapters.notes import get_notes_content, search_notes_meta
 from local_apple_data.adapters.photos import export_photo_asset, get_photo_asset, search_photos
 from local_apple_data.adapters.reminders import (
     get_reminder_content,
+    plan_reminder_change,
     search_reminders_eventkit,
 )
 from local_apple_data.adapters.voice_memos import (
@@ -757,9 +758,27 @@ def _reminders_content_smoke() -> dict[str, Any]:
     }
 
 
+def _reminders_plan_smoke() -> dict[str, Any]:
+    result = plan_reminder_change(
+        "create",
+        title="Synthetic runtime planned reminder",
+        list_name="Synthetic List",
+        due_date="2026-06-04",
+    )
+    return {
+        "reminders_plan_status": result["status"],
+        "reminders_plan_mode": result["mode"],
+        "reminders_plan_mutation_applied": result["mutation_applied"],
+        "reminders_plan_apply_available": result["apply_available"],
+        "reminders_plan_idempotency_key": result["preview"]["idempotency_key"].startswith(
+            "reminders-plan:v1:"
+        ),
+    }
+
+
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 29,
+        "tool_count": 30,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -843,6 +862,11 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "reminders_notes_chars": 25,
         "reminders_legacy_content_status": "error",
         "reminders_legacy_content_warning": "invalid_handle",
+        "reminders_plan_status": "ok",
+        "reminders_plan_mode": "plan",
+        "reminders_plan_mutation_applied": False,
+        "reminders_plan_apply_available": False,
+        "reminders_plan_idempotency_key": True,
     }
     for key, value in expected.items():
         if summary.get(key) != value:
@@ -872,6 +896,7 @@ def main() -> None:
         summary.update(_contacts_content_smoke())
         summary.update(_photos_content_smoke(tmp_path))
         summary.update(_reminders_content_smoke())
+        summary.update(_reminders_plan_smoke())
 
     _assert_summary(summary)
     print(json.dumps(summary, sort_keys=True))

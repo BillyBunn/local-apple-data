@@ -95,12 +95,13 @@ SURFACE_CONTRACTS = (
         label="Reminders",
         cli_group="reminders",
         cli_subparser="reminders_subparsers",
-        cli_commands=("search", "due", "eventkit-search", "content"),
+        cli_commands=("search", "due", "eventkit-search", "content", "plan"),
         mcp_tools=(
             "reminders_search",
             "reminders_due",
             "reminders_eventkit_search",
             "reminders_get_content",
+            "reminders_plan_change",
         ),
     ),
     SurfaceContract(

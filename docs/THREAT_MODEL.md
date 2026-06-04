@@ -22,6 +22,7 @@ This plugin is for local, read-only, metadata-first access to locally synced App
 - Exact Contact details returned transiently for one selected `contacts:contact:v1:` handle.
 - Exact Photos asset/resource metadata returned transiently for one selected `photos:asset:v1:` handle.
 - Exact Reminder notes returned transiently for one selected `reminders:reminder:eventkit:v1:` handle.
+- Non-mutating Reminder plan previews returned transiently for requested future create/complete/update-due-date workflows.
 - Exact iCloud Drive text content returned transiently for one selected `icloud:file:v1:` handle.
 - Local handle secret under `~/.local/state/local-apple-data/handle-secret.key`.
 - Redacted event log under `~/.local/state/local-apple-data/events.jsonl`.
@@ -31,6 +32,7 @@ This plugin is for local, read-only, metadata-first access to locally synced App
 - No attachments, broad content search, durable content caches, raw database rows, raw framework identifiers, raw local file paths, unsupported/binary iCloud Drive content extraction, Contact notes/image data, inline Photos image/video bytes, inline Voice Memos audio bytes, generated transcription, broad Messages text search, broad Voice Memos transcript search, broad Reminder note retrieval, authoritative Hide My Email inventory, or Hide My Email creation/deactivation/deletion.
 - No Gmail connector, Gmail API, IMAP, OAuth, app passwords, iCloud.com, browser sessions, keychain credentials, private iCloud web APIs, or network mail access.
 - No mutation of Mail, Notes, Reminders, Hide My Email, Gmail, iCloud, TCC, launchd, Codex config, or OpenClaw state.
+- No apply-capable Reminders write tools; current Reminders planning returns `mutation_applied:false` and `apply_available:false`.
 - No background indexing or durable personal-metadata cache.
 
 ## Main Risks And Mitigations
@@ -49,6 +51,7 @@ This plugin is for local, read-only, metadata-first access to locally synced App
 - Local path leakage: store and SQLite warnings use safe generic messages; health store paths are `~/...` labels; tool paths are redacted.
 - Log leakage: event logs include command/status/source/result count/warning codes/privacy flags only, not queries, results, warning messages, or content.
 - Schema and readiness drift: health and doctor use store-readability checks, schema-only checks for Mail, Messages, Voice Memos, Notes, and Reminders, iCloud Drive root checks, non-prompting framework access requirements, and safe warning codes; doctor gives non-mutating remediation guidance.
+- Planning confused with mutation: Reminders planning uses `plan` naming, read-only MCP annotations, `mutation_applied:false`, `apply_available:false`, deterministic idempotency metadata, and no EventKit write calls.
 - Mail version drift: Mail store discovery chooses the highest existing local Envelope Index path without exposing the raw path in normal output.
 - Runtime cache drift: local install verification can compare project source, personal/plugin source, and installed cache key files.
 - Runtime dependency drift: MCP startup uses `scripts/run_mcp_server.sh` to prefer the plugin-local `.venv`, then an optional `LOCAL_APPLE_DATA_PROJECT_VENV`, before attempting fallback dependency resolution.
@@ -70,3 +73,4 @@ Any attachment retrieval, mutation, background indexing, arbitrary document extr
 
 The implemented v1.1 gate is `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`. It added exact-handle Mail content retrieval only.
 The implemented v1.2/v1.3/v1.4/v1.5/v1.6/v1.7/v1.8/v1.9/v1.10 gate is `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`. It adds exact-handle Notes content retrieval, exact-handle supported iCloud Drive text-file retrieval, exact-handle Calendar event detail retrieval, exact-handle Reminder note retrieval, exact-handle Contact detail retrieval, exact-handle Photos asset/resource metadata and export, exact-handle Messages chat transcript retrieval, exact-handle Voice Memos existing transcript and audio export, and exact-handle inferred Hide My Email alias detail while keeping attachments, broad content search, background indexing, connector fallback, private iCloud web/API access, and mutation out of scope.
+The implemented v1.11 gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`. It adds non-mutating Reminders planning while keeping apply-capable mutation tools out of scope.

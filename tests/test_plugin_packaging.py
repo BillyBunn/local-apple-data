@@ -55,6 +55,7 @@ def test_skill_metadata_mentions_local_mcp_dependency() -> None:
     assert "photos_get_asset" in skill
     assert "photos_export_asset" in skill
     assert "reminders_get_content" in skill
+    assert "reminders_plan_change" in skill
     assert "voice_memos_get_recording" in skill
     assert "voice_memos_export_audio" in skill
     assert 'value: "local-apple-data"' in agent
