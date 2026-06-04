@@ -44,6 +44,12 @@ from .adapters.messages import (
     plan_messages_change,
     search_message_chats,
 )
+from .adapters.music import (
+    get_music_playlist,
+    get_music_track,
+    search_music_playlists,
+    search_music_tracks,
+)
 from .adapters.notes import (
     apply_notes_change,
     export_notes_attachment,
@@ -480,6 +486,42 @@ def _podcasts_episode_command(args: argparse.Namespace) -> int:
         kwargs["db_path"] = Path(args.db).expanduser()
     payload = get_podcast_episode(args.handle, **kwargs)
     log_result("podcasts.episode", payload)
+    _print_json(payload)
+    return 0
+
+
+def _music_search_command(args: argparse.Namespace) -> int:
+    payload = search_music_tracks(
+        args.query,
+        limit=args.limit,
+        max_scan_items=args.max_scan_items,
+    )
+    log_result("music.search", payload)
+    _print_json(payload)
+    return 0
+
+
+def _music_get_command(args: argparse.Namespace) -> int:
+    payload = get_music_track(args.handle, max_scan_items=args.max_scan_items)
+    log_result("music.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _music_playlists_command(args: argparse.Namespace) -> int:
+    payload = search_music_playlists(
+        args.query,
+        limit=args.limit,
+        max_scan_items=args.max_scan_items,
+    )
+    log_result("music.playlists", payload)
+    _print_json(payload)
+    return 0
+
+
+def _music_playlist_command(args: argparse.Namespace) -> int:
+    payload = get_music_playlist(args.handle, max_scan_items=args.max_scan_items)
+    log_result("music.playlist", payload)
     _print_json(payload)
     return 0
 
@@ -1588,6 +1630,74 @@ def build_parser() -> argparse.ArgumentParser:
     podcasts_episode.add_argument("--max-chars", type=int, default=4000, help="Maximum description characters, capped at 12000.")
     podcasts_episode.add_argument("--db", help=argparse.SUPPRESS)
     podcasts_episode.set_defaults(func=_podcasts_episode_command)
+
+    music = subparsers.add_parser(
+        "music",
+        help="Apple Music track and playlist metadata commands.",
+    )
+    music_subparsers = music.add_subparsers(dest="music_command", required=True)
+
+    music_search = music_subparsers.add_parser(
+        "search",
+        help="Search Apple Music track metadata by title, artist, album, or genre.",
+    )
+    music_search.add_argument("--json", action="store_true", help="Emit JSON output.")
+    music_search.add_argument(
+        "--query",
+        required=True,
+        help="Track title, artist, album, or genre query text.",
+    )
+    music_search.add_argument("--limit", type=int, default=20, help="Maximum results, capped at 50.")
+    music_search.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum Music.app items to scan, capped by the adapter.",
+    )
+    music_search.set_defaults(func=_music_search_command)
+
+    music_get = music_subparsers.add_parser(
+        "get",
+        help="Get exact Apple Music track metadata by handle.",
+    )
+    music_get.add_argument("--json", action="store_true", help="Emit JSON output.")
+    music_get.add_argument("--handle", required=True, help="Track handle from search output.")
+    music_get.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum Music.app items to scan, capped by the adapter.",
+    )
+    music_get.set_defaults(func=_music_get_command)
+
+    music_playlists = music_subparsers.add_parser(
+        "playlists",
+        help="Search Apple Music playlist metadata by playlist name.",
+    )
+    music_playlists.add_argument("--json", action="store_true", help="Emit JSON output.")
+    music_playlists.add_argument("--query", required=True, help="Playlist name query text.")
+    music_playlists.add_argument("--limit", type=int, default=20, help="Maximum results, capped at 50.")
+    music_playlists.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum Music.app playlists to scan, capped by the adapter.",
+    )
+    music_playlists.set_defaults(func=_music_playlists_command)
+
+    music_playlist = music_subparsers.add_parser(
+        "playlist",
+        help="Get exact Apple Music playlist metadata by handle.",
+    )
+    music_playlist.add_argument("--json", action="store_true", help="Emit JSON output.")
+    music_playlist.add_argument("--handle", required=True, help="Playlist handle from search output.")
+    music_playlist.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=5000,
+        help="Maximum Music.app playlists to scan, capped by the adapter.",
+    )
+    music_playlist.set_defaults(func=_music_playlist_command)
 
     notes = subparsers.add_parser("notes", help="Apple Notes metadata commands.")
     notes_subparsers = notes.add_subparsers(dest="notes_command", required=True)

@@ -11,7 +11,7 @@ This project runs as a local CLI and stdio MCP server. The same runner script ca
 - `sqlite3`.
 - macOS permissions for the surfaces you intend to use.
 
-Some surfaces may need Full Disk Access, Automation, Calendar, Contacts, Photos, or Reminders permission. Safari bookmark/Reading List reads use the local Safari bookmarks file and may need Full Disk Access. Books metadata and selected-book annotation reads use local Apple Books stores and may need Full Disk Access. Podcasts metadata reads use the local Apple Podcasts store and may need Full Disk Access. Shortcuts metadata reads require Apple's local `shortcuts` CLI but health checks only CLI availability and do not list shortcuts. Permission failures should return structured warning codes rather than raw system errors.
+Some surfaces may need Full Disk Access, Automation, Calendar, Contacts, Photos, or Reminders permission. Safari bookmark/Reading List reads use the local Safari bookmarks file and may need Full Disk Access. Books metadata and selected-book annotation reads use local Apple Books stores and may need Full Disk Access. Podcasts metadata reads use the local Apple Podcasts store and may need Full Disk Access. Music metadata reads use bounded Music.app automation and may need Automation permission. Shortcuts metadata reads require Apple's local `shortcuts` CLI but health checks only CLI availability and do not list shortcuts. Permission failures should return structured warning codes rather than raw system errors.
 
 ## From Source
 

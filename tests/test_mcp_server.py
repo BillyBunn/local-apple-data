@@ -34,6 +34,8 @@ from local_apple_data.mcp_server import (
     messages_list_attachments,
     messages_plan_change,
     messages_apply_change,
+    music_get_playlist,
+    music_get_track,
     notes_apply_change,
     notes_export_attachment,
     notes_get_content,
@@ -129,6 +131,8 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     podcasts_show_result = podcasts_get_show("bad-handle")
     podcasts_episodes_result = podcasts_list_episodes("bad-handle")
     podcasts_episode_result = podcasts_get_episode("bad-handle")
+    music_track_result = music_get_track("bad-handle")
+    music_playlist_result = music_get_playlist("bad-handle")
     notes_result = notes_get_metadata("bad-handle")
     notes_content_result = notes_get_content("bad-handle")
     notes_attachments_result = notes_list_attachments("bad-handle")
@@ -245,6 +249,10 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert podcasts_episodes_result["warnings"][0]["code"] == "invalid_handle"
     assert podcasts_episode_result["status"] == "error"
     assert podcasts_episode_result["warnings"][0]["code"] == "invalid_handle"
+    assert music_track_result["status"] == "error"
+    assert music_track_result["warnings"][0]["code"] == "invalid_handle"
+    assert music_playlist_result["status"] == "error"
+    assert music_playlist_result["warnings"][0]["code"] == "invalid_handle"
     assert notes_result["status"] == "error"
     assert notes_content_result["status"] == "error"
     assert notes_content_result["warnings"][0]["code"] == "invalid_handle"
@@ -340,6 +348,10 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "podcasts_get_show",
                     "podcasts_list_episodes",
                     "podcasts_get_episode",
+                    "music_search",
+                    "music_get_track",
+                    "music_search_playlists",
+                    "music_get_playlist",
                     "notes_search",
                     "notes_get_metadata",
                     "notes_get_content",

@@ -44,6 +44,12 @@ from .adapters.messages import (
     plan_messages_change,
     search_message_chats,
 )
+from .adapters.music import (
+    get_music_playlist,
+    get_music_track,
+    search_music_playlists,
+    search_music_tracks,
+)
 from .adapters.notes import (
     apply_notes_change,
     export_notes_attachment,
@@ -89,7 +95,7 @@ from .redacted_log import log_result
 INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
-    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts show/episode metadata, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
+    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts show/episode metadata, Apple Music track/playlist metadata, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
     "Mail, Messages, and Notes attachment export are exact-handle only and never return attachment bytes inline. "
     "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, and each requires a matching plan approval token plus explicit confirmation."
 )
@@ -485,6 +491,47 @@ def podcasts_get_episode(handle: str, max_chars: int = 4000) -> dict[str, Any]:
     return _record(
         "podcasts_get_episode",
         get_podcast_episode(handle, max_chars=max_chars),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def music_search(query: str, limit: int = 20, max_scan_items: int = 5000) -> dict[str, Any]:
+    """Search local Apple Music track metadata by title, artist, album, or genre."""
+
+    return _record(
+        "music_search",
+        search_music_tracks(query, limit=limit, max_scan_items=max_scan_items),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def music_get_track(handle: str, max_scan_items: int = 5000) -> dict[str, Any]:
+    """Get exact local Apple Music track metadata by opaque handle."""
+
+    return _record("music_get_track", get_music_track(handle, max_scan_items=max_scan_items))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def music_search_playlists(
+    query: str,
+    limit: int = 20,
+    max_scan_items: int = 5000,
+) -> dict[str, Any]:
+    """Search local Apple Music playlist metadata by name."""
+
+    return _record(
+        "music_search_playlists",
+        search_music_playlists(query, limit=limit, max_scan_items=max_scan_items),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def music_get_playlist(handle: str, max_scan_items: int = 5000) -> dict[str, Any]:
+    """Get exact local Apple Music playlist metadata by opaque handle."""
+
+    return _record(
+        "music_get_playlist",
+        get_music_playlist(handle, max_scan_items=max_scan_items),
     )
 
 

@@ -56,6 +56,15 @@ from local_apple_data.adapters.messages import (
     plan_messages_change,
     search_message_chats,
 )
+from local_apple_data.adapters.music import (
+    FIELD_SEPARATOR,
+    RECORD_SEPARATOR,
+    MusicCommandResult,
+    get_music_playlist,
+    get_music_track,
+    search_music_playlists,
+    search_music_tracks,
+)
 from local_apple_data.adapters.notes import (
     apply_notes_change,
     export_notes_attachment,
@@ -431,6 +440,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
                     "podcasts_search",
                     {"query": "Podcasts"},
                 )
+                wildcard_music = await session.call_tool("music_search", {"query": "Music"})
                 wildcard_notes = await session.call_tool("notes_search", {"query": "%"})
                 wildcard_icloud = await session.call_tool("icloud_drive_search", {"query": "%"})
                 wildcard_calendar = await session.call_tool("calendar_search", {"query": "%"})
@@ -456,6 +466,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
         "wildcard_shortcuts": _payload(wildcard_shortcuts)["warnings"][0]["code"],
         "wildcard_books": _payload(wildcard_books)["warnings"][0]["code"],
         "wildcard_podcasts": _payload(wildcard_podcasts)["warnings"][0]["code"],
+        "wildcard_music": _payload(wildcard_music)["warnings"][0]["code"],
         "wildcard_notes": _payload(wildcard_notes)["warnings"][0]["code"],
         "wildcard_icloud": _payload(wildcard_icloud)["warnings"][0]["code"],
         "wildcard_calendar": _payload(wildcard_calendar)["warnings"][0]["code"],
@@ -674,6 +685,80 @@ def _shortcuts_smoke() -> dict[str, Any]:
         "shortcuts_folder_kind": folder["results"][0]["kind"],
         "shortcuts_legacy_detail_status": legacy_detail["status"],
         "shortcuts_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
+    }
+
+
+def _music_track_record(
+    persistent_id: str = "RUNTIME-MUSIC-TRACK-ID",
+    database_id: str = "123",
+    title: str = "Runtime Song",
+    artist: str = "Runtime Artist",
+    album: str = "Runtime Album",
+    album_artist: str = "Runtime Album Artist",
+    genre: str = "Runtime Genre",
+) -> str:
+    return FIELD_SEPARATOR.join(
+        [
+            persistent_id,
+            database_id,
+            title,
+            artist,
+            album,
+            album_artist,
+            genre,
+            "123.4",
+            "7",
+            "1",
+            "2026",
+        ]
+    )
+
+
+def _music_playlist_record(
+    persistent_id: str = "RUNTIME-MUSIC-PLAYLIST-ID",
+    database_id: str = "456",
+    title: str = "Runtime Playlist",
+) -> str:
+    return FIELD_SEPARATOR.join(
+        [persistent_id, database_id, title, "user", "3", "456.7"]
+    )
+
+
+def _music_runner(command: list[str], _timeout: float) -> MusicCommandResult:
+    if command[0] in {"search_tracks", "list_tracks"}:
+        return MusicCommandResult(0, _music_track_record())
+    if command[0] in {"search_playlists", "list_playlists"}:
+        return MusicCommandResult(0, _music_playlist_record())
+    return MusicCommandResult(1, "", "unexpected command")
+
+
+def _music_smoke() -> dict[str, Any]:
+    search = search_music_tracks("Runtime Song", runner=_music_runner)
+    handle = search["results"][0]["handle"]
+    detail = get_music_track(handle, runner=_music_runner)
+    playlist_search = search_music_playlists("Runtime Playlist", runner=_music_runner)
+    playlist_handle = playlist_search["results"][0]["handle"]
+    playlist_detail = get_music_playlist(playlist_handle, runner=_music_runner)
+    legacy_track = get_music_track("music:track:1", runner=_music_runner)
+    return {
+        "music_opaque_track_handle": handle.startswith("music:track:v1:"),
+        "music_opaque_playlist_handle": playlist_handle.startswith("music:playlist:v1:"),
+        "music_search_status": search["status"],
+        "music_track_detail_status": detail["status"],
+        "music_track_raw_identifier_returned": "RUNTIME-MUSIC-TRACK-ID" in str(search),
+        "music_track_file_path_returned": search["results"][0]["file_path_returned"],
+        "music_track_audio_returned": search["results"][0]["audio_content_returned"],
+        "music_track_lyrics_returned": search["results"][0]["lyrics_returned"],
+        "music_track_play_history_returned": search["results"][0]["play_history_returned"],
+        "music_playlist_search_status": playlist_search["status"],
+        "music_playlist_detail_status": playlist_detail["status"],
+        "music_playlist_tracks_returned": playlist_search["results"][0][
+            "playlist_tracks_returned"
+        ],
+        "music_playlist_raw_identifier_returned": "RUNTIME-MUSIC-PLAYLIST-ID"
+        in str(playlist_search),
+        "music_legacy_track_status": legacy_track["status"],
+        "music_legacy_track_warning": legacy_track["warnings"][0]["code"],
     }
 
 
@@ -2016,7 +2101,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 62,
+        "tool_count": 66,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -2028,6 +2113,7 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "wildcard_shortcuts": "broad_query",
         "wildcard_books": "broad_query",
         "wildcard_podcasts": "broad_query",
+        "wildcard_music": "broad_query",
         "wildcard_notes": "broad_query",
         "wildcard_icloud": "broad_query",
         "wildcard_calendar": "broad_query",
@@ -2164,6 +2250,21 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "podcasts_episode_audio_returned": False,
         "podcasts_legacy_detail_status": "error",
         "podcasts_legacy_detail_warning": "invalid_handle",
+        "music_opaque_track_handle": True,
+        "music_opaque_playlist_handle": True,
+        "music_search_status": "ok",
+        "music_track_detail_status": "ok",
+        "music_track_raw_identifier_returned": False,
+        "music_track_file_path_returned": False,
+        "music_track_audio_returned": False,
+        "music_track_lyrics_returned": False,
+        "music_track_play_history_returned": False,
+        "music_playlist_search_status": "ok",
+        "music_playlist_detail_status": "ok",
+        "music_playlist_tracks_returned": False,
+        "music_playlist_raw_identifier_returned": False,
+        "music_legacy_track_status": "error",
+        "music_legacy_track_warning": "invalid_handle",
         "notes_opaque_handle": True,
         "notes_content_status": "ok",
         "notes_content_chars": 31,
@@ -2309,6 +2410,7 @@ def main() -> None:
         summary.update(_shortcuts_smoke())
         summary.update(_books_smoke(tmp_path))
         summary.update(_podcasts_smoke(tmp_path))
+        summary.update(_music_smoke())
         summary.update(_notes_content_smoke(tmp_path))
         summary.update(_notes_attachment_smoke(tmp_path))
         summary.update(_notes_plan_apply_smoke(tmp_path))

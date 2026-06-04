@@ -24,6 +24,7 @@ These examples are synthetic. They are shape examples only and must not be repla
     "shortcuts": {"status": "available", "schema_check": "not_applicable"},
     "books": {"status": "ok", "schema_check": "ok"},
     "podcasts": {"status": "ok", "schema_check": "ok"},
+    "music": {"status": "available", "schema_check": "not_applicable", "automation_check": "on_exact_tool_call"},
     "notes": {"status": "ok", "automation_check": "on_exact_content_call"},
     "calendar": {"status": "checked_on_tool_call", "permission_check": "non_prompting_eventkit", "prompts": false},
     "reminders": {"status": "ok", "eventkit_check": "on_tool_call"},
@@ -43,6 +44,7 @@ These examples are synthetic. They are shape examples only and must not be repla
   "access_requirements": [
     {"surface": "books", "check_mode": "schema_only", "prompts": false},
     {"surface": "podcasts", "check_mode": "schema_only", "prompts": false},
+    {"surface": "music", "check_mode": "app_and_osascript_availability_without_automation_probe", "prompts": false},
     {"surface": "calendar", "check_mode": "non_prompting_eventkit", "prompts": false},
     {"surface": "contacts", "check_mode": "non_prompting_contacts_framework", "prompts": false},
     {"surface": "photos", "check_mode": "non_prompting_photokit", "prompts": false}
@@ -115,6 +117,53 @@ These examples are synthetic. They are shape examples only and must not be repla
     "audio_content_returned": false,
     "raw_identifier_returned": false
   },
+  "warnings": []
+}
+```
+
+## Music Search
+
+```json
+{
+  "status": "ok",
+  "source": "music",
+  "results": [
+    {
+      "handle": "<opaque music:track:v1 handle>",
+      "title": "Synthetic Track",
+      "artist": "Synthetic Artist",
+      "album": "Synthetic Album",
+      "genre": "Reference",
+      "duration_seconds": 180.0,
+      "audio_content_returned": false,
+      "lyrics_returned": false,
+      "file_path_returned": false,
+      "raw_identifier_returned": false,
+      "play_history_returned": false,
+      "rating_returned": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Music Playlists
+
+```json
+{
+  "status": "ok",
+  "source": "music",
+  "results": [
+    {
+      "handle": "<opaque music:playlist:v1 handle>",
+      "title": "Synthetic Playlist",
+      "kind": "user",
+      "track_count": 12,
+      "duration_seconds": 2160.0,
+      "playlist_tracks_returned": false,
+      "raw_identifier_returned": false
+    }
+  ],
   "warnings": []
 }
 ```

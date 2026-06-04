@@ -1,7 +1,7 @@
 {
   "name": "local-apple-data",
-  "version": "0.1.0+codex.20260605020000",
-  "description": "Local-first Apple Mail/Messages/Notes attachment export, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Notes content, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients, with approved Reminders, iCloud Drive create/append text, Calendar, Contacts, Notes create/append text, Mail draft, Photos import, and Messages send-text apply.",
+  "version": "0.1.0+codex.20260605030000",
+  "description": "Local-first Apple Mail/Messages/Notes attachment export, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Apple Music metadata, Notes content, Calendar, Contacts, Photos, Reminders, and iCloud Drive access for MCP clients, with approved Reminders, iCloud Drive create/append text, Calendar, Contacts, Notes create/append text, Mail draft, Photos import, and Messages send-text apply.",
   "author": {
     "name": "Billy Bunn"
   },
@@ -12,6 +12,7 @@
     "apple-books",
     "apple-notes",
     "apple-podcasts",
+    "apple-music",
     "apple-reminders",
     "calendar",
     "contacts",
@@ -30,7 +31,7 @@
   "interface": {
     "displayName": "Local Apple Data",
     "shortDescription": "Search local Apple data",
-    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a bounded MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Notes content and Mail/Messages/Notes attachment export, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. Safari search returns title/domain metadata only and full URLs only by exact handle. Shortcuts search returns shortcut/folder name metadata only and never runs, opens, signs, exports, or returns shortcut bodies. Books search returns title/author/genre metadata only; selected annotations are returned only by exact book handle and book text is not extracted. Podcasts search returns show metadata only; selected episode detail returns bounded episode descriptions only by exact episode handle and never returns transcripts, audio bytes, feed URLs, enclosure URLs, raw identifiers, or local download paths. Messages transcript retrieval uses local message text plus a native attributedBody plaintext fallback when modern Messages rows omit the text column. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, each with a matching plan approval token and explicit confirmation. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
+    "longDescription": "Private local-first access to Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Apple Music track/playlist metadata, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive through a bounded MCP server. Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Music, Notes content and Mail/Messages/Notes attachment export, Calendar, Contact, Photos, Reminder, and iCloud Drive content/detail/export retrieval is exact-handle only. Safari search returns title/domain metadata only and full URLs only by exact handle. Shortcuts search returns shortcut/folder name metadata only and never runs, opens, signs, exports, or returns shortcut bodies. Books search returns title/author/genre metadata only; selected annotations are returned only by exact book handle and book text is not extracted. Podcasts search returns show metadata only; selected episode detail returns bounded episode descriptions only by exact episode handle and never returns transcripts, audio bytes, feed URLs, enclosure URLs, raw identifiers, or local download paths. Music search returns track and playlist metadata only through bounded Music.app automation and never returns audio bytes, lyrics, file paths, play history, ratings, raw identifiers, or playlist track dumps. Messages transcript retrieval uses local message text plus a native attributedBody plaintext fallback when modern Messages rows omit the text column. The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, each with a matching plan approval token and explicit confirmation. The plugin avoids Gmail connector, Gmail API, IMAP, OAuth, private iCloud web APIs, browser sessions, keychain credentials, and network mail paths.",
     "developerName": "Billy Bunn",
     "category": "Productivity",
     "capabilities": [
@@ -66,6 +67,9 @@
       "Search local Apple Podcasts show metadata for this title, author, category, or provider.",
       "List bounded episodes from the selected Apple Podcasts show handle.",
       "Retrieve bounded Apple Podcasts episode description from the selected episode handle.",
+      "Search local Apple Music track metadata for this title, artist, album, or genre.",
+      "Search local Apple Music playlist metadata for this playlist name.",
+      "Retrieve exact Apple Music track or playlist metadata from the selected opaque handle.",
       "Find local Notes metadata matching this phrase.",
       "Retrieve exact Notes content from the selected opaque handle.",
       "List exact Notes attachments from the selected note handle.",

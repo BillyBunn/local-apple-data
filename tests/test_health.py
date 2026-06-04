@@ -9,7 +9,7 @@ from local_apple_data.health import DEFAULT_STORE_PATHS, build_health, health_js
 
 
 def _fake_which(name: str) -> str | None:
-    if name in {"uv", "swift", "sqlite3", "shortcuts"}:
+    if name in {"uv", "swift", "sqlite3", "shortcuts", "osascript"}:
         return f"/fake/bin/{name}"
     return None
 
@@ -249,6 +249,10 @@ def _make_schema_stores(
             """
         )
 
+    music = tmp_path / DEFAULT_STORE_PATHS["music_library_store"]
+    music.parent.mkdir(parents=True, exist_ok=True)
+    music.write_bytes(b"synthetic musicdb placeholder")
+
     icloud_drive = tmp_path / DEFAULT_STORE_PATHS["icloud_drive_root"]
     icloud_drive.mkdir(parents=True, exist_ok=True)
 
@@ -281,6 +285,10 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["surfaces"]["books"]["schema_check"] == "ok"
     assert health["surfaces"]["podcasts"]["status"] == "ok"
     assert health["surfaces"]["podcasts"]["schema_check"] == "ok"
+    assert health["surfaces"]["music"]["status"] == "available"
+    assert health["surfaces"]["music"]["store_status"] == "ok"
+    assert health["surfaces"]["music"]["schema_check"] == "not_applicable"
+    assert health["surfaces"]["music"]["tool_check"] == "osascript"
     assert health["surfaces"]["icloud_drive"]["status"] == "ok"
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
     assert health["surfaces"]["calendar"]["prompts"] is False
@@ -318,6 +326,12 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert any(
         requirement["surface"] == "podcasts"
         and requirement["check_mode"] == "schema_only"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert any(
+        requirement["surface"] == "music"
+        and requirement["check_mode"] == "app_and_osascript_availability_without_automation_probe"
         and requirement["prompts"] is False
         for requirement in health["access_requirements"]
     )

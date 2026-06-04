@@ -38,6 +38,7 @@ DEFAULT_STORE_PATHS = {
         "Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Documents/"
         "MTLibrary.sqlite"
     ),
+    "music_library_store": Path("Music/Music/Music Library.musiclibrary/Library.musicdb"),
     "notes_store": Path("Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"),
     "reminders_stores": Path(
         "Library/Group Containers/group.com.apple.reminders/Container_v1/Stores"
@@ -46,7 +47,7 @@ DEFAULT_STORE_PATHS = {
 }
 
 REQUIRED_TOOLS = ("uv", "swift", "sqlite3")
-OPTIONAL_TOOLS = ("node", "npm", "shortcuts")
+OPTIONAL_TOOLS = ("node", "npm", "shortcuts", "osascript")
 
 ACCESS_REQUIREMENTS = [
     {
@@ -103,6 +104,13 @@ ACCESS_REQUIREMENTS = [
         "permission_class": "Full Disk Access may be required",
         "status": "covered_by_store_check",
         "check_mode": "schema_only",
+        "prompts": False,
+    },
+    {
+        "surface": "music",
+        "permission_class": "Automation permission may be required",
+        "status": "covered_by_tool_and_app_check",
+        "check_mode": "app_and_osascript_availability_without_automation_probe",
         "prompts": False,
     },
     {
@@ -325,6 +333,17 @@ def _surface_summary(
             "status": _schema_status(schema_checks, "podcasts"),
             "store_status": _store_status(stores, "podcasts_store"),
             "schema_check": _schema_status(schema_checks, "podcasts"),
+        },
+        "music": {
+            "status": "available"
+            if _tool_available(optional_tools, "osascript")
+            else "missing",
+            "store_status": _store_status(stores, "music_library_store"),
+            "tool_check": "osascript",
+            "app_check": "music_app_exists",
+            "schema_check": "not_applicable",
+            "automation_check": "on_exact_tool_call",
+            "prompts": False,
         },
         "notes": {
             "status": _schema_status(schema_checks, "notes"),

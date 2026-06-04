@@ -115,6 +115,19 @@ SURFACE_CONTRACTS = (
         ),
     ),
     SurfaceContract(
+        name="music",
+        label="Music",
+        cli_group="music",
+        cli_subparser="music_subparsers",
+        cli_commands=("search", "get", "playlists", "playlist"),
+        mcp_tools=(
+            "music_search",
+            "music_get_track",
+            "music_search_playlists",
+            "music_get_playlist",
+        ),
+    ),
+    SurfaceContract(
         name="notes",
         label="Notes",
         cli_group="notes",

@@ -2,6 +2,22 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260605030000 - 2026-06-04
+
+### Added
+
+- Read-only Apple Music track metadata search through `local-apple-data music search` and MCP `music_search`.
+- Exact selected Apple Music track metadata retrieval through `local-apple-data music get` and MCP `music_get_track`.
+- Read-only Apple Music playlist metadata search through `local-apple-data music playlists` and MCP `music_search_playlists`.
+- Exact selected Apple Music playlist metadata retrieval through `local-apple-data music playlist` and MCP `music_get_playlist`.
+- Synthetic Music.app automation runner, adapter, CLI, MCP, health, runtime, surface-contract, and redaction coverage for the Music metadata surface.
+
+### Security
+
+- Music search returns track/playlist metadata and opaque handles only; raw Music identifiers, file paths, audio bytes, lyrics, play history, ratings, and playlist track dumps are not returned.
+- The first Music tranche uses bounded read-only Music.app automation because the local `Library.musicdb` format is proprietary and not SQLite.
+- Music playback, queue changes, playlist mutation, rating/favorite mutation, library import/delete, audio export, lyrics export, raw Music database parsing, and broad library dumps remain blocked.
+
 ## 0.1.0+codex.20260605020000 - 2026-06-04
 
 ### Added
