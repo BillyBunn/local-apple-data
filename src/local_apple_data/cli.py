@@ -72,6 +72,7 @@ from .adapters.voice_memos import (
     get_voice_memo_recording,
     search_voice_memos,
 )
+from .adapters.safari import get_safari_item, search_safari_items
 from .doctor import build_doctor
 from .health import build_health
 from .redacted_log import log_result
@@ -352,6 +353,30 @@ def _voice_memos_export_command(args: argparse.Namespace) -> int:
         kwargs["recordings_dir"] = Path(args.recordings_dir).expanduser()
     payload = export_voice_memo_audio(args.handle, **kwargs)
     log_result("voice_memos.export", payload)
+    _print_json(payload)
+    return 0
+
+
+def _safari_search_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {
+        "limit": args.limit,
+        "kind": args.kind,
+        "max_scan_items": args.max_scan_items,
+    }
+    if args.bookmarks_path:
+        kwargs["bookmarks_path"] = Path(args.bookmarks_path).expanduser()
+    payload = search_safari_items(args.query, **kwargs)
+    log_result("safari.search", payload)
+    _print_json(payload)
+    return 0
+
+
+def _safari_get_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {"max_scan_items": args.max_scan_items}
+    if args.bookmarks_path:
+        kwargs["bookmarks_path"] = Path(args.bookmarks_path).expanduser()
+    payload = get_safari_item(args.handle, **kwargs)
+    log_result("safari.get", payload)
     _print_json(payload)
     return 0
 
@@ -1267,6 +1292,58 @@ def build_parser() -> argparse.ArgumentParser:
     voice_memos_export.add_argument("--db", help=argparse.SUPPRESS)
     voice_memos_export.add_argument("--recordings-dir", help=argparse.SUPPRESS)
     voice_memos_export.set_defaults(func=_voice_memos_export_command)
+
+    safari = subparsers.add_parser(
+        "safari",
+        help="Safari bookmarks and Reading List metadata commands.",
+    )
+    safari_subparsers = safari.add_subparsers(dest="safari_command", required=True)
+
+    safari_search = safari_subparsers.add_parser(
+        "search",
+        help="Search Safari bookmarks and Reading List metadata by title or URL.",
+    )
+    safari_search.add_argument("--json", action="store_true", help="Emit JSON output.")
+    safari_search.add_argument("--query", required=True, help="Bookmark title or URL query text.")
+    safari_search.add_argument(
+        "--limit",
+        type=int,
+        default=20,
+        help="Maximum results, capped at 50.",
+    )
+    safari_search.add_argument(
+        "--kind",
+        choices=["all", "bookmark", "reading-list"],
+        default="all",
+        help="Optional item kind filter.",
+    )
+    safari_search.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=20000,
+        help="Maximum bookmark items to scan.",
+    )
+    safari_search.add_argument("--bookmarks-path", help=argparse.SUPPRESS)
+    safari_search.set_defaults(func=_safari_search_command)
+
+    safari_get = safari_subparsers.add_parser(
+        "get",
+        help="Get exact Safari bookmark or Reading List detail by handle.",
+    )
+    safari_get.add_argument("--json", action="store_true", help="Emit JSON output.")
+    safari_get.add_argument(
+        "--handle",
+        required=True,
+        help="Safari item handle from search output.",
+    )
+    safari_get.add_argument(
+        "--max-scan-items",
+        type=int,
+        default=20000,
+        help="Maximum bookmark items to scan while resolving the handle.",
+    )
+    safari_get.add_argument("--bookmarks-path", help=argparse.SUPPRESS)
+    safari_get.set_defaults(func=_safari_get_command)
 
     notes = subparsers.add_parser("notes", help="Apple Notes metadata commands.")
     notes_subparsers = notes.add_subparsers(dest="notes_command", required=True)

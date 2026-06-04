@@ -5,9 +5,11 @@ import asyncio
 import hashlib
 import json
 import os
+import plistlib
 import sqlite3
 import struct
 import tempfile
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -74,6 +76,7 @@ from local_apple_data.adapters.reminders import (
     plan_reminder_change,
     search_reminders_eventkit,
 )
+from local_apple_data.adapters.safari import get_safari_item, search_safari_items
 from local_apple_data.adapters.voice_memos import (
     export_voice_memo_audio,
     get_voice_memo_recording,
@@ -338,6 +341,45 @@ def _make_icloud_drive_root(path: Path) -> None:
     )
 
 
+def _make_safari_bookmarks(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(
+        plistlib.dumps(
+            {
+                "Title": "Bookmarks",
+                "WebBookmarkFileVersion": 1,
+                "WebBookmarkType": "WebBookmarkTypeList",
+                "Children": [
+                    {
+                        "Title": "Favorites",
+                        "WebBookmarkType": "WebBookmarkTypeList",
+                        "Children": [
+                            {
+                                "WebBookmarkType": "WebBookmarkTypeLeaf",
+                                "URIDictionary": {"title": "Synthetic Runtime Bookmark"},
+                                "URLString": "https://runtime.example.com/private?example=1",
+                            }
+                        ],
+                    },
+                    {
+                        "Title": "com.apple.ReadingList",
+                        "WebBookmarkType": "WebBookmarkTypeList",
+                        "Children": [
+                            {
+                                "WebBookmarkType": "WebBookmarkTypeLeaf",
+                                "URIDictionary": {"title": "Synthetic Runtime Reading"},
+                                "URLString": "https://reading-runtime.example.org/article",
+                                "ReadingList": {"DateAdded": datetime(2026, 6, 4, 12, 0, 0)},
+                            }
+                        ],
+                    },
+                ],
+            },
+            sort_keys=True,
+        )
+    )
+
+
 def _payload(result: Any) -> dict[str, Any]:
     return json.loads(result.content[0].text)
 
@@ -367,6 +409,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
                     "voice_memos_search",
                     {"query": "%"},
                 )
+                wildcard_safari = await session.call_tool("safari_search", {"query": "Safari"})
                 wildcard_notes = await session.call_tool("notes_search", {"query": "%"})
                 wildcard_icloud = await session.call_tool("icloud_drive_search", {"query": "%"})
                 wildcard_calendar = await session.call_tool("calendar_search", {"query": "%"})
@@ -388,6 +431,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
         "wildcard_messages": _payload(wildcard_messages)["warnings"][0]["code"],
         "wildcard_hide_my_email": _payload(wildcard_hide_my_email)["warnings"][0]["code"],
         "wildcard_voice_memos": _payload(wildcard_voice_memos)["warnings"][0]["code"],
+        "wildcard_safari": _payload(wildcard_safari)["warnings"][0]["code"],
         "wildcard_notes": _payload(wildcard_notes)["warnings"][0]["code"],
         "wildcard_icloud": _payload(wildcard_icloud)["warnings"][0]["code"],
         "wildcard_calendar": _payload(wildcard_calendar)["warnings"][0]["code"],
@@ -546,6 +590,32 @@ def _hide_my_email_smoke(tmp_path: Path) -> dict[str, Any]:
         "hide_my_email_authoritative_inventory": detail["authoritative_inventory"],
         "hide_my_email_legacy_detail_status": legacy_detail["status"],
         "hide_my_email_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
+    }
+
+
+def _safari_smoke(tmp_path: Path) -> dict[str, Any]:
+    bookmarks_path = tmp_path / "Library/Safari/Bookmarks.plist"
+    _make_safari_bookmarks(bookmarks_path)
+    search = search_safari_items("Runtime Bookmark", bookmarks_path=bookmarks_path)
+    handle = search["results"][0]["handle"]
+    detail = get_safari_item(handle, bookmarks_path=bookmarks_path)
+    legacy_detail = get_safari_item("safari:item:1", bookmarks_path=bookmarks_path)
+    reading = search_safari_items(
+        "Runtime Reading",
+        bookmarks_path=bookmarks_path,
+        kind="reading-list",
+    )
+    return {
+        "safari_opaque_handle": handle.startswith("safari:item:v1:"),
+        "safari_search_status": search["status"],
+        "safari_search_url_returned": "url" in search["results"][0],
+        "safari_detail_status": detail["status"],
+        "safari_detail_url_domain": detail["result"]["url_domain"],
+        "safari_detail_url_returned": "url" in detail["result"],
+        "safari_reading_list_status": reading["status"],
+        "safari_reading_list_kind": reading["results"][0]["kind"],
+        "safari_legacy_detail_status": legacy_detail["status"],
+        "safari_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
     }
 
 
@@ -1664,7 +1734,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 51,
+        "tool_count": 53,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1672,6 +1742,7 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "wildcard_messages": "broad_query",
         "wildcard_hide_my_email": "broad_query",
         "wildcard_voice_memos": "broad_query",
+        "wildcard_safari": "broad_query",
         "wildcard_notes": "broad_query",
         "wildcard_icloud": "broad_query",
         "wildcard_calendar": "broad_query",
@@ -1757,6 +1828,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "voice_memos_exported_bytes": 119,
         "voice_memos_legacy_content_status": "error",
         "voice_memos_legacy_content_warning": "invalid_handle",
+        "safari_opaque_handle": True,
+        "safari_search_status": "ok",
+        "safari_search_url_returned": False,
+        "safari_detail_status": "ok",
+        "safari_detail_url_domain": "runtime.example.com",
+        "safari_detail_url_returned": True,
+        "safari_reading_list_status": "ok",
+        "safari_reading_list_kind": "reading_list",
+        "safari_legacy_detail_status": "error",
+        "safari_legacy_detail_warning": "invalid_handle",
         "notes_opaque_handle": True,
         "notes_content_status": "ok",
         "notes_content_chars": 31,
@@ -1898,6 +1979,7 @@ def main() -> None:
         summary.update(_messages_plan_apply_smoke(tmp_path))
         summary.update(_hide_my_email_smoke(tmp_path))
         summary.update(_voice_memos_content_smoke(tmp_path))
+        summary.update(_safari_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))
         summary.update(_notes_attachment_smoke(tmp_path))
         summary.update(_notes_plan_apply_smoke(tmp_path))

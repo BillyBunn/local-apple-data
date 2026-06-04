@@ -47,6 +47,7 @@ from local_apple_data.mcp_server import (
     reminders_apply_change,
     reminders_get_content,
     reminders_plan_change,
+    safari_get_item,
     voice_memos_export_audio,
     voice_memos_get_recording,
 )
@@ -119,6 +120,7 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     hide_my_email_result = hide_my_email_get_alias("bad-handle")
     voice_memos_result = voice_memos_get_recording("bad-handle")
     voice_memos_export_result = voice_memos_export_audio("bad-handle", str(tmp_path / "exports"))
+    safari_result = safari_get_item("bad-handle")
     notes_result = notes_get_metadata("bad-handle")
     notes_content_result = notes_get_content("bad-handle")
     notes_attachments_result = notes_list_attachments("bad-handle")
@@ -225,6 +227,8 @@ def test_mcp_direct_tool_wrappers_reject_bad_handles(tmp_path: Path, monkeypatch
     assert voice_memos_result["warnings"][0]["code"] == "invalid_handle"
     assert voice_memos_export_result["status"] == "error"
     assert voice_memos_export_result["warnings"][0]["code"] == "invalid_handle"
+    assert safari_result["status"] == "error"
+    assert safari_result["warnings"][0]["code"] == "invalid_handle"
     assert notes_result["status"] == "error"
     assert notes_content_result["status"] == "error"
     assert notes_content_result["warnings"][0]["code"] == "invalid_handle"
@@ -309,6 +313,8 @@ def test_mcp_stdio_lists_read_only_tools(tmp_path: Path, monkeypatch) -> None:
                     "voice_memos_search",
                     "voice_memos_get_recording",
                     "voice_memos_export_audio",
+                    "safari_search",
+                    "safari_get_item",
                     "notes_search",
                     "notes_get_metadata",
                     "notes_get_content",

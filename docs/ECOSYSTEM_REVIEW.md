@@ -52,6 +52,13 @@ Architecture implication: Voice Memos belongs in the broad local Apple data surf
 
 Architecture implication: local iCloud Drive text-file content can be exact-handle and file-system based, but binary extraction, broad content search, symlink traversal, hidden files, and network iCloud fetches should remain out of scope.
 
+### Safari
+
+- `MrGo2/icloud-mcp` includes Safari as one of its local-mode services and advertises Safari tab access in examples. Source: https://github.com/MrGo2/icloud-mcp
+- `krmj22/macos-mcp` documents a broad local macOS MCP pattern using EventKit, JXA, and SQLite/local database reads across Apple apps. Source: https://github.com/krmj22/macos-mcp
+
+Architecture implication: Safari belongs on the broader local Apple data roadmap, but the first durable tranche should be lower-risk than tabs/history/browser automation. Local `Bookmarks.plist` supports bookmark and Reading List search/detail without touching browser sessions, page content, cookies, passwords, private browsing state, or live Safari UI.
+
 ### Official Apple Frameworks
 
 - EventKit is Apple's framework family for Calendar and Reminders. Source: https://developer.apple.com/documentation/eventkit
@@ -64,7 +71,7 @@ Architecture implication: Calendar, Reminders, Contacts, and Photos should use n
 
 This plugin should be broader than single-surface MCP servers and stricter than most single-surface examples:
 
-- Broad surface: Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Reminders, Contacts, and Photos.
+- Broad surface: Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Notes, iCloud Drive, Calendar, Reminders, Contacts, and Photos.
 - Local-only transport: stdio MCP and CLI through local files/frameworks only.
 - Metadata-first search: narrow query gates before local store/framework access.
 - Exact-handle content: content/detail/export requires opaque handles returned by matching search tools.
@@ -78,5 +85,5 @@ This plugin should be broader than single-surface MCP servers and stricter than 
 
 - Whether to add a small privileged helper architecture for users who do not want their AI client process to hold Full Disk Access.
 - Whether future generated transcription belongs in this plugin or a separate transcription tool connected by handles.
-- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, Messages exact-chat send-text, and Mail/Messages/Notes attachment export tranches should prioritize Mail send, richer Messages mutation, Photos edit/delete/album support, arbitrary Notes update/delete/move, or richer framework-backed edits.
+- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, Messages exact-chat send-text, Safari bookmark/Reading List reads, and Mail/Messages/Notes attachment export tranches should prioritize Mail send, richer Messages mutation, Photos edit/delete/album support, arbitrary Notes update/delete/move, Safari history/tabs/bookmark mutation, or richer framework-backed edits.
 - Whether public registry packaging should target npm, PyPI, a Codex personal marketplace, Smithery-style registries, or only GitHub source installation first.

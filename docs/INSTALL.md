@@ -11,7 +11,7 @@ This project runs as a local CLI and stdio MCP server. The same runner script ca
 - `sqlite3`.
 - macOS permissions for the surfaces you intend to use.
 
-Some surfaces may need Full Disk Access, Automation, Calendar, Contacts, Photos, or Reminders permission. Permission failures should return structured warning codes rather than raw system errors.
+Some surfaces may need Full Disk Access, Automation, Calendar, Contacts, Photos, or Reminders permission. Safari bookmark/Reading List reads use the local Safari bookmarks file and may need Full Disk Access. Permission failures should return structured warning codes rather than raw system errors.
 
 ## From Source
 

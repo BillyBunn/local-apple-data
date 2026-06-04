@@ -78,6 +78,14 @@ SURFACE_CONTRACTS = (
         ),
     ),
     SurfaceContract(
+        name="safari",
+        label="Safari",
+        cli_group="safari",
+        cli_subparser="safari_subparsers",
+        cli_commands=("search", "get"),
+        mcp_tools=("safari_search", "safari_get_item"),
+    ),
+    SurfaceContract(
         name="notes",
         label="Notes",
         cli_group="notes",

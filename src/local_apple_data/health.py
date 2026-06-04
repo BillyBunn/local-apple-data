@@ -23,6 +23,7 @@ DEFAULT_STORE_PATHS = {
     "voice_memos_store": Path(
         "Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings/CloudRecordings.db"
     ),
+    "safari_bookmarks": Path("Library/Safari/Bookmarks.plist"),
     "notes_store": Path("Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"),
     "reminders_stores": Path(
         "Library/Group Containers/group.com.apple.reminders/Container_v1/Stores"
@@ -60,6 +61,13 @@ ACCESS_REQUIREMENTS = [
         "permission_class": "Full Disk Access may be required",
         "status": "covered_by_store_check",
         "check_mode": "schema_only",
+        "prompts": False,
+    },
+    {
+        "surface": "safari",
+        "permission_class": "Full Disk Access may be required",
+        "status": "covered_by_store_check",
+        "check_mode": "plist_readability",
         "prompts": False,
     },
     {
@@ -233,6 +241,11 @@ def _surface_summary(
             "status": _schema_status(schema_checks, "voice_memos"),
             "store_status": _store_status(stores, "voice_memos_store"),
             "schema_check": _schema_status(schema_checks, "voice_memos"),
+        },
+        "safari": {
+            "status": _store_status(stores, "safari_bookmarks"),
+            "store_status": _store_status(stores, "safari_bookmarks"),
+            "schema_check": "not_applicable",
         },
         "notes": {
             "status": _schema_status(schema_checks, "notes"),

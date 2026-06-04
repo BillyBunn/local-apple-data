@@ -142,6 +142,10 @@ def _make_schema_stores(
             """
         )
 
+    safari = tmp_path / DEFAULT_STORE_PATHS["safari_bookmarks"]
+    safari.parent.mkdir(parents=True, exist_ok=True)
+    safari.write_bytes(b"bplist00")
+
     icloud_drive = tmp_path / DEFAULT_STORE_PATHS["icloud_drive_root"]
     icloud_drive.mkdir(parents=True, exist_ok=True)
 
@@ -166,6 +170,8 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["schema_checks"]["reminders"]["status"] == "ok"
     assert health["surfaces"]["mail"]["content_status_supported"] is True
     assert health["surfaces"]["hide_my_email"]["authoritative_inventory"] is False
+    assert health["surfaces"]["safari"]["status"] == "ok"
+    assert health["surfaces"]["safari"]["schema_check"] == "not_applicable"
     assert health["surfaces"]["icloud_drive"]["status"] == "ok"
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
     assert health["surfaces"]["calendar"]["prompts"] is False
@@ -179,6 +185,12 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert any(
         requirement["surface"] == "photos"
         and requirement["check_mode"] == "non_prompting_photokit"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert any(
+        requirement["surface"] == "safari"
+        and requirement["check_mode"] == "plist_readability"
         and requirement["prompts"] is False
         for requirement in health["access_requirements"]
     )

@@ -2,6 +2,20 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260604235900 - 2026-06-04
+
+### Added
+
+- Read-only Safari bookmarks and Reading List search through `local-apple-data safari search` and MCP `safari_search`.
+- Exact selected Safari bookmark or Reading List URL detail through `local-apple-data safari get` and MCP `safari_get_item`.
+- Synthetic plist adapter, CLI, MCP, health, runtime, surface-contract, and redaction coverage for the Safari read surface.
+
+### Security
+
+- Safari search returns title/domain metadata only and does not return full URLs.
+- Full URLs are returned only by exact opaque `safari:item:v1:` handle.
+- Safari history, open tabs/iCloud tabs, private browsing data, cookies, passwords, browser caches, page content, browser sessions, Safari UI automation, and bookmark mutation remain blocked.
+
 ## 0.1.0+codex.20260604230000 - 2026-06-04
 
 ### Added

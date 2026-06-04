@@ -72,6 +72,7 @@ from .adapters.voice_memos import (
     get_voice_memo_recording,
     search_voice_memos,
 )
+from .adapters.safari import get_safari_item, search_safari_items
 from .doctor import build_doctor
 from .health import build_health
 from .redacted_log import log_result
@@ -80,7 +81,7 @@ from .redacted_log import log_result
 INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
-    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
+    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
     "Mail, Messages, and Notes attachment export are exact-handle only and never return attachment bytes inline. "
     "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, and each requires a matching plan approval token plus explicit confirmation."
 )
@@ -354,6 +355,36 @@ def voice_memos_export_audio(
             output_dir=Path(output_dir).expanduser(),
             filename=filename or None,
         ),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def safari_search(
+    query: str,
+    limit: int = 20,
+    kind: str = "all",
+    max_scan_items: int = 20000,
+) -> dict[str, Any]:
+    """Search local Safari bookmarks and Reading List metadata, capped and read-only."""
+
+    return _record(
+        "safari_search",
+        search_safari_items(
+            query,
+            limit=limit,
+            kind=kind,
+            max_scan_items=max_scan_items,
+        ),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def safari_get_item(handle: str, max_scan_items: int = 20000) -> dict[str, Any]:
+    """Get exact Safari bookmark or Reading List detail by opaque handle, capped and read-only."""
+
+    return _record(
+        "safari_get_item",
+        get_safari_item(handle, max_scan_items=max_scan_items),
     )
 
 

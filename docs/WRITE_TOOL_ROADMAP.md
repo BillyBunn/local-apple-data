@@ -1,6 +1,6 @@
 # Write Tool Roadmap
 
-The current release is read-mostly. Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply are the only approved write surfaces; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
+The current release is read-mostly. Safari bookmarks/Reading List are read-only. Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply are the only approved write surfaces; every other write surface remains gated by this roadmap and `docs/MUTATION_GATES.md`.
 
 Use this file with `docs/MUTATION_GATES.md`. The first concrete Reminders write design gate is `docs/V1_11_REMINDERS_WRITE_DESIGN.md`; the first iCloud Drive create-text write design gate is `docs/V1_12_ICLOUD_DRIVE_WRITE_DESIGN.md`; the first Calendar write design gate is `docs/V1_13_CALENDAR_WRITE_DESIGN.md`; the first Contacts write design gate is `docs/V1_14_CONTACTS_WRITE_DESIGN.md`; the first Notes write design gate is `docs/V1_15_NOTES_WRITE_DESIGN.md`; the first Mail draft write design gate is `docs/V1_16_MAIL_DRAFT_WRITE_DESIGN.md`; the first Photos import write design gate is `docs/V1_17_PHOTOS_IMPORT_WRITE_DESIGN.md`; the first iCloud Drive append-text write design gate is `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`; the first Notes append-text write design gate is `docs/V1_19_NOTES_APPEND_WRITE_DESIGN.md`; the first Notes attachment export design gate is `docs/V1_20_NOTES_ATTACHMENT_EXPORT.md`; the first Mail attachment export design gate is `docs/V1_21_MAIL_ATTACHMENT_EXPORT.md`; the first Messages attachment export design gate is `docs/V1_22_MESSAGES_ATTACHMENT_EXPORT.md`; the Messages attributed-body fallback design gate is `docs/V1_23_MESSAGES_ATTRIBUTED_BODY.md`; the first Messages send-text write design gate is `docs/V1_24_MESSAGES_SEND_TEXT_WRITE_DESIGN.md`.
 
@@ -56,6 +56,7 @@ These need separate design documents:
 - Messages direct-recipient sends, new chat creation, SMS fallback selection, outgoing-account selection, file sends, rich text, effects, inline replies, reactions/tapbacks, edit, unsend, delete, mark read, group management, participant lookup, contact lookup, and bulk operations.
 - Photos asset edits/delete, album targeting, hidden/favorite/metadata mutation, thumbnails, inline asset bytes, network iCloud fetch, and bulk operations.
 - Voice Memos creation, generated transcription, or deletion.
+- Safari bookmark creation/update/delete/move, history/open-tabs/iCloud-tabs access, browser-state access, cookies, passwords, page content, or mutation.
 - Authoritative Hide My Email inventory or mutation.
 
 ## Required Tests
@@ -88,7 +89,7 @@ The following remain blocked until a separate source review proves a durable, lo
 
 - Hide My Email alias creation, deactivation, deletion, or authoritative inventory.
 - Any iCloud.com, browser-session, cookie, keychain, private iCloud web/API, IMAP, OAuth, or connector fallback mutation path.
-- Sending Messages from the plugin.
+- Messages direct-recipient sends, new chats, SMS fallback selection, file sends, reactions, edit, delete, or account selection.
 - Mail sending or management from the plugin before a separate source review and explicit design gate.
 - Photos edit/delete/album/metadata mutation before a separate PhotoKit write design.
 - Voice Memos generated transcription or mutation before a separate media-content design.

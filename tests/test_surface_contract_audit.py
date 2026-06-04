@@ -20,9 +20,9 @@ def test_current_project_surface_contract_passes() -> None:
     )
 
     assert payload["status"] == "ok"
-    assert payload["surfaces_checked"] == 10
+    assert payload["surfaces_checked"] == 11
     assert payload["mcp_tools_checked"] >= payload["mcp_tools_expected"]
-    assert payload["capability_matrix_rows_checked"] == 10
+    assert payload["capability_matrix_rows_checked"] == 11
     assert payload["findings"] == []
 
 

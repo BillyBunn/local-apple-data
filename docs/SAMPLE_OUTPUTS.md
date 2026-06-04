@@ -20,6 +20,7 @@ These examples are synthetic. They are shape examples only and must not be repla
     "messages": {"status": "ok"},
     "hide_my_email": {"status": "ok", "authoritative_inventory": false},
     "voice_memos": {"status": "ok"},
+    "safari": {"status": "ok", "schema_check": "not_applicable"},
     "notes": {"status": "ok", "automation_check": "on_exact_content_call"},
     "calendar": {"status": "checked_on_tool_call", "permission_check": "non_prompting_eventkit", "prompts": false},
     "reminders": {"status": "ok", "eventkit_check": "on_tool_call"},
@@ -39,6 +40,44 @@ These examples are synthetic. They are shape examples only and must not be repla
     {"surface": "contacts", "check_mode": "non_prompting_contacts_framework", "prompts": false},
     {"surface": "photos", "check_mode": "non_prompting_photokit", "prompts": false}
   ]
+}
+```
+
+## Safari Search
+
+```json
+{
+  "status": "ok",
+  "source": "safari",
+  "results": [
+    {
+      "handle": "<opaque safari:item:v1 handle>",
+      "title": "Synthetic Bookmark",
+      "kind": "bookmark",
+      "url_domain": "example.com",
+      "url_scheme": "https",
+      "url_has_query": true,
+      "url_path_depth": 2
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Safari Exact Item
+
+```json
+{
+  "status": "ok",
+  "source": "safari",
+  "result": {
+    "handle": "<opaque safari:item:v1 handle>",
+    "title": "Synthetic Bookmark",
+    "kind": "bookmark",
+    "url_domain": "example.com",
+    "url": "https://example.com/private/path?example=1"
+  },
+  "warnings": []
 }
 ```
 
