@@ -23,6 +23,7 @@ These examples are synthetic. They are shape examples only and must not be repla
     "safari": {"status": "ok", "schema_check": "not_applicable"},
     "shortcuts": {"status": "available", "schema_check": "not_applicable"},
     "books": {"status": "ok", "schema_check": "ok"},
+    "podcasts": {"status": "ok", "schema_check": "ok"},
     "notes": {"status": "ok", "automation_check": "on_exact_content_call"},
     "calendar": {"status": "checked_on_tool_call", "permission_check": "non_prompting_eventkit", "prompts": false},
     "reminders": {"status": "ok", "eventkit_check": "on_tool_call"},
@@ -35,15 +36,86 @@ These examples are synthetic. They are shape examples only and must not be repla
     "messages": {"status": "ok", "warnings": []},
     "voice_memos": {"status": "ok", "warnings": []},
     "books": {"status": "ok", "warnings": []},
+    "podcasts": {"status": "ok", "warnings": []},
     "notes": {"status": "ok", "warnings": []},
     "reminders": {"status": "ok", "warnings": []}
   },
   "access_requirements": [
     {"surface": "books", "check_mode": "schema_only", "prompts": false},
+    {"surface": "podcasts", "check_mode": "schema_only", "prompts": false},
     {"surface": "calendar", "check_mode": "non_prompting_eventkit", "prompts": false},
     {"surface": "contacts", "check_mode": "non_prompting_contacts_framework", "prompts": false},
     {"surface": "photos", "check_mode": "non_prompting_photokit", "prompts": false}
   ]
+}
+```
+
+## Podcasts Search
+
+```json
+{
+  "status": "ok",
+  "source": "podcasts",
+  "results": [
+    {
+      "handle": "<opaque podcasts:show:v1 handle>",
+      "title": "Synthetic Show",
+      "author": "Synthetic Host",
+      "category": "Technology",
+      "episode_count": 12,
+      "feed_url_returned": false,
+      "webpage_url_returned": false,
+      "raw_identifier_returned": false
+    }
+  ],
+  "warnings": []
+}
+```
+
+## Podcasts Episodes
+
+```json
+{
+  "status": "ok",
+  "source": "podcasts",
+  "result": {
+    "handle": "<opaque podcasts:show:v1 handle>",
+    "title": "Synthetic Show",
+    "episodes": [
+      {
+        "handle": "<opaque podcasts:episode:v1 handle>",
+        "title": "Synthetic Episode",
+        "duration_seconds": 1800.0,
+        "transcript_status": "available",
+        "description_returned": false,
+        "transcript_text_returned": false,
+        "audio_content_returned": false,
+        "raw_identifier_returned": false
+      }
+    ],
+    "episodes_returned": 1
+  },
+  "warnings": []
+}
+```
+
+## Podcasts Episode Detail
+
+```json
+{
+  "status": "ok",
+  "source": "podcasts",
+  "result": {
+    "handle": "<opaque podcasts:episode:v1 handle>",
+    "title": "Synthetic Episode",
+    "description": "Synthetic bounded episode description.",
+    "description_chars": 38,
+    "description_truncated": false,
+    "transcript_text_returned": false,
+    "audio_content_returned": false,
+    "raw_identifier_returned": false
+  },
+  "warnings": []
 }
 ```
 

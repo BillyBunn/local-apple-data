@@ -102,6 +102,19 @@ SURFACE_CONTRACTS = (
         mcp_tools=("books_search", "books_get", "books_list_annotations"),
     ),
     SurfaceContract(
+        name="podcasts",
+        label="Podcasts",
+        cli_group="podcasts",
+        cli_subparser="podcasts_subparsers",
+        cli_commands=("search", "get", "episodes", "episode"),
+        mcp_tools=(
+            "podcasts_search",
+            "podcasts_get_show",
+            "podcasts_list_episodes",
+            "podcasts_get_episode",
+        ),
+    ),
+    SurfaceContract(
         name="notes",
         label="Notes",
         cli_group="notes",

@@ -71,6 +71,12 @@ from local_apple_data.adapters.photos import (
     plan_photo_change,
     search_photos,
 )
+from local_apple_data.adapters.podcasts import (
+    get_podcast_episode,
+    get_podcast_show,
+    list_podcast_episodes,
+    search_podcasts,
+)
 from local_apple_data.adapters.reminders import (
     apply_reminder_change,
     get_reminder_content,
@@ -421,6 +427,10 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
                     {"query": "Shortcuts"},
                 )
                 wildcard_books = await session.call_tool("books_search", {"query": "Books"})
+                wildcard_podcasts = await session.call_tool(
+                    "podcasts_search",
+                    {"query": "Podcasts"},
+                )
                 wildcard_notes = await session.call_tool("notes_search", {"query": "%"})
                 wildcard_icloud = await session.call_tool("icloud_drive_search", {"query": "%"})
                 wildcard_calendar = await session.call_tool("calendar_search", {"query": "%"})
@@ -445,6 +455,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
         "wildcard_safari": _payload(wildcard_safari)["warnings"][0]["code"],
         "wildcard_shortcuts": _payload(wildcard_shortcuts)["warnings"][0]["code"],
         "wildcard_books": _payload(wildcard_books)["warnings"][0]["code"],
+        "wildcard_podcasts": _payload(wildcard_podcasts)["warnings"][0]["code"],
         "wildcard_notes": _payload(wildcard_notes)["warnings"][0]["code"],
         "wildcard_icloud": _payload(wildcard_icloud)["warnings"][0]["code"],
         "wildcard_calendar": _payload(wildcard_calendar)["warnings"][0]["code"],
@@ -761,6 +772,132 @@ def _books_smoke(tmp_path: Path) -> dict[str, Any]:
         "books_annotation_raw_identifier_returned": "RUNTIME-ANNOTATION-UUID" in str(annotations),
         "books_legacy_detail_status": legacy_detail["status"],
         "books_legacy_detail_warning": legacy_detail["warnings"][0]["code"],
+    }
+
+
+def _make_podcasts_db(db_path: Path) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(db_path) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE ZMTPODCAST (
+                Z_PK INTEGER PRIMARY KEY,
+                ZTITLE TEXT,
+                ZAUTHOR TEXT,
+                ZCATEGORY TEXT,
+                ZPROVIDER TEXT,
+                ZSUBSCRIBED INTEGER,
+                ZHIDDEN INTEGER,
+                ZLIBRARYEPISODESCOUNT INTEGER,
+                ZDOWNLOADEDEPISODESCOUNT INTEGER,
+                ZSAVEDEPISODESCOUNT INTEGER,
+                ZNEWEPISODESCOUNT INTEGER,
+                ZLASTDATEPLAYED REAL,
+                ZUPDATEDDATE REAL,
+                ZUUID TEXT,
+                ZSTORECOLLECTIONID TEXT,
+                ZFEEDURL TEXT,
+                ZWEBPAGEURL TEXT
+            );
+            CREATE TABLE ZMTEPISODE (
+                Z_PK INTEGER PRIMARY KEY,
+                ZPODCAST INTEGER,
+                ZTITLE TEXT,
+                ZITUNESTITLE TEXT,
+                ZCLEANEDTITLE TEXT,
+                ZAUTHOR TEXT,
+                ZDURATION REAL,
+                ZPUBDATE REAL,
+                ZLASTDATEPLAYED REAL,
+                ZPLAYHEAD REAL,
+                ZHASBEENPLAYED INTEGER,
+                ZPLAYCOUNT INTEGER,
+                ZSAVED INTEGER,
+                ZDOWNLOADPATH TEXT,
+                ZASSETURL TEXT,
+                ZEXPLICIT INTEGER,
+                ZAUDIO INTEGER,
+                ZVIDEO INTEGER,
+                ZUUID TEXT,
+                ZGUID TEXT,
+                ZSTORETRACKID TEXT,
+                ZITEMDESCRIPTION TEXT,
+                ZITEMDESCRIPTIONWITHOUTHTML TEXT,
+                ZTRANSCRIPTIDENTIFIER TEXT,
+                ZFREETRANSCRIPTIDENTIFIER TEXT,
+                ZENTITLEDTRANSCRIPTIDENTIFIER TEXT,
+                ZWEBPAGEURL TEXT,
+                ZVISIBLE INTEGER,
+                ZUSERDELETED INTEGER,
+                ZFEEDDELETED INTEGER
+            );
+            INSERT INTO ZMTPODCAST
+              (Z_PK, ZTITLE, ZAUTHOR, ZCATEGORY, ZPROVIDER, ZSUBSCRIBED, ZHIDDEN,
+               ZLIBRARYEPISODESCOUNT, ZDOWNLOADEDEPISODESCOUNT, ZSAVEDEPISODESCOUNT,
+               ZNEWEPISODESCOUNT, ZLASTDATEPLAYED, ZUPDATEDDATE, ZUUID,
+               ZSTORECOLLECTIONID, ZFEEDURL, ZWEBPAGEURL)
+            VALUES
+              (1, 'Synthetic runtime Apple Podcasts show', 'Runtime Host',
+               'Technology', 'Runtime Provider', 1, 0, 1, 1, 1, 0, 802310400.0,
+               802310410.0, 'RUNTIME-PODCAST-SHOW-UUID', 'RUNTIME-PODCAST-COLLECTION-ID',
+               'https://example.invalid/runtime-feed.xml', 'https://example.invalid/show');
+            INSERT INTO ZMTEPISODE
+              (Z_PK, ZPODCAST, ZTITLE, ZITUNESTITLE, ZCLEANEDTITLE, ZAUTHOR,
+               ZDURATION, ZPUBDATE, ZLASTDATEPLAYED, ZPLAYHEAD, ZHASBEENPLAYED,
+               ZPLAYCOUNT, ZSAVED, ZDOWNLOADPATH, ZASSETURL, ZEXPLICIT, ZAUDIO,
+               ZVIDEO, ZUUID, ZGUID, ZSTORETRACKID, ZITEMDESCRIPTION,
+               ZITEMDESCRIPTIONWITHOUTHTML, ZTRANSCRIPTIDENTIFIER,
+               ZFREETRANSCRIPTIDENTIFIER, ZENTITLEDTRANSCRIPTIDENTIFIER,
+               ZWEBPAGEURL, ZVISIBLE, ZUSERDELETED, ZFEEDDELETED)
+            VALUES
+              (10, 1, 'Synthetic runtime podcast episode', '', '', 'Runtime Host',
+               1200.0, 802310300.0, 802310350.0, 300.0, 0, 2, 1,
+               '/private/synthetic/runtime-podcast.mp3',
+               'https://example.invalid/runtime-audio.mp3', 0, 1, 0,
+               'RUNTIME-PODCAST-EPISODE-UUID', 'RUNTIME-PODCAST-EPISODE-GUID',
+               'RUNTIME-PODCAST-TRACK-ID', '<p>Runtime fallback description.</p>',
+               'Synthetic runtime podcast episode description text.',
+               'RUNTIME-PODCAST-TRANSCRIPT-ID', '', '',
+               'https://example.invalid/runtime-episode', 1, 0, 0);
+            """
+        )
+
+
+def _podcasts_smoke(tmp_path: Path) -> dict[str, Any]:
+    db_path = tmp_path / "Podcasts/MTLibrary.sqlite"
+    _make_podcasts_db(db_path)
+    search = search_podcasts("runtime Apple", db_path=db_path)
+    show_handle = search["results"][0]["handle"]
+    detail = get_podcast_show(show_handle, db_path=db_path)
+    episodes = list_podcast_episodes(show_handle, db_path=db_path)
+    episode_handle = episodes["result"]["episodes"][0]["handle"]
+    episode = get_podcast_episode(episode_handle, db_path=db_path, max_chars=12)
+    legacy_show = get_podcast_show("podcasts:show:1", db_path=db_path)
+    return {
+        "podcasts_opaque_show_handle": show_handle.startswith("podcasts:show:v1:"),
+        "podcasts_opaque_episode_handle": episode_handle.startswith("podcasts:episode:v1:"),
+        "podcasts_search_status": search["status"],
+        "podcasts_episode_count": search["results"][0]["episode_count"],
+        "podcasts_raw_identifier_returned": "RUNTIME-PODCAST-SHOW-UUID" in str(search),
+        "podcasts_url_returned": "example.invalid" in str(search),
+        "podcasts_detail_status": detail["status"],
+        "podcasts_episodes_status": episodes["status"],
+        "podcasts_episodes_returned": episodes["result"]["episodes_returned"],
+        "podcasts_episode_description_in_list": "Synthetic runtime podcast episode description"
+        in str(episodes),
+        "podcasts_transcript_identifier_returned": "RUNTIME-PODCAST-TRANSCRIPT-ID"
+        in str(episode),
+        "podcasts_episode_status": episode["status"],
+        "podcasts_episode_description_returned": episode["privacy"][
+            "episode_description_returned"
+        ],
+        "podcasts_episode_description_chars": episode["result"]["description_chars"],
+        "podcasts_episode_description_truncated": episode["result"][
+            "description_truncated"
+        ],
+        "podcasts_episode_audio_returned": episode["privacy"]["audio_content_returned"],
+        "podcasts_legacy_detail_status": legacy_show["status"],
+        "podcasts_legacy_detail_warning": legacy_show["warnings"][0]["code"],
     }
 
 
@@ -1879,7 +2016,7 @@ def _reminders_apply_smoke() -> dict[str, Any]:
 
 def _assert_summary(summary: dict[str, Any]) -> None:
     expected = {
-        "tool_count": 58,
+        "tool_count": 62,
         "doctor_source": "doctor",
         "doctor_mode": "non_mutating",
         "empty_mail": "empty_query",
@@ -1890,6 +2027,7 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "wildcard_safari": "broad_query",
         "wildcard_shortcuts": "broad_query",
         "wildcard_books": "broad_query",
+        "wildcard_podcasts": "broad_query",
         "wildcard_notes": "broad_query",
         "wildcard_icloud": "broad_query",
         "wildcard_calendar": "broad_query",
@@ -2008,6 +2146,24 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "books_annotation_raw_identifier_returned": False,
         "books_legacy_detail_status": "error",
         "books_legacy_detail_warning": "invalid_handle",
+        "podcasts_opaque_show_handle": True,
+        "podcasts_opaque_episode_handle": True,
+        "podcasts_search_status": "ok",
+        "podcasts_episode_count": 1,
+        "podcasts_raw_identifier_returned": False,
+        "podcasts_url_returned": False,
+        "podcasts_detail_status": "ok",
+        "podcasts_episodes_status": "ok",
+        "podcasts_episodes_returned": 1,
+        "podcasts_episode_description_in_list": False,
+        "podcasts_transcript_identifier_returned": False,
+        "podcasts_episode_status": "ok",
+        "podcasts_episode_description_returned": True,
+        "podcasts_episode_description_chars": 12,
+        "podcasts_episode_description_truncated": True,
+        "podcasts_episode_audio_returned": False,
+        "podcasts_legacy_detail_status": "error",
+        "podcasts_legacy_detail_warning": "invalid_handle",
         "notes_opaque_handle": True,
         "notes_content_status": "ok",
         "notes_content_chars": 31,
@@ -2152,6 +2308,7 @@ def main() -> None:
         summary.update(_safari_smoke(tmp_path))
         summary.update(_shortcuts_smoke())
         summary.update(_books_smoke(tmp_path))
+        summary.update(_podcasts_smoke(tmp_path))
         summary.update(_notes_content_smoke(tmp_path))
         summary.update(_notes_attachment_smoke(tmp_path))
         summary.update(_notes_plan_apply_smoke(tmp_path))

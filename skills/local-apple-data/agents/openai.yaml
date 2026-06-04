@@ -2,13 +2,13 @@ interface:
   display_name: "Local Apple Data"
   short_description: "Local Apple data"
   brand_color: "#2F7D68"
-  default_prompt: "Use $local-apple-data to search local Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Books metadata/annotations, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive; retrieve/export exact content/detail only by opaque handle, including selected Mail, Messages transcripts/attachments, Safari URLs, Shortcuts metadata, Books annotations, and Notes attachments; and apply only approved Reminders, iCloud Drive create/append-text, Calendar create-event, Contacts create-contact, Notes create/append-text, Mail create-draft, Photos import, or Messages send-text changes after a matching plan approval token."
+  default_prompt: "Use $local-apple-data to search local Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Books metadata/annotations, Podcasts metadata, Notes, Calendar, Contacts, Photos, Reminders, or iCloud Drive; retrieve/export exact content/detail only by opaque handle, including selected Mail, Messages transcripts/attachments, Safari URLs, Shortcuts metadata, Books annotations, Podcasts selected-episode descriptions, and Notes attachments; and apply only approved Reminders, iCloud Drive create/append-text, Calendar create-event, Contacts create-contact, Notes create/append-text, Mail create-draft, Photos import, or Messages send-text changes after a matching plan approval token."
 
 dependencies:
   tools:
     - type: "mcp"
       value: "local-apple-data"
-      description: "Local MCP server for Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive metadata, with exact-handle content/detail/export retrieval including selected Mail, Messages, Safari URLs, Shortcuts metadata, Books annotations, and Notes attachments and approved Reminders, iCloud Drive create/append-text, Calendar create-event, Contacts create-contact, Notes create/append-text, Mail create-draft, Photos import, and Messages send-text apply."
+      description: "Local MCP server for Mail.app, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts metadata, Apple Notes, Apple Calendar, Apple Contacts, Apple Photos, Apple Reminders, and iCloud Drive metadata, with exact-handle content/detail/export retrieval including selected Mail, Messages, Safari URLs, Shortcuts metadata, Books annotations, Podcasts selected-episode descriptions, and Notes attachments and approved Reminders, iCloud Drive create/append-text, Calendar create-event, Contacts create-contact, Notes create/append-text, Mail create-draft, Photos import, and Messages send-text apply."
       transport: "stdio"
 
 policy:

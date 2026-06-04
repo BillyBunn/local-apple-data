@@ -190,6 +190,65 @@ def _make_schema_stores(
             """
         )
 
+    podcasts = tmp_path / DEFAULT_STORE_PATHS["podcasts_store"]
+    podcasts.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(podcasts) as connection:
+        connection.executescript(
+            """
+            CREATE TABLE ZMTPODCAST (
+                Z_PK INTEGER PRIMARY KEY,
+                ZTITLE TEXT,
+                ZAUTHOR TEXT,
+                ZCATEGORY TEXT,
+                ZPROVIDER TEXT,
+                ZSUBSCRIBED INTEGER,
+                ZHIDDEN INTEGER,
+                ZLIBRARYEPISODESCOUNT INTEGER,
+                ZDOWNLOADEDEPISODESCOUNT INTEGER,
+                ZSAVEDEPISODESCOUNT INTEGER,
+                ZNEWEPISODESCOUNT INTEGER,
+                ZLASTDATEPLAYED REAL,
+                ZUPDATEDDATE REAL,
+                ZUUID TEXT,
+                ZSTORECOLLECTIONID TEXT,
+                ZFEEDURL TEXT,
+                ZWEBPAGEURL TEXT
+            );
+            CREATE TABLE ZMTEPISODE (
+                Z_PK INTEGER PRIMARY KEY,
+                ZPODCAST INTEGER,
+                ZTITLE TEXT,
+                ZITUNESTITLE TEXT,
+                ZCLEANEDTITLE TEXT,
+                ZAUTHOR TEXT,
+                ZDURATION REAL,
+                ZPUBDATE REAL,
+                ZLASTDATEPLAYED REAL,
+                ZPLAYHEAD REAL,
+                ZHASBEENPLAYED INTEGER,
+                ZPLAYCOUNT INTEGER,
+                ZSAVED INTEGER,
+                ZDOWNLOADPATH TEXT,
+                ZASSETURL TEXT,
+                ZEXPLICIT INTEGER,
+                ZAUDIO INTEGER,
+                ZVIDEO INTEGER,
+                ZUUID TEXT,
+                ZGUID TEXT,
+                ZSTORETRACKID TEXT,
+                ZITEMDESCRIPTION TEXT,
+                ZITEMDESCRIPTIONWITHOUTHTML TEXT,
+                ZTRANSCRIPTIDENTIFIER TEXT,
+                ZFREETRANSCRIPTIDENTIFIER TEXT,
+                ZENTITLEDTRANSCRIPTIDENTIFIER TEXT,
+                ZWEBPAGEURL TEXT,
+                ZVISIBLE INTEGER,
+                ZUSERDELETED INTEGER,
+                ZFEEDDELETED INTEGER
+            );
+            """
+        )
+
     icloud_drive = tmp_path / DEFAULT_STORE_PATHS["icloud_drive_root"]
     icloud_drive.mkdir(parents=True, exist_ok=True)
 
@@ -220,6 +279,8 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["surfaces"]["shortcuts"]["tool_check"] == "shortcuts_cli"
     assert health["surfaces"]["books"]["status"] == "ok"
     assert health["surfaces"]["books"]["schema_check"] == "ok"
+    assert health["surfaces"]["podcasts"]["status"] == "ok"
+    assert health["surfaces"]["podcasts"]["schema_check"] == "ok"
     assert health["surfaces"]["icloud_drive"]["status"] == "ok"
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
     assert health["surfaces"]["calendar"]["prompts"] is False
@@ -250,6 +311,12 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     )
     assert any(
         requirement["surface"] == "books"
+        and requirement["check_mode"] == "schema_only"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert any(
+        requirement["surface"] == "podcasts"
         and requirement["check_mode"] == "schema_only"
         and requirement["prompts"] is False
         for requirement in health["access_requirements"]

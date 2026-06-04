@@ -14,6 +14,7 @@ from .adapters.books import check_books_schema
 from .adapters.mail import check_mail_schema, mail_db_relative_path
 from .adapters.messages import check_messages_schema
 from .adapters.notes import check_notes_schema
+from .adapters.podcasts import check_podcasts_schema
 from .adapters.reminders import check_reminders_schema
 from .adapters.voice_memos import check_voice_memos_schema
 
@@ -32,6 +33,10 @@ DEFAULT_STORE_PATHS = {
     "books_annotations_store": Path(
         "Library/Containers/com.apple.iBooksX/Data/Documents/AEAnnotation/"
         "AEAnnotation_v10312011_1727_local.sqlite"
+    ),
+    "podcasts_store": Path(
+        "Library/Group Containers/243LU875E5.groups.com.apple.podcasts/Documents/"
+        "MTLibrary.sqlite"
     ),
     "notes_store": Path("Library/Group Containers/group.com.apple.notes/NoteStore.sqlite"),
     "reminders_stores": Path(
@@ -88,6 +93,13 @@ ACCESS_REQUIREMENTS = [
     },
     {
         "surface": "books",
+        "permission_class": "Full Disk Access may be required",
+        "status": "covered_by_store_check",
+        "check_mode": "schema_only",
+        "prompts": False,
+    },
+    {
+        "surface": "podcasts",
         "permission_class": "Full Disk Access may be required",
         "status": "covered_by_store_check",
         "check_mode": "schema_only",
@@ -309,6 +321,11 @@ def _surface_summary(
             "annotations_store_status": _store_status(stores, "books_annotations_store"),
             "schema_check": _schema_status(schema_checks, "books"),
         },
+        "podcasts": {
+            "status": _schema_status(schema_checks, "podcasts"),
+            "store_status": _store_status(stores, "podcasts_store"),
+            "schema_check": _schema_status(schema_checks, "podcasts"),
+        },
         "notes": {
             "status": _schema_status(schema_checks, "notes"),
             "store_status": _store_status(stores, "notes_store"),
@@ -411,6 +428,14 @@ def build_health(
             and _store_available(stores, "books_annotations_store")
         )
         else _skipped_schema_check("books", "books_schema_skipped"),
+        "podcasts": _safe_schema_check(
+            "podcasts",
+            "podcasts_schema_unavailable",
+            ["ZMTPODCAST", "ZMTEPISODE"],
+            lambda: check_podcasts_schema(db_path=home / store_paths["podcasts_store"]),
+        )
+        if "podcasts_store" in store_paths and _store_available(stores, "podcasts_store")
+        else _skipped_schema_check("podcasts", "podcasts_schema_skipped"),
         "notes": _safe_schema_check(
             "notes",
             "notes_schema_unavailable",

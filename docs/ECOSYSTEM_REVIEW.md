@@ -61,6 +61,15 @@ Architecture implication: local iCloud Drive text-file content can be exact-hand
 
 Architecture implication: Books belongs in the broad local Apple data surface. Existing tools prove that reading highlights and notes from local SQLite stores is normal, but this plugin should avoid broad annotation exports by default. The durable first tranche is specific-query metadata search plus selected-book annotations behind an opaque `books:book:v1:` handle, without book/chapter/PDF/EPUB text extraction, raw IDs, local paths, iCloud fetches, Books.app automation, or mutation.
 
+### Podcasts
+
+- Apple Support documents that followed shows, subscriptions, stations, and current play position sync across devices when the user signs in with the same Apple Account and enables Sync Library. Source: https://support.apple.com/guide/podcasts/sync-podcasts-across-devices-pod5c911347/mac
+- Apple Podcasts & Privacy says Apple Podcasts syncs favorite categories, play position, and library contents, including followed shows, saved episodes, and stations. Source: https://www.apple.com/legal/privacy/data/en/apple-podcasts/
+- `dado3212/apple-podcast-transcripts` is a local browser-based Apple Podcasts transcript viewer/exporter and documents local transcript/cache inputs. Source: https://github.com/dado3212/apple-podcast-transcripts
+- Audioscrape's MCP integration exposes remote podcast/audio search and exact episode content with transcript/speaker information. Source: https://www.audioscrape.com/docs/integrations/mcp
+
+Architecture implication: Podcasts belongs in the broad local Apple data surface because Apple treats the library and playback position as synced Apple data, and third-party tools show that transcript/audio-oriented podcast surfaces are expected. The durable first tranche should be stricter than those transcript/audio examples: specific-query show metadata, selected-show episode metadata, and bounded selected-episode descriptions behind opaque `podcasts:show:v1:` and `podcasts:episode:v1:` handles, without transcript text/export, audio bytes, feed/enclosure URLs, local paths, broad dumps, iCloud media fetches, Podcasts.app automation, or mutation.
+
 ### Safari
 
 - `MrGo2/icloud-mcp` includes Safari as one of its local-mode services and advertises Safari tab access in examples. Source: https://github.com/MrGo2/icloud-mcp
@@ -87,7 +96,7 @@ Architecture implication: Calendar, Reminders, Contacts, and Photos should use n
 
 This plugin should be broader than single-surface MCP servers and stricter than most single-surface examples:
 
-- Broad surface: Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Books metadata/selected-book annotations, Notes, iCloud Drive, Calendar, Reminders, Contacts, and Photos.
+- Broad surface: Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Books metadata/selected-book annotations, Podcasts metadata/selected-episode descriptions, Notes, iCloud Drive, Calendar, Reminders, Contacts, and Photos.
 - Local-only transport: stdio MCP and CLI through local files/frameworks only.
 - Metadata-first search: narrow query gates before local store/framework access.
 - Exact-handle content: content/detail/export requires opaque handles returned by matching search tools.
@@ -101,5 +110,5 @@ This plugin should be broader than single-surface MCP servers and stricter than 
 
 - Whether to add a small privileged helper architecture for users who do not want their AI client process to hold Full Disk Access.
 - Whether future generated transcription belongs in this plugin or a separate transcription tool connected by handles.
-- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, Messages exact-chat send-text, Safari bookmark/Reading List reads, Shortcuts metadata reads, Books metadata/selected annotation reads, and Mail/Messages/Notes attachment export tranches should prioritize Mail send, richer Messages mutation, Photos edit/delete/album support, arbitrary Notes update/delete/move, Safari history/tabs/bookmark mutation, Shortcuts run/import/export, Books richer export/mutation, or richer framework-backed edits.
+- Whether future write support after the approved Reminders, iCloud Drive create/append-text, Calendar, Contacts, Notes create/append-text, Mail draft, Photos import, Messages exact-chat send-text, Safari bookmark/Reading List reads, Shortcuts metadata reads, Books metadata/selected annotation reads, Podcasts metadata/selected-episode description reads, and Mail/Messages/Notes attachment export tranches should prioritize Mail send, richer Messages mutation, Photos edit/delete/album support, arbitrary Notes update/delete/move, Safari history/tabs/bookmark mutation, Shortcuts run/import/export, Books richer export/mutation, Podcasts transcript/audio export or mutation, or richer framework-backed edits.
 - Whether public registry packaging should target npm, PyPI, a Codex personal marketplace, Smithery-style registries, or only GitHub source installation first.

@@ -60,6 +60,12 @@ from .adapters.photos import (
     plan_photo_change,
     search_photos,
 )
+from .adapters.podcasts import (
+    get_podcast_episode,
+    get_podcast_show,
+    list_podcast_episodes,
+    search_podcasts,
+)
 from .adapters.reminders import (
     apply_reminder_change,
     due_reminders_metadata,
@@ -83,7 +89,7 @@ from .redacted_log import log_result
 INSTRUCTIONS = (
     "Use these tools for local Apple data only. Stay metadata-first and "
     "bounded. Do not use Gmail connector paths. Do not request broad dumps. "
-    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
+    "Mail, Messages, inferred Hide My Email aliases, Voice Memos, Safari bookmarks/Reading List, Shortcuts metadata, Apple Books metadata/annotations, Apple Podcasts show/episode metadata, Notes, iCloud Drive, Calendar, Contacts, Photos, and Reminder detail/export retrieval are exact-handle only. "
     "Mail, Messages, and Notes attachment export are exact-handle only and never return attachment bytes inline. "
     "The only apply-capable mutation surfaces are Reminders apply, iCloud Drive create/append-text apply, Calendar create-event apply, Contacts create-contact apply, Notes create/append-text apply, Mail create-draft apply, Photos import apply, and Messages send-text apply, and each requires a matching plan approval token plus explicit confirmation."
 )
@@ -445,6 +451,40 @@ def books_list_annotations(
     return _record(
         "books_list_annotations",
         list_book_annotations(handle, limit=limit, max_chars=max_chars),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def podcasts_search(query: str, limit: int = 20) -> dict[str, Any]:
+    """Search local Apple Podcasts show metadata by title, author, category, or provider."""
+
+    return _record("podcasts_search", search_podcasts(query, limit=limit))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def podcasts_get_show(handle: str) -> dict[str, Any]:
+    """Get exact local Apple Podcasts show metadata by opaque handle."""
+
+    return _record("podcasts_get_show", get_podcast_show(handle))
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def podcasts_list_episodes(handle: str, limit: int = 20) -> dict[str, Any]:
+    """List bounded episode metadata for one exact selected Apple Podcasts show handle."""
+
+    return _record(
+        "podcasts_list_episodes",
+        list_podcast_episodes(handle, limit=limit),
+    )
+
+
+@mcp.tool(annotations=READ_ONLY_ANNOTATIONS)
+def podcasts_get_episode(handle: str, max_chars: int = 4000) -> dict[str, Any]:
+    """Get exact Apple Podcasts episode metadata and bounded description by opaque handle."""
+
+    return _record(
+        "podcasts_get_episode",
+        get_podcast_episode(handle, max_chars=max_chars),
     )
 
 

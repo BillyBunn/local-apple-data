@@ -18,6 +18,7 @@ The project is expected to need macOS because it depends on local Apple stores a
 | Safari | Safari local `Bookmarks.plist` for bookmarks and Reading List items | Full Disk Access may be required |
 | Shortcuts | Apple `shortcuts` command-line interface | Shortcuts CLI availability |
 | Books | Apple Books local `BKLibrary` and `AEAnnotation` SQLite stores | Full Disk Access may be required |
+| Podcasts | Apple Podcasts local `MTLibrary.sqlite` store | Full Disk Access may be required |
 | Notes | Local Notes SQLite plus bounded Notes.app automation for exact content and approved create/append-text apply; local Notes media files for exact attachment export | Full Disk Access and Automation may be required |
 | Calendar | EventKit helper | Calendar permission |
 | Reminders | EventKit helper plus legacy SQLite metadata | Reminders permission |
@@ -49,4 +50,5 @@ Expected degraded cases include:
 - Safari support returns bookmark and Reading List title/domain metadata during search and full URLs only by exact `safari:item:v1:` handle. It does not read history, open tabs, private browsing data, passwords, cookies, browser caches, page content, or mutate bookmarks.
 - Shortcuts support returns shortcut/folder name metadata by specific query and exact `shortcuts:item:v1:` handle. It does not run, open, view, sign, export, return bodies/action graphs, expose raw identifiers, or mutate shortcuts.
 - Books support returns title/author/genre/read-state metadata by specific query and selected-book annotations only by exact `books:book:v1:` handle. It does not extract book/chapter/PDF/EPUB text, perform broad annotation dumps or searches, expose raw asset IDs/annotation UUIDs/local paths, fetch iCloud content, automate Books.app, or mutate Books data.
+- Podcasts support returns show metadata by specific query, selected-show episode metadata by exact `podcasts:show:v1:` handle, and bounded selected-episode descriptions only by exact `podcasts:episode:v1:` handle. It does not return transcripts, audio/video bytes, feed/enclosure/web URLs, local download paths, expose raw identifiers, fetch iCloud media, automate Podcasts.app, or mutate Podcasts data.
 - Write and mutation tools require separate approval gates before implementation. The current Mail write gate is limited to save-only draft creation; it does not send mail. The current Photos write gate is limited to importing one local image or video file; it does not edit or delete Photos assets. The current Messages write gate is limited to send-text apply for one exact existing chat; it does not support direct recipients, new chats, SMS fallback selection, file sends, reactions, edit, or delete.

@@ -2,6 +2,22 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260605020000 - 2026-06-04
+
+### Added
+
+- Read-only Apple Podcasts show metadata search through `local-apple-data podcasts search` and MCP `podcasts_search`.
+- Exact selected Apple Podcasts show metadata retrieval through `local-apple-data podcasts get` and MCP `podcasts_get_show`.
+- Bounded selected-show episode listing through `local-apple-data podcasts episodes` and MCP `podcasts_list_episodes`.
+- Exact selected-episode bounded description retrieval through `local-apple-data podcasts episode` and MCP `podcasts_get_episode`.
+- Synthetic Apple Podcasts SQLite fixtures, adapter, CLI, MCP, health, runtime, surface-contract, and redaction coverage for the Podcasts surface.
+
+### Security
+
+- Podcasts search returns show metadata and opaque handles only; raw show IDs, feed URLs, web URLs, local paths, and episode descriptions are not returned.
+- Episode descriptions are returned only after an exact `podcasts:episode:v1:` handle from the selected-show episode flow.
+- Transcript text/export, audio/video bytes, feed/enclosure URL extraction, broad episode-description dumps/search, raw Podcasts identifiers/paths, iCloud media fetch, Podcasts.app automation, and Podcasts mutation remain blocked.
+
 ## 0.1.0+codex.20260605010000 - 2026-06-04
 
 ### Added

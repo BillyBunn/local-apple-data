@@ -60,6 +60,12 @@ from .adapters.photos import (
     plan_photo_change,
     search_photos,
 )
+from .adapters.podcasts import (
+    get_podcast_episode,
+    get_podcast_show,
+    list_podcast_episodes,
+    search_podcasts,
+)
 from .adapters.reminders import (
     apply_reminder_change,
     due_reminders_metadata,
@@ -434,6 +440,46 @@ def _books_annotations_command(args: argparse.Namespace) -> int:
         kwargs["annotations_db_path"] = Path(args.annotations_db).expanduser()
     payload = list_book_annotations(args.handle, **kwargs)
     log_result("books.annotations", payload)
+    _print_json(payload)
+    return 0
+
+
+def _podcasts_search_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {"limit": args.limit}
+    if args.db:
+        kwargs["db_path"] = Path(args.db).expanduser()
+    payload = search_podcasts(args.query, **kwargs)
+    log_result("podcasts.search", payload)
+    _print_json(payload)
+    return 0
+
+
+def _podcasts_get_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {}
+    if args.db:
+        kwargs["db_path"] = Path(args.db).expanduser()
+    payload = get_podcast_show(args.handle, **kwargs)
+    log_result("podcasts.get", payload)
+    _print_json(payload)
+    return 0
+
+
+def _podcasts_episodes_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {"limit": args.limit}
+    if args.db:
+        kwargs["db_path"] = Path(args.db).expanduser()
+    payload = list_podcast_episodes(args.handle, **kwargs)
+    log_result("podcasts.episodes", payload)
+    _print_json(payload)
+    return 0
+
+
+def _podcasts_episode_command(args: argparse.Namespace) -> int:
+    kwargs: dict[str, Any] = {"max_chars": args.max_chars}
+    if args.db:
+        kwargs["db_path"] = Path(args.db).expanduser()
+    payload = get_podcast_episode(args.handle, **kwargs)
+    log_result("podcasts.episode", payload)
     _print_json(payload)
     return 0
 
@@ -1493,6 +1539,55 @@ def build_parser() -> argparse.ArgumentParser:
     books_annotations.add_argument("--library-db", help=argparse.SUPPRESS)
     books_annotations.add_argument("--annotations-db", help=argparse.SUPPRESS)
     books_annotations.set_defaults(func=_books_annotations_command)
+
+    podcasts = subparsers.add_parser(
+        "podcasts",
+        help="Apple Podcasts metadata and selected episode commands.",
+    )
+    podcasts_subparsers = podcasts.add_subparsers(dest="podcasts_command", required=True)
+
+    podcasts_search = podcasts_subparsers.add_parser(
+        "search",
+        help="Search Apple Podcasts show metadata by title, author, category, or provider.",
+    )
+    podcasts_search.add_argument("--json", action="store_true", help="Emit JSON output.")
+    podcasts_search.add_argument(
+        "--query",
+        required=True,
+        help="Show title, author, category, or provider query text.",
+    )
+    podcasts_search.add_argument("--limit", type=int, default=20, help="Maximum results, capped at 50.")
+    podcasts_search.add_argument("--db", help=argparse.SUPPRESS)
+    podcasts_search.set_defaults(func=_podcasts_search_command)
+
+    podcasts_get = podcasts_subparsers.add_parser(
+        "get",
+        help="Get exact Apple Podcasts show metadata by handle.",
+    )
+    podcasts_get.add_argument("--json", action="store_true", help="Emit JSON output.")
+    podcasts_get.add_argument("--handle", required=True, help="Show handle from search output.")
+    podcasts_get.add_argument("--db", help=argparse.SUPPRESS)
+    podcasts_get.set_defaults(func=_podcasts_get_command)
+
+    podcasts_episodes = podcasts_subparsers.add_parser(
+        "episodes",
+        help="List bounded episode metadata for one exact selected Apple Podcasts show handle.",
+    )
+    podcasts_episodes.add_argument("--json", action="store_true", help="Emit JSON output.")
+    podcasts_episodes.add_argument("--handle", required=True, help="Show handle from search output.")
+    podcasts_episodes.add_argument("--limit", type=int, default=20, help="Maximum episodes, capped at 50.")
+    podcasts_episodes.add_argument("--db", help=argparse.SUPPRESS)
+    podcasts_episodes.set_defaults(func=_podcasts_episodes_command)
+
+    podcasts_episode = podcasts_subparsers.add_parser(
+        "episode",
+        help="Get exact Apple Podcasts episode metadata and bounded description by handle.",
+    )
+    podcasts_episode.add_argument("--json", action="store_true", help="Emit JSON output.")
+    podcasts_episode.add_argument("--handle", required=True, help="Episode handle from episodes output.")
+    podcasts_episode.add_argument("--max-chars", type=int, default=4000, help="Maximum description characters, capped at 12000.")
+    podcasts_episode.add_argument("--db", help=argparse.SUPPRESS)
+    podcasts_episode.set_defaults(func=_podcasts_episode_command)
 
     notes = subparsers.add_parser("notes", help="Apple Notes metadata commands.")
     notes_subparsers = notes.add_subparsers(dest="notes_command", required=True)

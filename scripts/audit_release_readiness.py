@@ -65,6 +65,7 @@ REQUIRED_FILES = (
     "docs/V1_25_SAFARI_BOOKMARKS.md",
     "docs/V1_26_SHORTCUTS_METADATA.md",
     "docs/V1_27_BOOKS_METADATA.md",
+    "docs/V1_28_PODCASTS_METADATA.md",
     "docs/WRITE_TOOL_ROADMAP.md",
     "docs/PUBLISHING.md",
     "docs/PRIVACY_MODEL.md",

@@ -13,6 +13,7 @@ This project provides a privacy-gated CLI and MCP server for locally synced:
 - Safari bookmarks and Reading List items synced locally through Safari/iCloud
 - Apple Shortcuts shortcut and folder metadata through the local `shortcuts` CLI
 - Apple Books library metadata and selected-book annotations synced through Books/iCloud
+- Apple Podcasts show and episode metadata synced through Podcasts/iCloud
 - Apple Notes
 - Apple Calendar
 - Apple Reminders
@@ -24,12 +25,12 @@ The current release is local-only and read-mostly. The only apply-capable mutati
 
 ## Current Status
 
-The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, or Messages send-text apply operation generated from a matching plan.
+The MCP server, local skill/plugin packaging, exact-handle content/detail/export retrieval, approved Reminders, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, and Messages send-text apply paths, and synthetic runtime verification paths are implemented for the surfaces listed below. Real-machine smoke stays schema-only unless a user intentionally requests a specific metadata search, provides/selects a specific Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Notes, Calendar, Reminders, Contacts, Photos, or iCloud Drive handle for content/detail/export retrieval, or explicitly approves a Reminder, iCloud Drive, Calendar, Contacts, Notes, Mail draft, Photos import, or Messages send-text apply operation generated from a matching plan.
 
 Implemented now:
 
 - Repo guidance and privacy model
-- `local-apple-data health --json` with redacted broad-surface readiness summaries, schema-only Mail/Messages/Voice Memos/Books/Notes/Reminders checks, Safari bookmarks and iCloud Drive root checks, Shortcuts CLI availability, and non-prompting access requirements for framework-backed surfaces
+- `local-apple-data health --json` with redacted broad-surface readiness summaries, schema-only Mail/Messages/Voice Memos/Books/Podcasts/Notes/Reminders checks, Safari bookmarks and iCloud Drive root checks, Shortcuts CLI availability, and non-prompting access requirements for framework-backed surfaces
 - `local-apple-data doctor --json` with redacted non-mutating remediation guidance
 - `local-apple-data mail search/get` metadata commands
 - Metadata-only `content_status` hints in Mail search results so agents can prefer locally retrievable messages before exact content calls
@@ -48,6 +49,7 @@ Implemented now:
 - `local-apple-data safari search/get` commands for local Safari bookmarks and Reading List title/URL metadata plus exact selected URL detail by opaque handle
 - `local-apple-data shortcuts search/get` commands for local Apple Shortcuts shortcut/folder name metadata by opaque handle, without running, opening, signing, exporting, or returning shortcut bodies
 - `local-apple-data books search/get/annotations` commands for local Apple Books title/author/genre metadata and exact selected-book annotation text by opaque handle, without extracting book/chapter text or returning raw asset IDs, annotation UUIDs, or local file paths
+- `local-apple-data podcasts search/get/episodes/episode` commands for local Apple Podcasts show metadata, selected-show episode metadata, and exact selected-episode bounded descriptions by opaque handle, without returning transcripts, audio bytes, feed/enclosure URLs, raw identifiers, or local download paths
 - `local-apple-data notes search/get` metadata commands
 - `local-apple-data notes content --json --handle <notes:note:v2:...> --max-chars 4000 --offset 0` for exact-handle local Notes plain-text content, with `next_offset` pagination for long imported notes
 - `local-apple-data notes attachments --json --handle <notes:note:v2:...>` for exact selected-note attachment metadata with opaque `notes:attachment:v1:` handles
@@ -83,7 +85,7 @@ Implemented now:
 - Local plugin manifest under `.codex-plugin/plugin.json`
 - Bundled MCP config under `.mcp.json`
 - Redacted command event logging
-- Opaque signed handles for exact Mail/Messages/Voice Memos/Safari/Shortcuts/Books/Notes/Calendar/Contacts/Photos/Reminders/iCloud Drive metadata fetches
+- Opaque signed handles for exact Mail/Messages/Voice Memos/Safari/Shortcuts/Books/Podcasts/Notes/Calendar/Contacts/Photos/Reminders/iCloud Drive metadata fetches
 - Exact Mail content retrieval through the same opaque `mail:message:v2:` handles
 - Exact Messages chat transcript retrieval through opaque `messages:chat:v1:` handles, using local text plus bounded `attributedBody` plaintext fallback when available
 - Exact Messages attachment metadata/export through opaque `messages:chat:v1:` and `messages:attachment:v1:` handles
@@ -93,6 +95,7 @@ Implemented now:
 - Exact Safari bookmark and Reading List URL detail retrieval through opaque `safari:item:v1:` handles without returning full URLs in search results
 - Exact Shortcuts shortcut/folder metadata retrieval through opaque `shortcuts:item:v1:` handles without returning raw identifiers or shortcut bodies
 - Exact Apple Books metadata and selected-book annotation retrieval through opaque `books:book:v1:` handles without returning raw Books identifiers, local paths, or book/chapter text
+- Exact Apple Podcasts show metadata, selected-show episode metadata, and selected-episode bounded descriptions through opaque `podcasts:show:v1:` and `podcasts:episode:v1:` handles without returning transcripts, audio bytes, feed/enclosure URLs, raw identifiers, or local download paths
 - Exact iCloud Drive text-file retrieval through opaque `icloud:file:v1:` handles
 - Exact Calendar event detail retrieval through opaque `calendar:event:v1:` handles
 - Exact Contact detail retrieval through opaque `contacts:contact:v1:` handles
@@ -119,7 +122,7 @@ Implemented now:
 Deferred:
 
 - Any mutating tools other than the approved Reminders create/complete/due-date apply surface, iCloud Drive create/append-text apply surface, Calendar create-event apply surface, Contacts create-contact apply surface, Notes create/append-text apply surface, Mail create-draft apply surface, Photos import apply surface, and Messages send-text apply surface
-- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages direct-recipient send/new-chat/SMS-fallback selection/edit/delete/reaction/tapback/file-send/other mutation, broad Messages attachment export, Messages attachment mutation, Voice Memos mutation or attachments, Safari history/open-tabs/passwords/private-browsing data/bookmark mutation, Shortcuts run/open/view/sign/export/body/action-graph/mutation, Books book/chapter/PDF/EPUB text extraction, broad annotation dumps/search, raw Books paths/identifiers, or mutation, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
+- Mail send/reply/forward/archive/move/delete/mark/flag/mailbox/account mutation, Mail attachment mutation, broad Mail attachment export, Calendar update/delete/recurrence/attendees/alarms/all-day/default-calendar guessing, Contacts update/delete/merge/move/group membership/postal-address/birthday/relationship/social-profile/notes/image mutation, Notes arbitrary update/delete/move/folder-account/rich-text/attachment mutation, Notes broad attachment export, locked/shared-note mutation, Photos edit/delete/album/hidden/favorite/metadata mutation, Photos network iCloud fetch, Messages direct-recipient send/new-chat/SMS-fallback selection/edit/delete/reaction/tapback/file-send/other mutation, broad Messages attachment export, Messages attachment mutation, Voice Memos mutation or attachments, Safari history/open-tabs/passwords/private-browsing data/bookmark mutation, Shortcuts run/open/view/sign/export/body/action-graph/mutation, Books book/chapter/PDF/EPUB text extraction, broad annotation dumps/search, raw Books paths/identifiers, or mutation, Podcasts transcript/audio/feed/enclosure URL extraction, broad episode-description dumps/search, raw Podcasts identifiers/paths, iCloud media fetch, Podcasts.app automation, or mutation, Reminders delete/bulk/list/account mutation or attachments, iCloud Drive overwrite/rename/move/copy/delete/binary/document writes, authoritative Hide My Email inventory, Hide My Email creation/deactivation/deletion, private iCloud web/API access, browser/keychain credential access, generated Voice Memos transcription, broad content search, broad Messages text search, broad Voice Memos transcript search, unsupported/binary iCloud Drive content extraction, and durable content caches
 
 The v1.1 design gate for exact-handle Mail content retrieval is documented in `docs/V1_1_CONTENT_RETRIEVAL_PLAN.md`.
 The v1.2 Notes content and broader local Apple data expansion plan is documented in `docs/V1_2_NOTES_CONTENT_AND_APPLE_DATA_EXPANSION_PLAN.md`.
@@ -144,6 +147,7 @@ The first Messages send-text write design gate is documented in `docs/V1_24_MESS
 The Safari bookmarks and Reading List read gate is documented in `docs/V1_25_SAFARI_BOOKMARKS.md`.
 The Shortcuts metadata read gate is documented in `docs/V1_26_SHORTCUTS_METADATA.md`.
 The Apple Books metadata and selected annotations read gate is documented in `docs/V1_27_BOOKS_METADATA.md`.
+The Apple Podcasts metadata read gate is documented in `docs/V1_28_PODCASTS_METADATA.md`.
 The publication checklist is documented in `docs/PUBLISHING.md`.
 The public install guide is documented in `docs/INSTALL.md`.
 Synthetic sample outputs are documented in `docs/SAMPLE_OUTPUTS.md`.
@@ -189,6 +193,13 @@ uv run local-apple-data safari search --json --query '<bookmark title or URL tex
 uv run local-apple-data safari get --json --handle '<safari:item:v1:...>'
 uv run local-apple-data shortcuts search --json --query '<shortcut or folder name text>'
 uv run local-apple-data shortcuts get --json --handle '<shortcuts:item:v1:...>'
+uv run local-apple-data books search --json --query '<book title or author text>'
+uv run local-apple-data books get --json --handle '<books:book:v1:...>'
+uv run local-apple-data books annotations --json --handle '<books:book:v1:...>' --max-chars 4000
+uv run local-apple-data podcasts search --json --query '<podcast show title or author text>'
+uv run local-apple-data podcasts get --json --handle '<podcasts:show:v1:...>'
+uv run local-apple-data podcasts episodes --json --handle '<podcasts:show:v1:...>'
+uv run local-apple-data podcasts episode --json --handle '<podcasts:episode:v1:...>' --max-chars 4000
 uv run local-apple-data notes search --json --query '<title or snippet text>'
 uv run local-apple-data notes content --json --handle '<notes:note:v2:...>' --max-chars 4000 --offset 0
 uv run local-apple-data notes attachments --json --handle '<notes:note:v2:...>'
@@ -238,9 +249,9 @@ uv run python scripts/verify_cross_agent_sync.py --require-cursor
 uv run python scripts/verify_cross_agent_sync.py --cursor-config .cursor/mcp.json --require-cursor
 ```
 
-The health command reports redacted local readiness only. Search commands may print local metadata such as subjects, Messages chat display names, masked inferred Hide My Email alias previews, Voice Memo titles, Safari bookmark titles/domains, Shortcuts names, Books titles/authors/genres, note titles/snippets, calendar event titles, contact names/organizations, Photos filenames, iCloud Drive filenames, and reminder titles, so run them only for an intentional user-requested workflow. The Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail/export commands may print bounded local text, exact selected alias or URL detail, Books selected-book annotations, asset/resource metadata, or caller-selected export paths and should be run only with an exact handle selected from metadata output.
+The health command reports redacted local readiness only. Search commands may print local metadata such as subjects, Messages chat display names, masked inferred Hide My Email alias previews, Voice Memo titles, Safari bookmark titles/domains, Shortcuts names, Books titles/authors/genres, Podcasts show titles/authors/categories/providers, note titles/snippets, calendar event titles, contact names/organizations, Photos filenames, iCloud Drive filenames, and reminder titles, so run them only for an intentional user-requested workflow. The Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive content/detail/export commands may print bounded local text, exact selected alias or URL detail, Books selected-book annotations, Podcasts selected-episode descriptions, asset/resource metadata, or caller-selected export paths and should be run only with an exact handle selected from metadata output.
 
-Search handles are opaque and are generated from a local secret under the plugin state directory. They are not reusable credentials and are not logged. Mail search results include a best-effort metadata-only `content_status` hint of `available`, `unavailable`, or `unknown`; the hint checks local content-file availability without reading message bodies. Hide My Email results are inferred from local Mail address metadata and set `authoritative_inventory:false`; they are not an iCloud account inventory or management API. Safari search returns titles and URL metadata such as domain/scheme/query presence, not full URLs. Shortcuts search returns names only, not raw identifiers or shortcut bodies. Books search returns title/author/genre metadata and annotation counts only, not annotation text, book text, raw identifiers, or local paths. Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive retrieval reject raw row IDs, older handle formats, mailbox refs, direct paths, raw framework identifiers, raw Hide My Email identifiers, raw Books identifiers, and arbitrary inputs.
+Search handles are opaque and are generated from a local secret under the plugin state directory. They are not reusable credentials and are not logged. Mail search results include a best-effort metadata-only `content_status` hint of `available`, `unavailable`, or `unknown`; the hint checks local content-file availability without reading message bodies. Hide My Email results are inferred from local Mail address metadata and set `authoritative_inventory:false`; they are not an iCloud account inventory or management API. Safari search returns titles and URL metadata such as domain/scheme/query presence, not full URLs. Shortcuts search returns names only, not raw identifiers or shortcut bodies. Books search returns title/author/genre metadata and annotation counts only, not annotation text, book text, raw identifiers, or local paths. Podcasts search returns show metadata only; episode descriptions require exact episode handles and transcripts, audio bytes, feed/enclosure URLs, raw identifiers, and local download paths are not returned. Mail, Messages, inferred Hide My Email, Voice Memos, Safari, Shortcuts, Books, Podcasts, Notes, Calendar, Contacts, Photos, Reminders, and iCloud Drive retrieval reject raw row IDs, older handle formats, mailbox refs, direct paths, raw framework identifiers, raw Hide My Email identifiers, raw Books identifiers, raw Podcasts identifiers, and arbitrary inputs.
 
 ## Safety Model
 
