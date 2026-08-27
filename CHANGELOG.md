@@ -2,6 +2,30 @@
 
 All notable public-release changes are tracked here.
 
+## 0.1.0+codex.20260827012955 - 2026-08-26
+
+Public-CI runtime-verifier hermeticity fix. No tool or Apple-data surface was
+added.
+
+### Fixed
+
+- Replaced host-dependent Mail, Calendar, and Contacts assumptions in the MCP
+  semantic smoke with bounded synthetic adapters. Clean macOS runners now prove
+  exact successful ISO-date forwarding and normalized bounds, Calendar
+  plan/apply binding, and positive/truncated Contacts-count transport without
+  requiring a locally synced Mail store or Apple-framework grants.
+- Kept the real plugin launcher in the runtime gate through a separate 151-tool
+  initialization plus deterministic Mail/Calendar/Contacts refusal checks, and
+  kept MCP exception redaction/transport covered by the injected-error smoke.
+- Added Messages helper typechecking to CI and the canonical testing commands so
+  all four Swift helpers are covered in both local and public gates.
+
+### Verified
+
+- Focused regression and hermetic local runtime verification pass. The complete
+  source receipt and required installed-cache, sanitized-public, and public-CI
+  release gates are recorded in the newest implementation-log entry.
+
 ## 0.1.0+codex.20260827004316 - 2026-08-26
 
 Recovery-closeout truth reconciliation and release hardening. No tool or Apple

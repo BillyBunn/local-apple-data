@@ -335,6 +335,80 @@ from local_apple_data.adapters.voice_memos import (
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+_MCP_RUNTIME_FIXTURE_SERVER = r"""
+import os
+from pathlib import Path
+
+from scripts import verify_runtime as fixture
+from local_apple_data import mcp_server
+
+mail_db = Path(os.environ["LOCAL_APPLE_DATA_RUNTIME_MAIL_DB"])
+mail_root = Path(os.environ["LOCAL_APPLE_DATA_RUNTIME_MAIL_ROOT"])
+
+
+def fixture_mail_advanced(*args, **kwargs):
+    return fixture.search_mail_advanced(
+        *args,
+        db_path=mail_db,
+        mail_root=mail_root,
+        **kwargs,
+    )
+
+
+def fixture_contacts_count(*, max_contacts=50000):
+    truncated = max_contacts < 2
+    return {
+        "schema_version": 1,
+        "status": "degraded" if truncated else "ok",
+        "source": "contacts",
+        "result_count": 1,
+        "result": {"live_count": 1, "count_complete": not truncated},
+        "warnings": (
+            [{"code": "scan_truncated", "message": "Synthetic scan truncated."}]
+            if truncated
+            else []
+        ),
+    }
+
+
+def fixture_calendar_plan(*args, **kwargs):
+    return fixture.plan_calendar_change(
+        *args,
+        eventkit_runner=fixture._calendar_runner,
+        **kwargs,
+    )
+
+
+def fixture_calendar_apply(*args, **kwargs):
+    return fixture.apply_calendar_change(
+        *args,
+        eventkit_runner=fixture._calendar_runner,
+        **kwargs,
+    )
+
+
+def fixture_health():
+    return {"schema_version": 1, "status": "degraded", "source": "health"}
+
+
+def fixture_doctor():
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "doctor",
+        "remediation_mode": "non_mutating",
+    }
+
+
+mcp_server.search_mail_advanced = fixture_mail_advanced
+mcp_server.count_contacts = fixture_contacts_count
+mcp_server.plan_calendar_change = fixture_calendar_plan
+mcp_server.apply_calendar_change = fixture_calendar_apply
+mcp_server.build_health = fixture_health
+mcp_server.build_doctor = fixture_doctor
+mcp_server.main()
+""".strip()
+
 
 def _make_mail_db(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -745,10 +819,65 @@ def _payload(result: Any) -> dict[str, Any]:
     return json.loads(result.content[0].text)
 
 
-async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
+def _mcp_mail_advanced_iso_contract(payload: dict[str, Any]) -> dict[str, Any]:
+    query = payload.get("query")
+    query = query if isinstance(query, dict) else {}
+    warnings = payload.get("warnings")
+    warnings = warnings if isinstance(warnings, list) else []
+    first_warning = warnings[0] if warnings and isinstance(warnings[0], dict) else {}
+    warning_code = str(first_warning.get("code") or "")
+    status = str(payload.get("status") or "")
+    result_count = int(payload.get("result_count") or 0)
+    after = query.get("after")
+    before = query.get("before")
+    results = payload.get("results")
+    successful = (
+        payload.get("source") == "mail"
+        and status == "ok"
+        and result_count > 0
+        and isinstance(results, list)
+        and len(results) == result_count
+        and after == 1782432000.0
+        and before == 1782863999.999
+        and warnings == []
+    )
+    return {
+        "mcp_mail_advanced_iso_status": status,
+        "mcp_mail_advanced_iso_count_positive": result_count > 0,
+        "mcp_mail_advanced_iso_after": after,
+        "mcp_mail_advanced_iso_before": before,
+        "mcp_mail_advanced_iso_warning": warning_code,
+        "mcp_mail_advanced_iso_contract_valid": successful,
+    }
+
+
+async def _mcp_launcher_smoke(env: dict[str, str]) -> dict[str, Any]:
     server = StdioServerParameters(
         command="./scripts/run_mcp_server.sh",
         args=[],
+        env=env,
+        cwd=PROJECT_ROOT,
+    )
+    with open(os.devnull, "w", encoding="utf-8") as errlog:
+        async with stdio_client(server, errlog=errlog) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                tools = await session.list_tools()
+                empty_mail = await session.call_tool("mail_search", {"query": ""})
+                wildcard_calendar = await session.call_tool("calendar_search", {"query": "%"})
+                wildcard_contacts = await session.call_tool("contacts_search", {"query": "%"})
+    return {
+        "mcp_launcher_tool_count": len(tools.tools),
+        "mcp_launcher_empty_mail": _payload(empty_mail)["warnings"][0]["code"],
+        "mcp_launcher_wildcard_calendar": _payload(wildcard_calendar)["warnings"][0]["code"],
+        "mcp_launcher_wildcard_contacts": _payload(wildcard_contacts)["warnings"][0]["code"],
+    }
+
+
+async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
+    server = StdioServerParameters(
+        command=sys.executable,
+        args=["-c", _MCP_RUNTIME_FIXTURE_SERVER],
         env=env,
         cwd=PROJECT_ROOT,
     )
@@ -763,7 +892,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
                 mcp_mail_advanced_iso = await session.call_tool(
                     "mail_search_advanced",
                     {
-                        "query": "Your",
+                        "query": "runtime verification",
                         "scopes": ["subject"],
                         "after": "2026-06-26",
                         "before": "2026-06-30",
@@ -3109,6 +3238,9 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
     mcp_contacts_count_payload = _payload(mcp_contacts_count)
     mcp_contacts_count_warnings = mcp_contacts_count_payload.get("warnings") or []
     mcp_mail_advanced_iso_payload = _payload(mcp_mail_advanced_iso)
+    mcp_mail_advanced_iso_contract = _mcp_mail_advanced_iso_contract(
+        mcp_mail_advanced_iso_payload
+    )
     mcp_calendar_recurrence_delete_plan_payload = _payload(
         mcp_calendar_recurrence_delete_plan
     )
@@ -3123,13 +3255,7 @@ async def _mcp_smoke(env: dict[str, str]) -> dict[str, Any]:
         "priority_mcp_missing_tools": missing_priority_tools,
         "mcp_mail_search_mailbox_handle_schema_present": "mailbox_handle"
         in mail_search_schema_properties,
-        "mcp_mail_advanced_iso_status": mcp_mail_advanced_iso_payload["status"],
-        "mcp_mail_advanced_iso_count_positive": int(
-            mcp_mail_advanced_iso_payload.get("result_count") or 0
-        )
-        > 0,
-        "mcp_mail_advanced_iso_after": mcp_mail_advanced_iso_payload["query"]["after"],
-        "mcp_mail_advanced_iso_before": mcp_mail_advanced_iso_payload["query"]["before"],
+        **mcp_mail_advanced_iso_contract,
         "mail_sender_search_tool_present": "mail_search_senders" in tool_map,
         "mail_sender_get_tool_present": "mail_get_sender" in tool_map,
         "mail_signature_search_tool_present": "mail_search_signatures" in tool_map,
@@ -25038,10 +25164,16 @@ def _assert_summary(summary: dict[str, Any]) -> None:
         "priority_mcp_tools_present": True,
         "priority_mcp_missing_tools": [],
         "mcp_mail_search_mailbox_handle_schema_present": True,
+        "mcp_mail_advanced_iso_contract_valid": True,
+        "mcp_launcher_tool_count": 151,
+        "mcp_launcher_empty_mail": "empty_query",
+        "mcp_launcher_wildcard_calendar": "broad_query",
+        "mcp_launcher_wildcard_contacts": "broad_query",
         "mcp_mail_advanced_iso_status": "ok",
         "mcp_mail_advanced_iso_count_positive": True,
         "mcp_mail_advanced_iso_after": 1782432000.0,
         "mcp_mail_advanced_iso_before": 1782863999.999,
+        "mcp_mail_advanced_iso_warning": "",
         "mcp_mail_error_status": "error",
         "mcp_mail_error_warning": "mcp_tool_error",
         "mcp_mail_error_output_redacted": True,
@@ -27708,6 +27840,19 @@ def main() -> None:
         env["PYTHONDONTWRITEBYTECODE"] = "1"
         env["LOCAL_APPLE_DATA_LOG_DIR"] = str(tmp_path / "logs")
         env["LOCAL_APPLE_DATA_HANDLE_SECRET"] = "synthetic-runtime-verification-secret"
+        python_paths = [str(PROJECT_ROOT), str(PROJECT_ROOT / "src")]
+        if env.get("PYTHONPATH"):
+            python_paths.append(env["PYTHONPATH"])
+        env["PYTHONPATH"] = os.pathsep.join(python_paths)
+        mcp_mail_db = tmp_path / "MCPMail/V10/MailData/Envelope Index"
+        _make_mail_db(mcp_mail_db)
+        with sqlite3.connect(mcp_mail_db) as connection:
+            connection.execute(
+                "UPDATE messages SET date_received = ?, date_sent = ? WHERE ROWID = 42",
+                (1782600000, 1782600000),
+            )
+        env["LOCAL_APPLE_DATA_RUNTIME_MAIL_DB"] = str(mcp_mail_db)
+        env["LOCAL_APPLE_DATA_RUNTIME_MAIL_ROOT"] = str(mcp_mail_db.parent.parent)
         mcp_icloud_root = tmp_path / "MCPCloudDocs"
         _make_icloud_drive_root(mcp_icloud_root)
         env["LOCAL_APPLE_DATA_ICLOUD_DRIVE_ROOT"] = str(mcp_icloud_root)
@@ -27725,7 +27870,8 @@ def main() -> None:
                 "PYTHONDONTWRITEBYTECODE": env["PYTHONDONTWRITEBYTECODE"],
             }
         )
-        summary = asyncio.run(_mcp_smoke(env))
+        summary = asyncio.run(_mcp_launcher_smoke(env))
+        summary.update(asyncio.run(_mcp_smoke(env)))
         summary.update(asyncio.run(_mcp_mail_error_transport_smoke(env, tmp_path)))
         summary.update(_handle_smoke(tmp_path))
         summary.update(_mail_attachment_smoke(tmp_path))

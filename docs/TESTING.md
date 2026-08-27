@@ -39,6 +39,7 @@ uv run python scripts/audit_surface_contract.py
 swiftc -typecheck scripts/eventkit_helper.swift
 swiftc -typecheck scripts/contacts_helper.swift
 swiftc -typecheck scripts/photos_helper.swift
+swiftc -typecheck scripts/messages_helper.swift
 cd /absolute/path/to/local-apple-data && uv run python scripts/verify_runtime.py
 cd /absolute/path/to/local-apple-data && uv run python scripts/verify_cross_agent_sync.py
 cd /absolute/path/to/local-apple-data && uv run python scripts/verify_cross_agent_sync.py --cursor-config .cursor/mcp.json --require-cursor

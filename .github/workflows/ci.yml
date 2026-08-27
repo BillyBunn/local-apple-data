@@ -33,6 +33,7 @@ jobs:
           swiftc -typecheck scripts/eventkit_helper.swift
           swiftc -typecheck scripts/contacts_helper.swift
           swiftc -typecheck scripts/photos_helper.swift
+          swiftc -typecheck scripts/messages_helper.swift
 
       - name: Runtime smoke
         run: uv run python scripts/verify_runtime.py
