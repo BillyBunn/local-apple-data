@@ -1,0 +1,6 @@
+{
+  "type": "stdio",
+  "command": "<REPO_ROOT>/scripts/run_mcp_server.sh",
+  "args": [],
+  "env": {}
+}

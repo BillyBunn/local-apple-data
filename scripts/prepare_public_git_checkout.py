@@ -3,11 +3,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import ParseResult, unquote, urlparse
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -16,6 +18,22 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 from build_public_release_tree import BuildResult, build_release_tree
+
+
+RESERVED_BRANCH_NAMES = {
+    "AUTO_MERGE",
+    "BISECT_HEAD",
+    "CHERRY_PICK_HEAD",
+    "FETCH_HEAD",
+    "HEAD",
+    "MERGE_HEAD",
+    "ORIG_HEAD",
+    "REVERT_HEAD",
+}
+
+SSH_SHORTHAND_REMOTE_RE = re.compile(
+    r"^(?P<user>[A-Za-z0-9_.-]+)@(?P<host>[A-Za-z0-9_.-]+):(?P<path>.+)$"
+)
 
 
 @dataclass(frozen=True)
@@ -43,11 +61,6 @@ def prepare_public_git_checkout(
     commit_author_name: str = "local-apple-data release",
     commit_author_email: str = "local-apple-data@example.invalid",
 ) -> PublicGitCheckoutResult:
-    release = build_release_tree(root, destination, force=force)
-    commit_sha: str | None = None
-    committed = False
-    staged_files = 0
-    remote_configured = False
     if commit and not init_git:
         raise ValueError("--commit requires --init-git")
     if init_git:
@@ -55,6 +68,15 @@ def prepare_public_git_checkout(
         if commit:
             _validate_commit_message(commit_message)
             _validate_git_identity(commit_author_name, commit_author_email)
+        if remote_url:
+            _validate_remote_url(remote_url)
+
+    release = build_release_tree(root, destination, force=force)
+    commit_sha: str | None = None
+    committed = False
+    staged_files = 0
+    remote_configured = False
+    if init_git:
         _run_git_init(release.destination, branch)
         _run(["git", "add", "."], cwd=release.destination)
         staged_files = _staged_file_count(release.destination)
@@ -67,7 +89,6 @@ def prepare_public_git_checkout(
             commit_sha = _run(["git", "rev-parse", "HEAD"], cwd=release.destination).strip()
             committed = True
         if remote_url:
-            _validate_remote_url(remote_url)
             _run(["git", "remote", "add", "origin", remote_url], cwd=release.destination)
             remote_configured = True
 
@@ -115,13 +136,79 @@ def _validate_branch(branch: str) -> None:
         raise ValueError("branch must be a non-empty single token")
     if branch.startswith("-"):
         raise ValueError("branch must not start with '-'")
+    if branch == "@" or branch.startswith("@{") or branch.startswith("refs/"):
+        raise ValueError("branch must be a plain branch name")
+    if branch in RESERVED_BRANCH_NAMES:
+        raise ValueError("branch must not use a reserved git ref name")
+    try:
+        result = subprocess.run(
+            ["git", "check-ref-format", "--allow-onelevel", branch],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        raise ValueError("branch could not be validated by git") from None
+    if result.returncode != 0:
+        raise ValueError("branch is not a valid git branch name")
 
 
 def _validate_remote_url(remote_url: str) -> None:
-    if any(char in remote_url for char in "\r\n\t"):
-        raise ValueError("remote URL must be a single line")
-    if not remote_url.strip():
+    if any(ord(char) < 32 or ord(char) == 127 for char in remote_url):
+        raise ValueError("remote URL must not contain control characters")
+    trimmed = remote_url.strip()
+    if not trimmed:
         raise ValueError("remote URL must not be empty")
+    if trimmed.startswith("-"):
+        raise ValueError("remote URL must not start with '-'")
+    if trimmed != remote_url:
+        raise ValueError("remote URL must not include surrounding whitespace")
+    if any(char.isspace() for char in remote_url):
+        raise ValueError("remote URL must not contain whitespace")
+    if not remote_url.isascii():
+        raise ValueError("remote URL must be ASCII")
+    parsed = urlparse(remote_url)
+    shorthand_match = SSH_SHORTHAND_REMOTE_RE.fullmatch(remote_url)
+    if parsed.scheme == "https" and (parsed.username or parsed.password):
+        raise ValueError("remote URL must not include credentials")
+    if parsed.scheme == "ssh" and parsed.password:
+        raise ValueError("remote URL must not include credentials")
+    host = parsed.hostname or (shorthand_match.group("host") if shorthand_match else "")
+    user = parsed.username or (shorthand_match.group("user") if shorthand_match else "")
+    if host.startswith("-") or user.startswith("-"):
+        raise ValueError("remote URL user and host must not start with '-'")
+    if unquote(host).startswith("-") or unquote(user).startswith("-"):
+        raise ValueError("remote URL user and host must not start with '-'")
+    if shorthand_match and shorthand_match.group("path").startswith("-"):
+        raise ValueError("remote URL path must not start with '-'")
+    if not _remote_url_uses_allowed_transport(parsed, shorthand_match):
+        raise ValueError("remote URL must use https://, ssh://, or user@host:path")
+
+
+def validate_remote_url(remote_url: str) -> None:
+    _validate_remote_url(remote_url)
+
+
+def validated_remote_host(remote_url: str) -> str:
+    _validate_remote_url(remote_url)
+    parsed = urlparse(remote_url)
+    shorthand_match = SSH_SHORTHAND_REMOTE_RE.fullmatch(remote_url)
+    host = parsed.hostname or (shorthand_match.group("host") if shorthand_match else "")
+    return host.lower()
+
+
+def _remote_url_uses_allowed_transport(
+    parsed: ParseResult, shorthand_match: re.Match[str] | None
+) -> bool:
+    if parsed.scheme:
+        return (
+            parsed.scheme in {"https", "ssh"}
+            and bool(parsed.netloc)
+            and bool(parsed.path and parsed.path != "/")
+        )
+    return shorthand_match is not None
 
 
 def _validate_commit_message(commit_message: str) -> None:
@@ -165,7 +252,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true", help="Replace an existing destination.")
     parser.add_argument("--init-git", action="store_true", help="Initialize git and stage files.")
     parser.add_argument("--branch", default="main", help="Branch name for --init-git.")
-    parser.add_argument("--remote-url", default="", help="Optional origin remote URL for --init-git.")
+    parser.add_argument(
+        "--remote-url",
+        default="",
+        help="Optional HTTPS/SSH origin remote URL for --init-git.",
+    )
     parser.add_argument("--commit", action="store_true", help="Create an initial local commit after staging.")
     parser.add_argument(
         "--commit-message",
@@ -198,8 +289,11 @@ def main(argv: list[str] | None = None) -> int:
             commit_author_name=args.commit_author_name,
             commit_author_email=args.commit_author_email,
         )
-    except (RuntimeError, ValueError) as exc:
-        print(f"public git checkout preparation failed: {exc}", file=sys.stderr)
+    except (RuntimeError, ValueError, OSError) as exc:
+        print(
+            f"public git checkout preparation failed: {type(exc).__name__}",
+            file=sys.stderr,
+        )
         return 1
 
     payload = _payload(result)

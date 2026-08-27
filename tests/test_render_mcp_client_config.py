@@ -124,6 +124,24 @@ def test_main_can_print_compact_server_only_json(tmp_path: Path, capsys) -> None
     assert output.count("\n") == 1
 
 
+def test_main_redacts_missing_runner_failure(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    try:
+        render_mcp_client_config.render_config(client="generic", project_root=tmp_path)
+    except ValueError as exc:
+        assert "runner" in str(exc)
+    else:
+        raise AssertionError("expected missing runner failure")
+
+    status = render_mcp_client_config.main(["--project-root", str(tmp_path)])
+
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert captured.err == "MCP config render failed: ValueError\n"
+    assert str(tmp_path) not in captured.err
+    assert "runner" not in captured.err
+
+
 def test_render_config_fails_when_runner_missing(tmp_path: Path) -> None:
     try:
         render_mcp_client_config.render_config(client="generic", project_root=tmp_path)

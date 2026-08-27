@@ -68,6 +68,10 @@ def render_config(
     return {"mcpServers": {SERVER_NAME: server}}
 
 
+def _exception_class_name(exc: Exception) -> str:
+    return type(exc).__name__
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Render local-apple-data MCP client config JSON.")
     parser.add_argument(
@@ -108,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
                 absolute=args.absolute,
             )
     except ValueError as exc:
-        print(f"MCP config render failed: {exc}", file=sys.stderr)
+        print(f"MCP config render failed: {_exception_class_name(exc)}", file=sys.stderr)
         return 1
 
     if args.compact:

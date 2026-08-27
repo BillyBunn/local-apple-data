@@ -6,7 +6,7 @@ Approved write tools: `local-apple-data icloud-drive apply` and `icloud_drive_ap
 
 No new write tool names are approved or exposed by this document. The existing `local-apple-data icloud-drive plan` and `icloud_drive_plan_change` tools now support `operation: append_text` as a non-mutating preview, and the existing apply tools now support the matching approved append operation.
 
-This document defines the second iCloud Drive write lane: append bounded UTF-8 text to one supported text-like file selected by exact opaque `icloud:file:v1:` handle, with preview as the default behavior, expected-current-SHA-256 drift refusal on apply, and independent read_back verification after apply.
+This document defines the second iCloud Drive write lane: append bounded UTF-8 text to one supported text-like file selected by exact opaque `icloud:file:v1:` handle, with preview as the default behavior, expected-current-SHA-256 drift refusal on apply, same-directory temp replacement that preserves existing file bytes and adds normalized appended text, a final pre-replace SHA recheck, and independent read_back verification after apply.
 
 ## Scope
 
@@ -21,7 +21,7 @@ Allowed:
 Blocked:
 
 - Raw local paths, hidden files, symlinks, package traversal, broad folder writes, recursive operations, and unsupported file types.
-- Overwrite, rename, move, copy, delete, binary/document generation, and durable content caches.
+- Overwrite outside the exact replace-text gate, rename/copy/move outside v1.54 exact text-file gates, delete outside the exact trash-text gate, binary/document generation, and durable content caches.
 - Broad content search, arbitrary document extraction, and background indexing.
 
 ## Tool Contract
@@ -73,8 +73,9 @@ Apply requirements:
 - Reject directories, hidden files, symlinks, binary files, unsupported suffixes, missing targets, and unreadable files.
 - Normalize current text the same way exact content retrieval does before computing the current SHA-256.
 - Refuse to append when the current SHA-256 differs from `expected_current_sha256`.
-- Append bounded UTF-8 text only after all checks pass.
+- Write original existing bytes plus normalized appended text through a same-directory temporary file and final no-follow expected-SHA recheck so concurrent drift is refused before replacement; existing file bytes and line endings are not canonicalized by append.
 - Read back the changed file and return the new normalized content SHA-256.
+- Return `partial` with `read_back_mismatch` if read-back does not match the approved post-append hash.
 - Do not log handles, content, content hashes, filenames, raw paths, approval fingerprints, or approval tokens.
 
 ## Implementation Boundary
@@ -82,7 +83,7 @@ Apply requirements:
 Use the existing Python iCloud Drive adapter for this operation:
 
 - iCloud Drive files are exposed locally through the filesystem under CloudDocs.
-- Python `pathlib` and standard file APIs are sufficient for bounded UTF-8 append and post-append read-back.
+- Python filesystem APIs, no-follow reads, same-directory temp files, and `os.replace` are sufficient for bounded UTF-8 append semantics and post-append read-back.
 - Adding Swift would add process overhead and another failure mode without improving privacy, performance, or durability for this filesystem operation.
 - Swift remains the right boundary for EventKit, Contacts, and PhotoKit operations.
 
@@ -115,6 +116,8 @@ The apply path must be retry-safe:
 
 - A retry before apply recomputes the same plan and token.
 - A retry after successful append with the same expected current hash refuses with `current_content_changed`, forcing the caller to re-read exact content and plan again.
+- A concurrent edit between the first current-hash check and the visible update is refused by a second no-follow current-hash check immediately before `os.replace`; the temp file is removed on refusal.
+- Existing bytes are preserved during append even though current-state SHA and read-back SHA are computed from normalized text, matching exact content retrieval semantics.
 - If the append call returns an uncertain status, the caller must re-read exact content by handle and compare content hashes before retrying.
 
 Append is intentionally not made silently idempotent because that would require storing or replaying prior content. Hash drift refusal is safer and easier to audit.
@@ -138,6 +141,7 @@ Stable warning codes:
 - `current_content_changed`
 - `append_error`
 - `read_back_unavailable`
+- `read_back_mismatch`
 
 Warnings must use safe generic messages and no raw local paths or exception text.
 
@@ -147,8 +151,9 @@ Before exposure, the iCloud Drive append implementation must add:
 
 - Preview success tests for exact-handle append planning.
 - Preview rejection tests for missing file handle, missing expected hash, bad hash, unexpected parent/filename, empty content, oversized content, and invalid handles.
-- Apply rejection tests for missing confirmation, invalid token, missing target, unsupported file type, unreadable target, hash drift, and unavailable root.
+- Apply rejection tests for missing confirmation, invalid token, missing target, unsupported file type, invalid UTF-8, unreadable target, symlink/package traversal, hash drift, concurrent drift immediately before replace, and unavailable root.
 - Apply success tests proving bounded append and read-back hash verification.
+- Partial-read-back tests for `read_back_unavailable` and `read_back_mismatch`.
 - CLI tests for `icloud-drive plan/apply --operation append-text`.
 - Runtime verifier coverage for append plan/apply success and stale-hash refusal.
 - Redacted log tests proving no handle, content, hash, raw path, or approval-token persistence.
@@ -157,4 +162,4 @@ Before exposure, the iCloud Drive append implementation must add:
 
 ## Current Non-Goals
 
-The current release allows iCloud Drive create-text and append-text apply only. iCloud Drive overwrite, rename, move, copy, delete, binary/document generation, broad folder writes, raw path writes, hidden-file writes, symlink/package traversal, and every other mutation class remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+The v1.18 release allowed iCloud Drive create-text and append-text apply only. Later iCloud Drive replace-text is governed separately by `docs/V1_51_ICLOUD_DRIVE_REPLACE_WRITE_DESIGN.md`, create-folder is governed separately by `docs/V1_52_ICLOUD_DRIVE_FOLDER_CREATE_WRITE_DESIGN.md`; create-folder-path is governed separately by `docs/V1_157_ICLOUD_DRIVE_FOLDER_PATH_CREATE_WRITE_DESIGN.md`, trash-text is governed separately by `docs/V1_53_ICLOUD_DRIVE_TRASH_WRITE_DESIGN.md`, rename/copy/move is governed separately by `docs/V1_54_ICLOUD_DRIVE_RENAME_COPY_MOVE_WRITE_DESIGN.md`, exact folder rename by `docs/V1_60_ICLOUD_DRIVE_FOLDER_RENAME_WRITE_DESIGN.md` plus `docs/V1_145_ICLOUD_DRIVE_NON_EMPTY_FOLDER_RENAME_MOVE_WRITE_DESIGN.md`, exact folder Trash by `docs/V1_61_ICLOUD_DRIVE_FOLDER_TRASH_WRITE_DESIGN.md` plus `docs/V1_146_ICLOUD_DRIVE_NON_EMPTY_FOLDER_TRASH_WRITE_DESIGN.md`, exact folder move by `docs/V1_62_ICLOUD_DRIVE_FOLDER_MOVE_WRITE_DESIGN.md` plus `docs/V1_145_ICLOUD_DRIVE_NON_EMPTY_FOLDER_RENAME_MOVE_WRITE_DESIGN.md`, exact selected-folder copy by `docs/V1_63_ICLOUD_DRIVE_FOLDER_COPY_WRITE_DESIGN.md` plus `docs/V1_147_ICLOUD_DRIVE_NON_EMPTY_FOLDER_COPY_WRITE_DESIGN.md`, and exact selected-folder delete by `docs/V1_67_ICLOUD_DRIVE_FOLDER_DELETE_WRITE_DESIGN.md`. File permanent delete outside exact delete-text/delete-file gates, empty Trash, unbounded recursive folder copy/delete, binary/document generation, recursive folder writes, raw path writes, hidden-file writes, symlink/package traversal, content replacement outside the exact replace-text gate, and every other mutation class remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from local_apple_data import redacted_log
 from local_apple_data.redacted_log import log_result
 
 
@@ -636,3 +637,113 @@ def test_log_result_excludes_mail_attachment_export_content(
     assert "do-not-log-mail-packet.pdf" not in text
     assert "/do/not/log/exported" not in text
     assert "do not log warning" not in text
+
+def _use_default_log_dir(tmp_path: Path, monkeypatch) -> Path:
+    """Point the *default* log location at a temp dir.
+
+    The mode fixes are deliberately gated on the default location, so a test that only
+    sets LOCAL_APPLE_DATA_LOG_DIR exercises the override path and proves nothing about
+    them. The autouse fixture in conftest sets that variable for every test, so it has
+    to be removed here as well.
+    """
+
+    # Deliberately NOT tmp_path/"state": conftest points LOCAL_APPLE_DATA_STATE_DIR there,
+    # and handles.py chmods that directory to 0700 when a handle is minted. Sharing it
+    # would let the 0700 assertion below be satisfied by handles.py rather than by
+    # write_event, and would make mkdir() in these tests race an existing directory.
+    default = tmp_path / "default-log"
+    monkeypatch.delenv("LOCAL_APPLE_DATA_LOG_DIR", raising=False)
+    monkeypatch.setattr(redacted_log, "DEFAULT_LOG_DIR", default)
+    return default
+
+
+def test_default_log_file_and_directory_are_operator_private(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    default = _use_default_log_dir(tmp_path, monkeypatch)
+
+    log_result("mail.search", {"schema_version": 1, "status": "ok"})
+
+    log_path = default / "events.jsonl"
+    assert log_path.is_file()
+    assert log_path.stat().st_mode & 0o777 == 0o600
+    assert default.stat().st_mode & 0o777 == 0o700
+
+
+def test_default_log_permissions_are_repaired_when_already_permissive(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    default = _use_default_log_dir(tmp_path, monkeypatch)
+    default.mkdir()
+    default.chmod(0o755)
+    log_path = default / "events.jsonl"
+    log_path.write_text("", encoding="utf-8")
+    log_path.chmod(0o644)
+
+    log_result("mail.search", {"schema_version": 1, "status": "ok"})
+
+    # A log created before this rule existed is 0644 on disk, so the fix is applied on
+    # every write rather than only at creation.
+    assert log_path.stat().st_mode & 0o777 == 0o600
+    assert default.stat().st_mode & 0o777 == 0o700
+
+
+def test_operator_chosen_log_dir_modes_are_left_alone(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    custom = tmp_path / "operator-chosen"
+    custom.mkdir()
+    custom.chmod(0o750)
+    log_path = custom / "events.jsonl"
+    log_path.write_text("", encoding="utf-8")
+    log_path.chmod(0o640)
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(custom))
+
+    log_result("mail.search", {"schema_version": 1, "status": "ok"})
+
+    # LOCAL_APPLE_DATA_LOG_DIR is an operator override. Forcing modes there would
+    # clobber a deliberately group-readable log and could re-widen a sealed directory,
+    # so the mode fixes must not touch it.
+    assert log_path.stat().st_mode & 0o777 == 0o640
+    assert custom.stat().st_mode & 0o777 == 0o750
+    assert log_path.read_text(encoding="utf-8").strip() != ""
+
+
+def test_default_log_symlink_target_mode_is_not_rewritten(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    default = _use_default_log_dir(tmp_path, monkeypatch)
+    default.mkdir()
+    victim = tmp_path / "victim.txt"
+    victim.write_text("", encoding="utf-8")
+    victim.chmod(0o644)
+    (default / "events.jsonl").symlink_to(victim)
+
+    log_result("mail.search", {"schema_version": 1, "status": "ok"})
+
+    # chmod follows symlinks; without the is_symlink guard this would rewrite the
+    # target's mode.
+    assert victim.stat().st_mode & 0o777 == 0o644
+
+
+def test_log_result_survives_unwritable_log_directory(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    custom = tmp_path / "sealed"
+    custom.mkdir()
+    custom.chmod(0o500)
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(custom))
+
+    try:
+        # Logging must never raise into the data access command.
+        log_result("mail.search", {"schema_version": 1, "status": "ok"})
+        # Prove the failure path was actually reached rather than silently repaired:
+        # nothing may be written into a directory the process cannot write to.
+        assert not (custom / "events.jsonl").exists()
+    finally:
+        custom.chmod(0o700)

@@ -5,6 +5,7 @@ import sqlite3
 import struct
 from pathlib import Path
 
+import local_apple_data.adapters.voice_memos as voice_memos_adapter
 from local_apple_data.adapters.voice_memos import (
     export_voice_memo_audio,
     get_voice_memo_recording,
@@ -254,7 +255,33 @@ def test_export_voice_memo_audio_rejects_invalid_handle(tmp_path: Path) -> None:
 
     assert result["status"] == "error"
     assert result["privacy"]["output_tier"] == "export"
+    assert result["privacy"]["content_exported"] is False
     assert result["warnings"][0]["code"] == "invalid_handle"
+
+
+def test_export_voice_memo_audio_reports_missing_audio_without_export(
+    tmp_path: Path,
+) -> None:
+    recordings_dir = tmp_path / "Recordings"
+    db_path = recordings_dir / "CloudRecordings.db"
+    recordings_dir.mkdir()
+    _make_voice_memos_db(db_path, recordings_dir)
+    search = search_voice_memos("Planning", db_path=db_path, recordings_dir=recordings_dir)
+    handle = search["results"][0]["handle"]
+    (recordings_dir / "synthetic-planning.m4a").unlink()
+
+    result = export_voice_memo_audio(
+        handle,
+        output_dir=tmp_path / "exports",
+        db_path=db_path,
+        recordings_dir=recordings_dir,
+    )
+
+    assert result["status"] == "export_unavailable"
+    assert result["privacy"]["output_tier"] == "export"
+    assert result["privacy"]["content_exported"] is False
+    assert result["result"]["audio_content_exported"] is False
+    assert result["warnings"][0]["code"] == "voice_memos_audio_unavailable"
 
 
 def test_search_voice_memos_degrades_without_store(tmp_path: Path) -> None:
@@ -263,3 +290,82 @@ def test_search_voice_memos_degrades_without_store(tmp_path: Path) -> None:
     assert result["status"] == "degraded"
     assert result["warnings"][0]["code"] == "voice_memos_store_unavailable"
     assert str(tmp_path) not in result["warnings"][0]["message"]
+
+
+def test_voice_memos_store_warning_uses_generic_message(tmp_path: Path, monkeypatch) -> None:
+    recordings_dir = tmp_path / "Recordings"
+    db_path = recordings_dir / "CloudRecordings.db"
+    recordings_dir.mkdir()
+    _make_voice_memos_db(db_path, recordings_dir)
+
+    def fail_schema(_connection):
+        raise voice_memos_adapter.StoreUnavailableError(
+            "voice memos failed at /private/local/CloudRecordings.db"
+        )
+
+    monkeypatch.setattr(voice_memos_adapter, "_check_schema", fail_schema)
+
+    result = search_voice_memos("Planning", db_path=db_path, recordings_dir=recordings_dir)
+
+    assert result["status"] == "degraded"
+    assert result["warnings"] == [
+        {
+            "code": "voice_memos_store_unavailable",
+            "message": "Voice Memos local store is unavailable or unreadable.",
+        }
+    ]
+
+
+def test_get_voice_memo_recording_store_failure_uses_content_shape(
+    tmp_path: Path, monkeypatch
+) -> None:
+    recordings_dir = tmp_path / "Recordings"
+    db_path = recordings_dir / "CloudRecordings.db"
+    recordings_dir.mkdir()
+    _make_voice_memos_db(db_path, recordings_dir)
+    search = search_voice_memos("Planning", db_path=db_path, recordings_dir=recordings_dir)
+    handle = search["results"][0]["handle"]
+
+    def fail_schema(_connection):
+        raise voice_memos_adapter.StoreUnavailableError(
+            "voice memos failed at /private/local/CloudRecordings.db"
+        )
+
+    monkeypatch.setattr(voice_memos_adapter, "_check_schema", fail_schema)
+
+    result = get_voice_memo_recording(handle, db_path=db_path, recordings_dir=recordings_dir)
+
+    assert result["status"] == "degraded"
+    assert result["privacy"]["output_tier"] == "content"
+    assert result["privacy"]["content_inspected"] is False
+    assert result["warnings"][0]["message"] == "Voice Memos local store is unavailable or unreadable."
+
+
+def test_export_voice_memo_audio_store_failure_uses_export_shape(
+    tmp_path: Path, monkeypatch
+) -> None:
+    recordings_dir = tmp_path / "Recordings"
+    db_path = recordings_dir / "CloudRecordings.db"
+    recordings_dir.mkdir()
+    _make_voice_memos_db(db_path, recordings_dir)
+    search = search_voice_memos("Planning", db_path=db_path, recordings_dir=recordings_dir)
+    handle = search["results"][0]["handle"]
+
+    def fail_schema(_connection):
+        raise voice_memos_adapter.StoreUnavailableError(
+            "voice memos failed at /private/local/CloudRecordings.db"
+        )
+
+    monkeypatch.setattr(voice_memos_adapter, "_check_schema", fail_schema)
+
+    result = export_voice_memo_audio(
+        handle,
+        output_dir=tmp_path / "exports",
+        db_path=db_path,
+        recordings_dir=recordings_dir,
+    )
+
+    assert result["status"] == "degraded"
+    assert result["privacy"]["output_tier"] == "export"
+    assert result["privacy"]["content_exported"] is False
+    assert result["warnings"][0]["message"] == "Voice Memos local store is unavailable or unreadable."

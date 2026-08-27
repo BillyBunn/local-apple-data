@@ -47,6 +47,7 @@ DEFAULT_STORE_PATHS = {
         "Library/Group Containers/group.com.apple.reminders/Container_v1/Stores"
     ),
     "icloud_drive_root": Path("Library/Mobile Documents/com~apple~CloudDocs"),
+    "filesystem_root": Path("."),
 }
 
 REQUIRED_TOOLS = ("uv", "swift", "sqlite3")
@@ -141,21 +142,24 @@ ACCESS_REQUIREMENTS = [
         "surface": "calendar",
         "permission_class": "Calendar",
         "status": "checked_on_tool_call",
-        "check_mode": "non_prompting_eventkit",
+        "check_mode": "non_prompting_eventkit_helper_app",
+        "prompt_command": "local-apple-data calendar request-access --json",
         "prompts": False,
     },
     {
         "surface": "reminders",
         "permission_class": "Reminders",
         "status": "partially_covered_by_store_check",
-        "check_mode": "schema_only_and_non_prompting_eventkit_on_tool_call",
+        "check_mode": "schema_only_and_non_prompting_eventkit_helper_app_on_tool_call",
+        "prompt_command": "local-apple-data reminders request-access --json",
         "prompts": False,
     },
     {
         "surface": "contacts",
         "permission_class": "Contacts",
         "status": "checked_on_tool_call",
-        "check_mode": "non_prompting_contacts_framework",
+        "check_mode": "non_prompting_contacts_helper_app",
+        "prompt_command": "local-apple-data contacts request-access --json",
         "prompts": False,
     },
     {
@@ -163,10 +167,18 @@ ACCESS_REQUIREMENTS = [
         "permission_class": "Photos",
         "status": "checked_on_tool_call",
         "check_mode": "non_prompting_photokit",
+        "prompt_command": "local-apple-data photos request-access --json",
         "prompts": False,
     },
     {
         "surface": "icloud_drive",
+        "permission_class": "Local file access",
+        "status": "covered_by_store_check",
+        "check_mode": "root_readability",
+        "prompts": False,
+    },
+    {
+        "surface": "filesystem",
         "permission_class": "Local file access",
         "status": "covered_by_store_check",
         "check_mode": "root_readability",
@@ -386,23 +398,29 @@ def _surface_summary(
         },
         "calendar": {
             "status": "checked_on_tool_call",
-            "permission_check": "non_prompting_eventkit",
+            "permission_check": "non_prompting_eventkit_helper_app",
+            "prompt_command": "local-apple-data calendar request-access --json",
             "prompts": False,
         },
         "reminders": {
             "status": _schema_status(schema_checks, "reminders"),
             "store_status": _store_status(stores, "reminders_stores"),
             "schema_check": _schema_status(schema_checks, "reminders"),
+            "permission_check": "non_prompting_eventkit_helper_app",
             "eventkit_check": "on_tool_call",
+            "prompt_command": "local-apple-data reminders request-access --json",
+            "prompts": False,
         },
         "contacts": {
             "status": "checked_on_tool_call",
-            "permission_check": "non_prompting_contacts_framework",
+            "permission_check": "non_prompting_contacts_helper_app",
+            "prompt_command": "local-apple-data contacts request-access --json",
             "prompts": False,
         },
         "photos": {
             "status": "checked_on_tool_call",
             "permission_check": "non_prompting_photokit",
+            "prompt_command": "local-apple-data photos request-access --json",
             "prompts": False,
         },
         "icloud_drive": {
@@ -410,6 +428,56 @@ def _surface_summary(
             "store_status": _store_status(stores, "icloud_drive_root"),
             "schema_check": "not_applicable",
         },
+        "filesystem": {
+            "status": _store_status(stores, "filesystem_root"),
+            "store_status": _store_status(stores, "filesystem_root"),
+            "schema_check": "not_applicable",
+        },
+    }
+
+
+# Environment overrides that change where this server reads, writes, or how it
+# gates. Health reports which are ACTIVE, never their values: several point at
+# operator paths, and one of them disables a security control. An override that
+# silently changes behaviour with no way to observe it is how a relaxed guard
+# becomes permanent by accident.
+#
+# `weakens_a_guard` marks the ones that remove protection rather than relocate
+# state, so a reader does not have to know the codebase to spot them.
+ENVIRONMENT_OVERRIDES = (
+    ("LOCAL_APPLE_DATA_STATE_DIR", False),
+    ("LOCAL_APPLE_DATA_LOG_DIR", False),
+    ("LOCAL_APPLE_DATA_HANDLE_SECRET", False),
+    ("LOCAL_APPLE_DATA_MAIL_FTS_INDEX", False),
+    ("LOCAL_APPLE_DATA_MAIL_TEMPLATE_STATE", False),
+    ("LOCAL_APPLE_DATA_FS_ROOT", False),
+    ("LOCAL_APPLE_DATA_ICLOUD_DRIVE_ROOT", False),
+    ("LOCAL_APPLE_DATA_SIGNING_IDENTITY", False),
+    ("LOCAL_APPLE_DATA_EVENTKIT_HELPER_BUNDLE_ID", False),
+    ("LOCAL_APPLE_DATA_PHOTOS_HELPER_BUNDLE_ID", False),
+    ("LOCAL_APPLE_DATA_OPERATOR_ENV_FILE", False),
+    ("LOCAL_APPLE_DATA_ALLOW_TEST_ROOT", True),
+    ("LOCAL_APPLE_DATA_FS_ALLOW_CREDENTIAL_PATHS", True),
+)
+
+
+def _environment_overrides() -> dict[str, Any]:
+    """Which overrides are set, and whether any of them weakens a guard.
+
+    Names and booleans only. Values are never reported: they are local paths,
+    bundle identifiers, and a signing identity name.
+    """
+
+    active = [
+        {"name": name, "weakens_a_guard": weakens}
+        for name, weakens in ENVIRONMENT_OVERRIDES
+        if os.environ.get(name, "").strip()
+    ]
+    return {
+        "active": active,
+        "active_count": len(active),
+        "guard_weakening_active": any(entry["weakens_a_guard"] for entry in active),
+        "values_returned": False,
     }
 
 
@@ -554,7 +622,6 @@ def build_health(
                         "message": f"{source}: {warning['message']}",
                     }
                 )
-
     return {
         "schema_version": 1,
         "package_version": __version__,
@@ -566,6 +633,7 @@ def build_health(
             "output_tier": "health",
         },
         "macos": _sw_vers(),
+        "environment_overrides": _environment_overrides(),
         "tools": {
             "required": required_tools,
             "optional": optional_tools,

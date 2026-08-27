@@ -261,6 +261,7 @@ def search_freeform_folders(
                         FROM boards b
                         WHERE b.parent_identifier = f.identifier
                           AND COALESCE(b.tombstoned, 0) = 0
+                          AND COALESCE(b.hide_from_recently_deleted, 0) = 0
                     ) AS board_count
                 FROM folders f
                 WHERE COALESCE(f.tombstone, 0) = 0
@@ -327,9 +328,125 @@ def get_freeform_folder(
     }
 
 
-def _select_boards(connection, *, limit: int | None) -> list[Any]:
+def list_freeform_folder_boards(
+    handle: str,
+    *,
+    db_path: Path = DEFAULT_FREEFORM_DB,
+    limit: int = DEFAULT_LIMIT,
+) -> dict[str, Any]:
+    if not is_opaque_handle(handle, FOLDER_HANDLE_PREFIX):
+        return _invalid_handle_result(
+            "folder",
+            detail=False,
+            source="freeform_folder_boards",
+        )
+
+    bounded_limit = max(1, min(limit, MAX_LIMIT))
+    try:
+        with connect_readonly(db_path) as connection:
+            fingerprint = _check_schema(connection)
+            folders = _select_folders(connection)
+            selected_folder = None
+            for folder in folders:
+                if opaque_handle_matches(
+                    handle, FOLDER_HANDLE_PREFIX, fingerprint, _folder_key(folder)
+                ):
+                    selected_folder = folder
+                    break
+            if selected_folder is None:
+                return _not_found_folder_boards_result(fingerprint)
+            rows = _select_boards(
+                connection,
+                limit=bounded_limit,
+                parent_id_hex=_folder_key(selected_folder),
+            )
+    except StoreUnavailableError as exc:
+        return _store_degraded_result(
+            exc,
+            detail=False,
+            source="freeform_folder_boards",
+        )
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "freeform_folder_boards",
+        "schema_fingerprint": fingerprint,
+        "privacy": _privacy(),
+        "query": {"scope": "selected_folder_boards", "limit": bounded_limit},
+        "folder": _folder_metadata(selected_folder, fingerprint),
+        "results": [_board_metadata(row, fingerprint) for row in rows],
+        "result_count": len(rows),
+        "warnings": [],
+    }
+
+
+def list_freeform_child_folders(
+    handle: str,
+    *,
+    db_path: Path = DEFAULT_FREEFORM_DB,
+    limit: int = DEFAULT_LIMIT,
+) -> dict[str, Any]:
+    if not is_opaque_handle(handle, FOLDER_HANDLE_PREFIX):
+        return _invalid_handle_result(
+            "folder",
+            detail=False,
+            source="freeform_child_folders",
+        )
+
+    bounded_limit = max(1, min(limit, MAX_LIMIT))
+    try:
+        with connect_readonly(db_path) as connection:
+            fingerprint = _check_schema(connection)
+            folders = _select_folders(connection)
+            selected_folder = None
+            for folder in folders:
+                if opaque_handle_matches(
+                    handle, FOLDER_HANDLE_PREFIX, fingerprint, _folder_key(folder)
+                ):
+                    selected_folder = folder
+                    break
+            if selected_folder is None:
+                return _not_found_child_folders_result(fingerprint)
+            rows = _select_folders(
+                connection,
+                limit=bounded_limit,
+                parent_id_hex=_folder_key(selected_folder),
+            )
+    except StoreUnavailableError as exc:
+        return _store_degraded_result(
+            exc,
+            detail=False,
+            source="freeform_child_folders",
+        )
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "freeform_child_folders",
+        "schema_fingerprint": fingerprint,
+        "privacy": _privacy(),
+        "query": {"scope": "selected_child_folders", "limit": bounded_limit},
+        "folder": _folder_metadata(selected_folder, fingerprint),
+        "results": [_folder_metadata(row, fingerprint) for row in rows],
+        "result_count": len(rows),
+        "warnings": [],
+    }
+
+
+def _select_boards(
+    connection,
+    *,
+    limit: int | None,
+    parent_id_hex: str | None = None,
+) -> list[Any]:
     limit_clause = "" if limit is None else "LIMIT ?"
-    params: tuple[Any, ...] = () if limit is None else (limit,)
+    parent_clause = "" if parent_id_hex is None else "AND hex(b.parent_identifier) = ?"
+    params: tuple[Any, ...]
+    if parent_id_hex is None:
+        params = () if limit is None else (limit,)
+    else:
+        params = (parent_id_hex,) if limit is None else (parent_id_hex, limit)
     return connection.execute(
         f"""
         SELECT
@@ -359,6 +476,7 @@ def _select_boards(connection, *, limit: int | None) -> list[Any]:
         LEFT JOIN boards_metadata m ON m.board_identifier = b.board_identifier
         WHERE COALESCE(b.tombstoned, 0) = 0
           AND COALESCE(b.hide_from_recently_deleted, 0) = 0
+          {parent_clause}
         ORDER BY COALESCE(b.last_activity_time, 0) DESC
         {limit_clause}
         """,
@@ -366,9 +484,21 @@ def _select_boards(connection, *, limit: int | None) -> list[Any]:
     ).fetchall()
 
 
-def _select_folders(connection) -> list[Any]:
+def _select_folders(
+    connection,
+    *,
+    limit: int | None = None,
+    parent_id_hex: str | None = None,
+) -> list[Any]:
+    limit_clause = "" if limit is None else "LIMIT ?"
+    parent_clause = "" if parent_id_hex is None else "AND hex(f.parent_identifier) = ?"
+    params: tuple[Any, ...]
+    if parent_id_hex is None:
+        params = () if limit is None else (limit,)
+    else:
+        params = (parent_id_hex,) if limit is None else (parent_id_hex, limit)
     return connection.execute(
-        """
+        f"""
         SELECT
             hex(f.identifier) AS folder_id,
             hex(f.parent_identifier) AS parent_id,
@@ -382,13 +512,17 @@ def _select_folders(connection) -> list[Any]:
                 FROM boards b
                 WHERE b.parent_identifier = f.identifier
                   AND COALESCE(b.tombstoned, 0) = 0
+                  AND COALESCE(b.hide_from_recently_deleted, 0) = 0
             ) AS board_count
         FROM folders f
         WHERE COALESCE(f.tombstone, 0) = 0
           AND COALESCE(f.hide_from_recently_deleted, 0) = 0
+          {parent_clause}
         ORDER BY COALESCE(f.last_activity_time, 0) DESC,
                  COALESCE(f.title, '') ASC
-        """
+        {limit_clause}
+        """,
+        params,
     ).fetchall()
 
 
@@ -470,12 +604,17 @@ def _broad_folder_query_result() -> dict[str, Any]:
     }
 
 
-def _invalid_handle_result(kind: str, *, detail: bool) -> dict[str, Any]:
+def _invalid_handle_result(
+    kind: str,
+    *,
+    detail: bool,
+    source: str = "freeform",
+) -> dict[str, Any]:
     expected = f"{'freeform:board' if kind == 'board' else 'freeform:folder'}:v1"
     return {
         "schema_version": 1,
         "status": "error",
-        "source": "freeform",
+        "source": source,
         "privacy": _privacy(),
         "result": None if detail else None,
         "results": [] if not detail else None,
@@ -489,11 +628,16 @@ def _invalid_handle_result(kind: str, *, detail: bool) -> dict[str, Any]:
     }
 
 
-def _store_degraded_result(_exc: StoreUnavailableError, *, detail: bool) -> dict[str, Any]:
+def _store_degraded_result(
+    _exc: StoreUnavailableError,
+    *,
+    detail: bool,
+    source: str = "freeform",
+) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "degraded",
-        "source": "freeform",
+        "source": source,
         "privacy": _privacy(),
         "results": [] if not detail else None,
         "result": None if detail else None,
@@ -504,6 +648,34 @@ def _store_degraded_result(_exc: StoreUnavailableError, *, detail: bool) -> dict
                 "Apple Freeform local store is missing, unreadable, locked, or incompatible.",
             )
         ],
+    }
+
+
+def _not_found_folder_boards_result(fingerprint: str) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "not_found",
+        "source": "freeform_folder_boards",
+        "schema_fingerprint": fingerprint,
+        "privacy": _privacy(),
+        "folder": None,
+        "results": [],
+        "result_count": 0,
+        "warnings": [],
+    }
+
+
+def _not_found_child_folders_result(fingerprint: str) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "not_found",
+        "source": "freeform_child_folders",
+        "schema_fingerprint": fingerprint,
+        "privacy": _privacy(),
+        "folder": None,
+        "results": [],
+        "result_count": 0,
+        "warnings": [],
     }
 
 

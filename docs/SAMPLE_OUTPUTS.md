@@ -26,11 +26,14 @@ These examples are synthetic. They are shape examples only and must not be repla
     "podcasts": {"status": "ok", "schema_check": "ok"},
     "music": {"status": "available", "schema_check": "not_applicable", "automation_check": "on_exact_tool_call"},
     "notes": {"status": "ok", "automation_check": "on_exact_content_call"},
-    "calendar": {"status": "checked_on_tool_call", "permission_check": "non_prompting_eventkit", "prompts": false},
-    "reminders": {"status": "ok", "eventkit_check": "on_tool_call"},
-    "contacts": {"status": "checked_on_tool_call", "permission_check": "non_prompting_contacts_framework", "prompts": false},
-    "photos": {"status": "checked_on_tool_call", "permission_check": "non_prompting_photokit", "prompts": false},
-    "icloud_drive": {"status": "ok", "schema_check": "not_applicable"}
+    "calendar": {"status": "checked_on_tool_call", "permission_check": "non_prompting_eventkit_helper_app", "prompt_command": "local-apple-data calendar request-access --json", "prompts": false},
+    "reminders": {"status": "ok", "permission_check": "non_prompting_eventkit_helper_app", "eventkit_check": "on_tool_call", "prompt_command": "local-apple-data reminders request-access --json", "prompts": false},
+    "contacts": {"status": "checked_on_tool_call", "permission_check": "non_prompting_contacts_helper_app", "prompt_command": "local-apple-data contacts request-access --json", "prompts": false},
+    "photos": {"status": "checked_on_tool_call", "permission_check": "non_prompting_photokit", "prompt_command": "local-apple-data photos request-access --json", "prompts": false},
+    "icloud_drive": {"status": "ok", "schema_check": "not_applicable"},
+    "filesystem": {"status": "ok", "schema_check": "not_applicable"},
+    "tv": {"status": "available", "schema_check": "not_applicable"},
+    "freeform": {"status": "ok", "schema_check": "not_applicable"}
   },
   "schema_checks": {
     "mail": {"status": "ok", "warnings": []},
@@ -45,9 +48,10 @@ These examples are synthetic. They are shape examples only and must not be repla
     {"surface": "books", "check_mode": "schema_only", "prompts": false},
     {"surface": "podcasts", "check_mode": "schema_only", "prompts": false},
     {"surface": "music", "check_mode": "app_and_osascript_availability_without_automation_probe", "prompts": false},
-    {"surface": "calendar", "check_mode": "non_prompting_eventkit", "prompts": false},
-    {"surface": "contacts", "check_mode": "non_prompting_contacts_framework", "prompts": false},
-    {"surface": "photos", "check_mode": "non_prompting_photokit", "prompts": false}
+    {"surface": "calendar", "check_mode": "non_prompting_eventkit_helper_app", "prompt_command": "local-apple-data calendar request-access --json", "prompts": false},
+    {"surface": "reminders", "check_mode": "schema_only_and_non_prompting_eventkit_helper_app_on_tool_call", "prompt_command": "local-apple-data reminders request-access --json", "prompts": false},
+    {"surface": "contacts", "check_mode": "non_prompting_contacts_helper_app", "prompt_command": "local-apple-data contacts request-access --json", "prompts": false},
+    {"surface": "photos", "check_mode": "non_prompting_photokit", "prompt_command": "local-apple-data photos request-access --json", "prompts": false}
   ]
 }
 ```
@@ -746,7 +750,7 @@ These examples are synthetic. They are shape examples only and must not be repla
       "format": "plaintext_append",
       "append_chars": 20,
       "append_preview_text": "Synthetic append body.",
-      "overwrite": "blocked",
+      "replace_text": "separate_approved_gate",
       "delete": "blocked"
     },
     "idempotency_key": "notes-plan:v1:<hash>",
@@ -807,19 +811,44 @@ These examples are synthetic. They are shape examples only and must not be repla
 
 Exact Hide My Email detail returns the selected full alias only after the matching opaque handle is supplied. Public examples should keep that value as a placeholder.
 
-## Runtime Verifier
+## Runtime Verifier (Historical Synthetic Excerpt)
+
+This intentionally retained synthetic excerpt was captured when the verifier exposed 95 MCP tools; it is not a current inventory or live-machine authorization receipt. The 2026-08-12 verified baseline has 151 MCP tools, and the current count must always be read from a fresh `uv run python scripts/verify_runtime.py`. In particular, the Contacts note success keys below prove the designed synthetic gate only: the current locally signed Contacts helper lacks Apple's restricted notes entitlement and live note operations fail closed with `contacts_note_unavailable`.
 
 ```json
 {
   "status": "ok",
-  "tool_count": 74,
+  "tool_count": 95,
   "mail_content_status": "ok",
+  "mail_content_page_status": "ok",
+  "mail_content_page_next_offset": 19,
+  "mail_body_search_status": "ok",
+  "mail_body_search_count": 1,
+  "mail_body_search_tool_present": true,
+  "mail_advanced_from_status": "ok",
+  "mail_advanced_search_tool_present": true,
   "mail_plan_status": "ok",
   "mail_plan_mutation_applied": false,
   "mail_plan_apply_available": true,
   "mail_apply_status": "ok",
   "mail_apply_mutation_applied": true,
+  "mail_draft_attachment_plan_status": "ok",
+  "mail_draft_attachment_plan_count": 1,
+  "mail_draft_attachment_plan_paths_returned": false,
+  "mail_draft_attachment_apply_status": "ok",
+  "mail_draft_attachment_apply_mutation_applied": true,
+  "mail_draft_attachment_apply_count": 1,
+  "mail_draft_attachment_apply_paths_returned": false,
+  "mail_draft_attachment_apply_path_leaked": false,
+  "mail_draft_attachment_send_plan_status": "ok",
+  "mail_draft_attachment_send_plan_count": 1,
+  "mail_draft_attachment_send_apply_status": "ok",
+  "mail_draft_attachment_send_apply_count": 1,
+  "mail_draft_attachment_send_apply_path_leaked": false,
   "mail_attachment_list_status": "ok",
+  "mail_attachment_search_status": "ok",
+  "mail_attachment_search_count": 1,
+  "mail_attachment_search_tool_present": true,
   "mail_attachment_export_status": "ok",
   "mail_attachment_content_exported": true,
   "notes_content_status": "ok",
@@ -859,6 +888,14 @@ Exact Hide My Email detail returns the selected full alias only after the matchi
   "contacts_plan_apply_available": true,
   "contacts_apply_status": "ok",
   "contacts_apply_mutation_applied": true,
+  "contacts_count_status": "ok",
+  "contacts_export_status": "ok",
+  "contacts_export_archive_verified": true,
+  "contacts_export_counts_match": true,
+  "contacts_append_note_plan_status": "ok",
+  "contacts_append_note_apply_status": "ok",
+  "contacts_append_note_apply_mutation_applied": true,
+  "contacts_append_note_apply_text_returned": false,
   "photos_detail_status": "ok",
   "photos_export_status": "ok",
   "photos_plan_status": "ok",

@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import os
 import secrets
+from collections.abc import Iterable
 from pathlib import Path
 
 
@@ -54,12 +55,16 @@ def _secret_bytes() -> bytes:
     return secret.encode("utf-8")
 
 
-def _digest(label: str, payload: str) -> bytes:
+def _digest_with_secret(secret: bytes, label: str, payload: str) -> bytes:
     return hmac.new(
-        _secret_bytes(),
+        secret,
         f"{label}\0{payload}".encode("utf-8"),
         hashlib.sha256,
     ).digest()
+
+
+def _digest(label: str, payload: str) -> bytes:
+    return _digest_with_secret(_secret_bytes(), label, payload)
 
 
 def _is_lower_hex(value: str) -> bool:
@@ -93,6 +98,40 @@ def int_handle_matches(handle: str, prefix: str, item_id: int) -> bool:
     if token is None:
         return False
     return hmac.compare_digest(token, _int_handle_token(prefix, item_id))
+
+
+def resolve_int_handles(
+    handles: Iterable[str],
+    prefix: str,
+    item_ids: Iterable[int],
+) -> dict[str, int]:
+    """Resolve several opaque integer handles with one current-secret read.
+
+    The caller still supplies the bounded live item-id candidate set. Invalid or
+    unmatched handles are omitted, and no token or secret material is returned.
+    """
+
+    token_to_handle: dict[str, str] = {}
+    for handle in handles:
+        token = _parse_handle_token(handle, prefix, "v2", 32)
+        if token is not None:
+            token_to_handle[token] = handle
+    if not token_to_handle:
+        return {}
+
+    secret = _secret_bytes()
+    label = f"int:{prefix}"
+    resolved: dict[str, int] = {}
+    for item_id_value in item_ids:
+        item_id = int(item_id_value)
+        token = _digest_with_secret(secret, label, str(item_id)).hex()[:32]
+        handle = token_to_handle.get(token)
+        if handle is None:
+            continue
+        resolved[handle] = item_id
+        if len(resolved) == len(token_to_handle):
+            break
+    return resolved
 
 
 def make_opaque_handle(prefix: str, *parts: object) -> str:

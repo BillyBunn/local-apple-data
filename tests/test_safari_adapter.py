@@ -5,7 +5,10 @@ from datetime import datetime
 from pathlib import Path
 
 from local_apple_data.adapters.safari import (
+    get_safari_folder,
     get_safari_item,
+    list_safari_folder_items,
+    search_safari_folders,
     search_safari_items,
 )
 
@@ -31,6 +34,28 @@ def _write_bookmarks(path: Path) -> None:
                         "URIDictionary": {"title": "Synthetic Search"},
                         "URLString": "https://search.example.net/",
                     },
+                    {
+                        "Title": "Synthetic Folder",
+                        "WebBookmarkType": "WebBookmarkTypeList",
+                        "Children": [
+                            {
+                                "WebBookmarkType": "WebBookmarkTypeLeaf",
+                                "URIDictionary": {"title": "Nested Packet"},
+                                "URLString": "https://nested.example.com/private/path?secret=1",
+                            },
+                            {
+                                "Title": "Synthetic Child Folder",
+                                "WebBookmarkType": "WebBookmarkTypeList",
+                                "Children": [
+                                    {
+                                        "WebBookmarkType": "WebBookmarkTypeLeaf",
+                                        "URIDictionary": {"title": "Grandchild Packet"},
+                                        "URLString": "https://grandchild.example.com/",
+                                    }
+                                ],
+                            },
+                        ],
+                    },
                 ],
             },
             {
@@ -54,7 +79,7 @@ def test_search_safari_items_returns_metadata_without_full_url(tmp_path: Path) -
     bookmarks_path = tmp_path / "Bookmarks.plist"
     _write_bookmarks(bookmarks_path)
 
-    result = search_safari_items("Packet", bookmarks_path=bookmarks_path)
+    result = search_safari_items("Synthetic Packet", bookmarks_path=bookmarks_path)
 
     assert result["status"] == "ok"
     assert result["privacy"]["output_tier"] == "metadata"
@@ -85,7 +110,9 @@ def test_search_safari_items_filters_reading_list(tmp_path: Path) -> None:
 def test_get_safari_item_returns_exact_url_by_handle(tmp_path: Path) -> None:
     bookmarks_path = tmp_path / "Bookmarks.plist"
     _write_bookmarks(bookmarks_path)
-    handle = search_safari_items("Packet", bookmarks_path=bookmarks_path)["results"][0]["handle"]
+    handle = search_safari_items("Synthetic Packet", bookmarks_path=bookmarks_path)["results"][0][
+        "handle"
+    ]
 
     result = get_safari_item(handle, bookmarks_path=bookmarks_path)
 
@@ -128,3 +155,88 @@ def test_search_safari_items_reports_unavailable_and_parse_errors(tmp_path: Path
     assert missing["warnings"][0]["code"] == "safari_store_unavailable"
     assert malformed["status"] == "degraded"
     assert malformed["warnings"][0]["code"] == "safari_parse_error"
+
+
+def test_search_safari_folders_returns_metadata_only(tmp_path: Path) -> None:
+    bookmarks_path = tmp_path / "Bookmarks.plist"
+    _write_bookmarks(bookmarks_path)
+
+    result = search_safari_folders("Synthetic Folder", bookmarks_path=bookmarks_path)
+
+    assert result["status"] == "ok"
+    assert result["source"] == "safari_folders"
+    assert result["privacy"]["output_tier"] == "metadata"
+    assert result["result_count"] == 1
+    folder = result["results"][0]
+    assert folder["handle"].startswith("safari:folder:v1:")
+    assert folder["title"] == "Synthetic Folder"
+    assert folder["child_item_count"] == 1
+    assert folder["child_folder_count"] == 1
+    assert "URLString" not in str(result)
+    assert "https://nested.example.com/private/path?secret=1" not in str(result)
+
+
+def test_get_safari_folder_returns_exact_metadata_by_handle(tmp_path: Path) -> None:
+    bookmarks_path = tmp_path / "Bookmarks.plist"
+    _write_bookmarks(bookmarks_path)
+    handle = search_safari_folders("Synthetic Folder", bookmarks_path=bookmarks_path)["results"][0][
+        "handle"
+    ]
+
+    result = get_safari_folder(handle, bookmarks_path=bookmarks_path)
+
+    assert result["status"] == "ok"
+    assert result["result"]["title"] == "Synthetic Folder"
+    assert result["result"]["child_item_count"] == 1
+    assert result["result"]["child_folder_count"] == 1
+    assert "URLString" not in str(result)
+
+
+def test_list_safari_folder_items_returns_direct_metadata_only(tmp_path: Path) -> None:
+    bookmarks_path = tmp_path / "Bookmarks.plist"
+    _write_bookmarks(bookmarks_path)
+    handle = search_safari_folders("Synthetic Folder", bookmarks_path=bookmarks_path)["results"][0][
+        "handle"
+    ]
+
+    result = list_safari_folder_items(handle, bookmarks_path=bookmarks_path)
+
+    assert result["status"] == "ok"
+    assert result["source"] == "safari_folder_items"
+    assert result["folder"]["title"] == "Synthetic Folder"
+    assert result["result_count"] == 1
+    assert result["child_folder_count"] == 1
+    assert result["results"][0]["title"] == "Nested Packet"
+    assert result["results"][0]["url_domain"] == "nested.example.com"
+    assert result["child_folders"][0]["title"] == "Synthetic Child Folder"
+    assert "url" not in result["results"][0]
+    assert "Grandchild Packet" not in str(result)
+    assert "https://nested.example.com/private/path?secret=1" not in str(result)
+
+
+def test_list_safari_folder_items_caps_combined_direct_children(tmp_path: Path) -> None:
+    bookmarks_path = tmp_path / "Bookmarks.plist"
+    _write_bookmarks(bookmarks_path)
+    handle = search_safari_folders("Synthetic Folder", bookmarks_path=bookmarks_path)["results"][0][
+        "handle"
+    ]
+
+    result = list_safari_folder_items(handle, bookmarks_path=bookmarks_path, limit=1)
+
+    assert result["status"] == "ok"
+    assert result["query"]["limit"] == 1
+    assert result["result_count"] + result["child_folder_count"] == 1
+    assert result["results"][0]["title"] == "Nested Packet"
+
+
+def test_safari_folder_paths_reject_bad_handles(tmp_path: Path) -> None:
+    bookmarks_path = tmp_path / "Bookmarks.plist"
+    _write_bookmarks(bookmarks_path)
+
+    detail = get_safari_folder("safari:folder:1", bookmarks_path=bookmarks_path)
+    listing = list_safari_folder_items("bad-handle", bookmarks_path=bookmarks_path)
+
+    assert detail["status"] == "error"
+    assert detail["warnings"][0]["code"] == "invalid_handle"
+    assert listing["status"] == "error"
+    assert listing["source"] == "safari_folder_items"

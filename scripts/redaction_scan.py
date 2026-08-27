@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -92,12 +93,36 @@ def _should_scan(path: Path) -> bool:
     return not any(part in EXCLUDED_DIRS for part in path.parts)
 
 
+def _display_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def _finding_payload(finding: Finding) -> dict[str, object]:
+    return {
+        "path": _display_path(finding.path),
+        "line_number": finding.line_number,
+        "pattern": finding.pattern,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Scan repo text files for high-risk secrets.")
     parser.add_argument("paths", nargs="*", default=["."], help="Files or directories to scan.")
+    parser.add_argument("--json", action="store_true", help="Emit machine-readable output.")
     args = parser.parse_args(argv)
 
     findings = scan_paths(Path(value) for value in args.paths)
+    payload = {
+        "finding_count": len(findings),
+        "findings": [_finding_payload(finding) for finding in findings],
+        "status": "error" if findings else "ok",
+    }
+    if args.json:
+        print(json.dumps(payload, sort_keys=True))
+        return 1 if findings else 0
     if findings:
         print("redaction scan failed", file=sys.stderr)
         for finding in findings:

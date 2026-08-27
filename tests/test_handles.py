@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import local_apple_data.handles as handles_module
 from local_apple_data.handles import (
     SECRET_FILENAME,
     int_handle_matches,
@@ -10,6 +11,7 @@ from local_apple_data.handles import (
     make_int_handle,
     make_opaque_handle,
     opaque_handle_matches,
+    resolve_int_handles,
 )
 
 
@@ -26,6 +28,31 @@ def test_int_handle_is_opaque_and_rejects_tampering() -> None:
 
     tampered = handle[:-1] + ("0" if handle[-1] != "0" else "1")
     assert int_handle_matches(tampered, "mail:message", 12345) is False
+
+
+def test_resolve_int_handles_matches_many_with_one_secret_read(monkeypatch) -> None:
+    handles = [
+        make_int_handle("mail:message", 12345),
+        make_int_handle("mail:message", 54321),
+    ]
+    secret_reads = 0
+    real_secret_bytes = handles_module._secret_bytes
+
+    def counted_secret_bytes() -> bytes:
+        nonlocal secret_reads
+        secret_reads += 1
+        return real_secret_bytes()
+
+    monkeypatch.setattr("local_apple_data.handles._secret_bytes", counted_secret_bytes)
+
+    resolved = resolve_int_handles(
+        [*handles, "mail:message:v2:" + "0" * 32],
+        "mail:message",
+        range(10000, 60000),
+    )
+
+    assert resolved == {handles[0]: 12345, handles[1]: 54321}
+    assert secret_reads == 1
 
 
 def test_opaque_handle_is_stable_and_prefix_scoped() -> None:

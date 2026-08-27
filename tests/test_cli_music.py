@@ -70,6 +70,24 @@ def _playlist_payload() -> dict:
     }
 
 
+def _playlist_tracks_payload() -> dict:
+    track_payload = _track_payload()
+    playlist_payload = _playlist_payload()
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "music_playlist_tracks",
+        "privacy": {
+            **track_payload["privacy"],
+            "playlist_tracks_returned": True,
+        },
+        "playlist": playlist_payload["results"][0],
+        "results": track_payload["results"],
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
 def test_cli_music_search_outputs_json(monkeypatch, tmp_path, capsys) -> None:
     monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
     seen: dict[str, object] = {}
@@ -196,3 +214,35 @@ def test_cli_music_playlist_outputs_json(monkeypatch, tmp_path, capsys) -> None:
     parsed = json.loads(capsys.readouterr().out)
     assert parsed["status"] == "ok"
     assert parsed["result"]["title"] == "Synthetic CLI Playlist"
+
+
+def test_cli_music_playlist_tracks_outputs_json(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    seen: dict[str, object] = {}
+
+    def fake_list(handle: str, **kwargs):
+        seen["handle"] = handle
+        seen["kwargs"] = kwargs
+        return _playlist_tracks_payload()
+
+    monkeypatch.setattr("local_apple_data.cli.list_music_playlist_tracks", fake_list)
+
+    exit_code = main(
+        [
+            "music",
+            "playlist-tracks",
+            "--json",
+            "--handle",
+            "music:playlist:v1:22222222222222222222222222222222",
+            "--limit",
+            "3",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["source"] == "music_playlist_tracks"
+    assert parsed["result_count"] == 1
+    assert seen["handle"] == "music:playlist:v1:22222222222222222222222222222222"
+    assert seen["kwargs"] == {"limit": 3, "max_scan_items": 5000}

@@ -362,7 +362,27 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
     assert health["surfaces"]["freeform"]["schema_check"] == "ok"
     assert health["surfaces"]["icloud_drive"]["status"] == "ok"
     assert health["surfaces"]["calendar"]["status"] == "checked_on_tool_call"
+    assert (
+        health["surfaces"]["calendar"]["prompt_command"]
+        == "local-apple-data calendar request-access --json"
+    )
     assert health["surfaces"]["calendar"]["prompts"] is False
+    assert health["surfaces"]["reminders"]["permission_check"] == (
+        "non_prompting_eventkit_helper_app"
+    )
+    assert (
+        health["surfaces"]["reminders"]["prompt_command"]
+        == "local-apple-data reminders request-access --json"
+    )
+    assert health["surfaces"]["reminders"]["prompts"] is False
+    assert health["surfaces"]["contacts"]["permission_check"] == (
+        "non_prompting_contacts_helper_app"
+    )
+    assert (
+        health["surfaces"]["contacts"]["prompt_command"]
+        == "local-apple-data contacts request-access --json"
+    )
+    assert health["surfaces"]["contacts"]["prompts"] is False
     assert any(
         requirement["surface"] == "messages"
         and requirement["permission_class"] == "Full Disk Access and Automation may be required"
@@ -371,8 +391,30 @@ def test_build_health_is_redacted_and_ok_for_present_stores(tmp_path: Path) -> N
         for requirement in health["access_requirements"]
     )
     assert any(
+        requirement["surface"] == "contacts"
+        and requirement["check_mode"] == "non_prompting_contacts_helper_app"
+        and requirement["prompt_command"]
+        == "local-apple-data contacts request-access --json"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert any(
         requirement["surface"] == "photos"
         and requirement["check_mode"] == "non_prompting_photokit"
+        and requirement["prompt_command"] == "local-apple-data photos request-access --json"
+        and requirement["prompts"] is False
+        for requirement in health["access_requirements"]
+    )
+    assert (
+        health["surfaces"]["photos"]["prompt_command"]
+        == "local-apple-data photos request-access --json"
+    )
+    assert any(
+        requirement["surface"] == "reminders"
+        and requirement["check_mode"]
+        == "schema_only_and_non_prompting_eventkit_helper_app_on_tool_call"
+        and requirement["prompt_command"]
+        == "local-apple-data reminders request-access --json"
         and requirement["prompts"] is False
         for requirement in health["access_requirements"]
     )
@@ -487,6 +529,26 @@ def test_cli_health_outputs_json(tmp_path: Path, monkeypatch, capsys) -> None:
     assert parsed["privacy"]["content_inspected"] is False
 
 
+def test_cli_redacts_unexpected_health_exception(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    def fail_health():
+        raise OSError(f"permission denied for {tmp_path / 'Library/Mail'}")
+
+    monkeypatch.setattr("local_apple_data.cli.build_health", fail_health)
+
+    exit_code = main(["health", "--json"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert captured.out == ""
+    assert "local-apple-data command failed: OSError" in captured.err
+    assert "permission denied" not in captured.err
+    assert str(tmp_path) not in captured.err
+
+
 def test_build_doctor_returns_redacted_guidance(tmp_path: Path) -> None:
     doctor = build_doctor(home=tmp_path, which=_fake_which)
 
@@ -515,3 +577,44 @@ def test_cli_doctor_outputs_json(tmp_path: Path, monkeypatch, capsys) -> None:
     parsed = json.loads(capsys.readouterr().out)
     assert parsed["source"] == "doctor"
     assert parsed["remediation_mode"] == "non_mutating"
+
+
+def test_health_reports_active_environment_overrides_without_values(monkeypatch) -> None:
+    """Overrides must be observable. Values must not be."""
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", "/tmp/operator-specific-path")
+    monkeypatch.delenv("LOCAL_APPLE_DATA_FS_ALLOW_CREDENTIAL_PATHS", raising=False)
+
+    overrides = build_health()["environment_overrides"]
+    names = {entry["name"] for entry in overrides["active"]}
+
+    assert "LOCAL_APPLE_DATA_LOG_DIR" in names
+    assert overrides["guard_weakening_active"] is False
+    assert overrides["values_returned"] is False
+    assert "/tmp/operator-specific-path" not in json.dumps(overrides)
+
+
+def test_health_reports_operator_env_path_name_without_value(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "LOCAL_APPLE_DATA_OPERATOR_ENV_FILE", "/tmp/private-machine-env"
+    )
+
+    overrides = build_health()["environment_overrides"]
+    names = {entry["name"] for entry in overrides["active"]}
+
+    assert "LOCAL_APPLE_DATA_OPERATOR_ENV_FILE" in names
+    assert "/tmp/private-machine-env" not in json.dumps(overrides)
+
+
+def test_health_flags_an_override_that_weakens_a_guard(monkeypatch) -> None:
+    """The credential-path escape hatch disables a security control silently.
+
+    A prior review found it invisible at runtime: nothing in health, no warning,
+    no log line. Being able to see that it is on is the whole point.
+    """
+    monkeypatch.setenv("LOCAL_APPLE_DATA_FS_ALLOW_CREDENTIAL_PATHS", "1")
+
+    overrides = build_health()["environment_overrides"]
+    weakening = [e["name"] for e in overrides["active"] if e["weakens_a_guard"]]
+
+    assert overrides["guard_weakening_active"] is True
+    assert "LOCAL_APPLE_DATA_FS_ALLOW_CREDENTIAL_PATHS" in weakening

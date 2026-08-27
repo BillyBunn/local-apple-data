@@ -16,7 +16,7 @@ Candidate operation:
 
 Out of scope:
 
-- Sending mail, reply, forward, archive, move, delete, mark read/unread, flag, mailbox/account management, attachments, HTML/rich-text drafts, template storage, bulk operations, and sender-account selection.
+- Sending mail, reply, forward, archive, move, delete, mark read/unread, flag, mailbox/account management, attachments, HTML/rich-text drafts, template storage, bulk operations, and sender selection outside the approved draft/send/reply/reply-all/forward sender gate.
 - Raw Mail database row IDs, mailbox refs, local Mail file paths, or account identifiers as user inputs.
 - Mutations through Gmail, IMAP, OAuth, iCloud.com, browser sessions, keychain credentials, private iCloud APIs, network mail APIs, or external connectors.
 
@@ -160,4 +160,4 @@ Before exposure, the Mail draft implementation must add:
 
 ## Current Release Gate
 
-The current release allows only this Mail create-draft apply surface. Mail send, reply, forward, archive, move, delete, mark read/unread, flag, mailbox/account management, attachments, HTML/rich-text draft mutation, template storage, bulk operations, and sender-account selection remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+The v1.16 release allowed only this Mail create-draft apply surface. Later Mail read/flag/archive/move/trash triage, send-message, reply-message, reply-all-message, forward-message, and capped exact bulk triage support are governed by their own design gates. Mail reply outside the exact-message sender-only or reply-all gates, forward outside the exact-message no-source-attachments/no-non-body-parts gate, source attachment/non-body-part forwarding, cross-account move outside the exact target-mailbox gate, permanent delete, mailbox/account management, attachments outside approved draft/send/reply/reply-all/forward local-file gates, HTML/rich-text draft mutation, template storage, query-result auto-apply, unbounded bulk mutation, sender selection outside the approved draft/send/reply/reply-all/forward sender gate, and send outside the v1.43 send-message gate remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

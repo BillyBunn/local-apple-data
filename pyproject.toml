@@ -5,7 +5,7 @@ description = "Local-first Apple data CLI and MCP server"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
-authors = [{ name = "Billy Bunn" }]
+authors = [{ name = "local-apple-data contributors" }]
 classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: MacOS",

@@ -3,9 +3,11 @@ from __future__ import annotations
 from local_apple_data.adapters.tv import (
     FIELD_SEPARATOR,
     RECORD_SEPARATOR,
+    TV_APPLESCRIPT,
     TVCommandResult,
     get_tv_item,
     get_tv_playlist,
+    list_tv_playlist_items,
     search_tv_items,
     search_tv_playlists,
 )
@@ -80,6 +82,22 @@ def _runner(command: list[str], _timeout: float) -> TVCommandResult:
                         persistent_id="SECOND-TV-PLAYLIST-ID",
                         database_id="987",
                         title="Other TV Playlist",
+                    ),
+                ]
+            ),
+        )
+    if command_name == "list_playlist_items":
+        if command[1] != "RUNTIME-TV-PLAYLIST-ID":
+            return TVCommandResult(returncode=0, stdout="")
+        return TVCommandResult(
+            returncode=0,
+            stdout=RECORD_SEPARATOR.join(
+                [
+                    _item_record(),
+                    _item_record(
+                        persistent_id="PLAYLIST-SECOND-TV-ITEM-ID",
+                        database_id="790",
+                        title="Playlist Other Episode",
                     ),
                 ]
             ),
@@ -195,6 +213,62 @@ def test_search_tv_playlists_and_get_exact_playlist() -> None:
     assert detail["result"]["duration_seconds"] == 4567.8
 
 
+def test_list_tv_playlist_items_requires_playlist_handle() -> None:
+    result = list_tv_playlist_items("tv:item:v1:bad", runner=_runner)
+
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "invalid_handle"
+
+
+def test_list_tv_playlist_items_returns_metadata_without_raw_identifiers() -> None:
+    search = search_tv_playlists("Runtime", runner=_runner)
+    handle = search["results"][0]["handle"]
+
+    result = list_tv_playlist_items(handle, limit=1, runner=_runner)
+
+    assert result["status"] == "ok"
+    assert result["source"] == "tv_playlist_items"
+    assert result["privacy"]["playlist_items_returned"] is True
+    assert result["playlist"]["title"] == "Runtime TV Playlist"
+    assert result["playlist"]["handle"] == handle
+    assert result["result_count"] == 1
+    first = result["results"][0]
+    assert first["handle"].startswith("tv:item:v1:")
+    assert first["title"] == "Runtime Episode"
+    assert first["raw_identifier_returned"] is False
+    assert first["file_path_returned"] is False
+    assert first["video_content_returned"] is False
+    assert first["artwork_returned"] is False
+    assert first["description_returned"] is False
+    assert first["playback_state_returned"] is False
+    assert first["watched_state_returned"] is False
+    assert first["rating_returned"] is False
+    assert "RUNTIME-TV-PLAYLIST-ID" not in str(result)
+    assert "RUNTIME-TV-ITEM-ID" not in str(result)
+
+
+def test_list_tv_playlist_items_uses_exact_selected_playlist() -> None:
+    search = search_tv_playlists("Runtime", runner=_runner)
+    handle = search["results"][1]["handle"]
+
+    result = list_tv_playlist_items(handle, runner=_runner)
+
+    assert result["status"] == "ok"
+    assert result["playlist"]["title"] == "Other TV Playlist"
+    assert result["result_count"] == 0
+
+
+def test_playlist_item_applescript_bounds_playlist_scan() -> None:
+    branch = TV_APPLESCRIPT.split('if commandName is "list_playlist_items" then', 1)[1]
+    branch = branch.split("end if", 1)[0]
+
+    assert "set playlistScanCount to 0" in branch
+    assert "if playlistScanCount > scanLimit then exit repeat" in branch
+    assert branch.index("if playlistScanCount > scanLimit then exit repeat") < branch.index(
+        "persistent ID of playlistItem"
+    )
+
+
 def test_tv_automation_errors_are_degraded() -> None:
     def runner(_command: list[str], _timeout: float) -> TVCommandResult:
         return TVCommandResult(returncode=1, stdout="", stderr="permission denied")
@@ -203,3 +277,15 @@ def test_tv_automation_errors_are_degraded() -> None:
 
     assert result["status"] == "degraded"
     assert result["warnings"][0]["code"] == "tv_automation_error"
+
+
+def test_tv_runner_os_errors_are_degraded_without_details() -> None:
+    def runner(_command: list[str], _timeout: float) -> TVCommandResult:
+        raise OSError("permission denied for /private/local/tv")
+
+    result = search_tv_items("Runtime", runner=runner)
+
+    assert result["status"] == "degraded"
+    assert result["warnings"][0]["code"] == "tv_automation_unavailable"
+    assert "permission denied" not in str(result)
+    assert "/private/local/tv" not in str(result)

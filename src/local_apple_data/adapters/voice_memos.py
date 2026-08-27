@@ -50,10 +50,10 @@ def _content_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
     }
 
 
-def _export_privacy() -> dict[str, bool | str]:
+def _export_privacy(*, content_exported: bool = False) -> dict[str, bool | str]:
     return {
         "content_inspected": False,
-        "content_exported": True,
+        "content_exported": content_exported,
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "export",
@@ -62,6 +62,13 @@ def _export_privacy() -> dict[str, bool | str]:
 
 def _warning(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
+
+
+def _voice_memos_store_unavailable_warning() -> dict[str, str]:
+    return _warning(
+        "voice_memos_store_unavailable",
+        "Voice Memos local store is unavailable or unreadable.",
+    )
 
 
 def _check_schema(connection) -> str:
@@ -186,7 +193,7 @@ def get_voice_memo_recording(
                 }
             row = _select_recording(connection, recording_id)
     except StoreUnavailableError as exc:
-        return _store_degraded_export_result(exc)
+        return _store_degraded_result(exc, content=True)
 
     result = _recording_metadata(row, fingerprint, recordings_dir=recordings_dir)
     result.update(
@@ -249,7 +256,7 @@ def export_voice_memo_audio(
                 }
             row = _select_recording(connection, recording_id)
     except StoreUnavailableError as exc:
-        return _store_degraded_result(exc, content=True)
+        return _store_degraded_export_result(exc)
 
     result = _recording_metadata(row, fingerprint, recordings_dir=recordings_dir)
     result.update(
@@ -292,7 +299,7 @@ def export_voice_memo_audio(
         "status": "ok",
         "source": "voice_memos",
         "schema_fingerprint": fingerprint,
-        "privacy": _export_privacy(),
+        "privacy": _export_privacy(content_exported=True),
         "result": result,
         "result_count": 1,
         "warnings": [],
@@ -586,7 +593,7 @@ def _export_unavailable_result(result: dict[str, Any], warning_code: str) -> dic
     }
 
 
-def _store_degraded_result(exc: StoreUnavailableError, *, content: bool) -> dict[str, Any]:
+def _store_degraded_result(_exc: StoreUnavailableError, *, content: bool) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "degraded",
@@ -595,11 +602,11 @@ def _store_degraded_result(exc: StoreUnavailableError, *, content: bool) -> dict
         "results": [] if not content else None,
         "result": None if content else None,
         "result_count": 0 if not content else None,
-        "warnings": [_warning("voice_memos_store_unavailable", str(exc))],
+        "warnings": [_voice_memos_store_unavailable_warning()],
     }
 
 
-def _store_degraded_export_result(exc: StoreUnavailableError) -> dict[str, Any]:
+def _store_degraded_export_result(_exc: StoreUnavailableError) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "degraded",
@@ -607,7 +614,7 @@ def _store_degraded_export_result(exc: StoreUnavailableError) -> dict[str, Any]:
         "privacy": _export_privacy(),
         "result": None,
         "result_count": 0,
-        "warnings": [_warning("voice_memos_store_unavailable", str(exc))],
+        "warnings": [_voice_memos_store_unavailable_warning()],
     }
 
 

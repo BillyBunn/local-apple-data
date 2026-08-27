@@ -16,7 +16,9 @@ Candidate operation:
 
 Out of scope:
 
-- Event update, delete, move, recurrence, attendees, invitations, URLs, alarms, attachments, travel time, availability changes, default-calendar guessing, all-day events, and bulk operations.
+- Event update, delete, move, recurrence, attendees, invitations, URLs, attachments, travel time, availability changes, default-calendar guessing, and bulk operations.
+- All-day behavior was out of scope for this original v1.13 tranche; explicit all-day support is now governed by `docs/V1_55_CALENDAR_ALL_DAY_WRITE_DESIGN.md`.
+- Exact alarm offsets were out of scope for this original v1.13 tranche; exact alarm-offset support is now governed by `docs/V1_56_CALENDAR_ALARM_WRITE_DESIGN.md`.
 - Raw EventKit identifier targeting.
 - Mutations through iCloud.com, browser sessions, keychain credentials, private iCloud APIs, OAuth, IMAP, or external connectors.
 
@@ -95,7 +97,7 @@ Optional create input:
 - `location`, capped at the normal location limit.
 - `notes`, capped at the normal text-content maximum.
 
-All inputs are bounded. Attendees, recurrence, URLs, alarms, attachments, and all-day behavior are not accepted in this tranche.
+All inputs are bounded. Attendees, recurrence, URLs, attachments, and all-day behavior were not accepted in this tranche. Explicit all-day support is now governed by `docs/V1_55_CALENDAR_ALL_DAY_WRITE_DESIGN.md`; exact alarm-offset support is now governed by `docs/V1_56_CALENDAR_ALARM_WRITE_DESIGN.md`.
 
 ## Approval Gate
 
@@ -156,4 +158,4 @@ Before exposure, the Calendar write implementation must add:
 
 ## Current Release Gate
 
-The current release allows only this Calendar create-event apply surface. Calendar update, delete, move, recurrence, attendees, invitations, URLs, alarms, attachments, travel time, availability changes, default-calendar guessing, all-day events, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+The v1.13 release allowed only this Calendar create-event apply surface. Calendar exact-event update is governed by `docs/V1_34_CALENDAR_UPDATE_WRITE_DESIGN.md`. Calendar exact-event delete is governed by `docs/V1_36_CALENDAR_DELETE_WRITE_DESIGN.md`. Calendar explicit all-day support is governed by `docs/V1_55_CALENDAR_ALL_DAY_WRITE_DESIGN.md`. Calendar exact alarm-offset support is governed by `docs/V1_56_CALENDAR_ALARM_WRITE_DESIGN.md`. Calendar move, recurrence, attendees, invitations, URLs, attachments, travel time, availability changes, default-calendar guessing, date-only/time-zone inference, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

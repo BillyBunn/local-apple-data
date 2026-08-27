@@ -21,7 +21,7 @@ Allowed:
 Blocked:
 
 - Raw Notes identifiers, raw local database paths, broad note exports, durable content caches, and background indexing.
-- Overwrite, arbitrary update, delete, move, folder/account targeting, rich-text editing, checklist state, attachment mutation, locked-note mutation, shared-note mutation, Recently Deleted management, and bulk operations.
+- Overwrite, arbitrary update outside the approved replace-text/move-to-folder gates, delete outside the approved exact-note delete gate, move outside the approved exact-note/exact-folder move-to-folder gate, folder/account targeting outside approved exact note create, exact child-folder create, exact-folder rename, exact empty child-folder delete, and move gates, folder rename outside the exact-folder rename gate, root/non-empty/recursive folder delete, folder move, root/default-account folder creation, rich-text editing, checklist state, attachment mutation, locked-note mutation, shared-note mutation, Recently Deleted management, and bulk operations.
 - Private Notes store writes, iCloud.com, browser sessions, keychain credentials, and private iCloud web APIs.
 
 ## Tool Contract
@@ -163,4 +163,4 @@ Before exposure, the Notes append implementation must add:
 
 ## Current Non-Goals
 
-The current release allows Notes create-note and append-text apply only. Notes arbitrary update, delete, move, folder creation, folder/account targeting, rich-text editing, checklist state, attachments, locked/shared-note mutation, Recently Deleted management, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+The v1.19 release allowed Notes create-note and append-text apply only. Later Notes replace-text is governed separately by `docs/V1_34_NOTES_REPLACE_WRITE_DESIGN.md`, exact-folder note create is governed by `docs/V1_39_NOTES_FOLDER_CREATE_WRITE_DESIGN.md`, exact child-folder create is governed by `docs/V1_57_NOTES_FOLDER_CREATE_WRITE_DESIGN.md`, exact-folder rename is governed by `docs/V1_58_NOTES_FOLDER_RENAME_WRITE_DESIGN.md`, exact empty child-folder delete is governed by `docs/V1_59_NOTES_FOLDER_DELETE_WRITE_DESIGN.md`, exact-note move-to-folder is governed by `docs/V1_45_NOTES_MOVE_WRITE_DESIGN.md`, and exact-note delete is governed by `docs/V1_42_NOTES_DELETE_WRITE_DESIGN.md`. Notes note delete outside the approved exact-note delete gate, folder delete outside the approved exact empty child-folder delete gate, move outside the approved exact-note/exact-folder move-to-folder gate, folder rename outside the approved exact-folder rename gate, folder/account targeting outside exact note create/child-folder create/folder-rename/delete-folder/move gates, rich-text editing, checklist state, attachments, locked/shared-note mutation, Recently Deleted management, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

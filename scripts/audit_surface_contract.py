@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -13,6 +14,94 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 CORE_MCP_TOOLS = ("apple_data_health", "apple_data_doctor")
 CORE_CLI_COMMANDS = ("health", "doctor")
+AGENTS_DOC = "A" + "GENTS.md"
+CROSS_AGENT_ROUTING_DOC = "docs/" + "CROSS_AGENT_" + "ROUTING.md"
+
+CURRENT_NORMATIVE_DOCS = (
+    AGENTS_DOC,
+    "README.md",
+    "docs/CODEX_PLUGIN.md",
+    CROSS_AGENT_ROUTING_DOC,
+    "docs/MUTATION_GATES.md",
+    "docs/PRIVACY_MODEL.md",
+    "docs/THREAT_MODEL.md",
+    "docs/TESTING.md",
+    "skills/local-apple-data/SKILL.md",
+)
+
+MUTATION_GATE_CONTRACT_REQUIREMENTS = (
+    (
+        "shortcuts_exact_run",
+        ("exact identifier-bound", "shortcuts_apply_run"),
+        "Current mutation gates must document exact identifier-bound Shortcuts run through shortcuts_apply_run.",
+    ),
+    (
+        "filesystem_apply",
+        ("filesystem_apply_change",),
+        "Current mutation gates must document the implemented Filesystem apply tool.",
+    ),
+    (
+        "public_mcp_apply_tool_count",
+        ("public mcp inventory", "14 apply-capable tools"),
+        "Current mutation gates must document 14 approved public MCP apply tools.",
+    ),
+    (
+        "contacts_note_live_fail_closed",
+        ("contacts note", "synthetic-testable", "fail closed", "contacts_note_unavailable"),
+        "Current mutation gates must say Contacts note mutations are synthetic-testable but fail closed live with contacts_note_unavailable.",
+    ),
+)
+
+EXPLICIT_HISTORICAL_MARKERS = (
+    "historical",
+    "at that checkpoint",
+    "at those checkpoints",
+    "historically",
+)
+
+STALE_SHORTCUTS_BLANKET_PHRASES = (
+    "shortcuts run/open/view/sign/export",
+    "shortcut run/open/view/sign/export",
+    "| shortcuts | none |",
+)
+
+CONTACTS_NOTE_CONTEXT_PATTERN = re.compile(
+    r"(?:\bcontacts?\b[^,;|\n]{0,160}\bnotes?\b|"
+    r"\bnotes?\b[^,;|\n]{0,160}\bcontacts?\b)"
+)
+CONTACTS_NOTE_MUTATION_PATTERN = re.compile(
+    r"\b(?:append(?:ed|ing)?|clear(?:ed|ing)?|edit(?:ed|ing)?|merge(?:d|s|ing)?|"
+    r"mutat(?:e|ed|es|ing|ion|ions)|overwrite(?:s|n|ing)?|set|setting|"
+    r"updat(?:e|ed|es|ing)|writ(?:e|es|ing|ten))\b"
+)
+CONTACTS_NOTE_LIVE_CAPABILITY_PATTERN = re.compile(
+    r"\b(?:allow(?:ed|s)?|apply-capable|approved|available|can|enabled|expos(?:e|ed|es)|"
+    r"implement(?:ed|s)?|permit(?:ted|s)?|ship(?:ped|s)?|support(?:ed|s)?|usable)\b|"
+    r"\b(?:live|may|work(?:ing|s)?)\b|"
+    r"\b(?:apply|mutation|write)[ -](?:gate|path|surface|support)\b|"
+    r"\bcontacts_apply_change\b"
+)
+CONTACTS_NOTE_SAFE_QUALIFIER_PATTERNS = (
+    re.compile(r"\bcontacts_note_unavailable\b"),
+    re.compile(r"\bfail(?:ed|ing|s)?[ -]closed\b"),
+    re.compile(r"\blive[ -]unavailable\b"),
+    re.compile(
+        r"\bnot (?:currently |presently )?(?:live[ -]?)?"
+        r"(?:available|enabled|implemented|supported|usable)\b"
+    ),
+    re.compile(r"\b(?:blocked|disabled|unavailable|unsupported)\b"),
+    re.compile(r"\b(?:excluding|except(?:ed)?|outside (?:the )?approved)\b"),
+    re.compile(r"\bnot returned\b"),
+    re.compile(
+        r"\b(?:can(?:not|'t)|do not|does not|must not|never|"
+        r"prohibit(?:ed|s)?|refus(?:e|ed|es|ing))\b"
+    ),
+    re.compile(
+        r"\bsynthetic(?:ally)?(?:[ -](?:only|proof|testable|tested))\b|"
+        r"\bsynthetic (?:coverage|fixtures?|gates?|proof|tests?)\b"
+    ),
+    re.compile(r"\bdesign[ -]only\b"),
+)
 
 
 @dataclass(frozen=True)
@@ -31,14 +120,68 @@ SURFACE_CONTRACTS = (
         label="Mail",
         cli_group="mail",
         cli_subparser="mail_subparsers",
-        cli_commands=("search", "get", "content", "attachments", "export-attachment", "plan", "apply"),
+        cli_commands=(
+            "search",
+            "get",
+            "mailboxes",
+            "mailbox",
+            "mailbox-messages",
+            "senders",
+            "sender",
+            "signatures",
+            "signature",
+            "template-create",
+            "templates",
+            "template",
+            "template-delete",
+            "body-search",
+            "attachment-search",
+            "advanced-search",
+            "fts-build",
+            "fts-search",
+            "fts-status",
+            "content",
+            "unsubscribe-metadata",
+            "attachments",
+            "export-attachment",
+            "plan",
+            "plan-search-triage",
+            "plan-mailbox",
+            "apply-mailbox",
+            "plan-cleanup",
+            "apply-cleanup",
+            "apply",
+        ),
         mcp_tools=(
             "mail_search",
             "mail_get_metadata",
+            "mail_search_mailboxes",
+            "mail_get_mailbox",
+            "mail_list_mailbox_messages",
+            "mail_search_senders",
+            "mail_get_sender",
+            "mail_search_signatures",
+            "mail_get_signature",
+            "mail_create_template",
+            "mail_search_templates",
+            "mail_get_template",
+            "mail_delete_template",
+            "mail_search_body",
+            "mail_search_attachments",
+            "mail_search_advanced",
+            "mail_build_fts_index",
+            "mail_search_fts",
+            "mail_fts_status",
             "mail_get_content",
+            "mail_get_unsubscribe_metadata",
             "mail_list_attachments",
             "mail_export_attachment",
             "mail_plan_change",
+            "mail_plan_search_triage",
+            "mail_plan_mailbox_change",
+            "mail_apply_mailbox_change",
+            "mail_plan_cleanup",
+            "mail_apply_cleanup",
             "mail_apply_change",
         ),
     ),
@@ -47,11 +190,22 @@ SURFACE_CONTRACTS = (
         label="Messages",
         cli_group="messages",
         cli_subparser="messages_subparsers",
-        cli_commands=("search", "get", "attachments", "export-attachment", "plan", "apply"),
+        cli_commands=(
+            "search",
+            "get",
+            "attachments",
+            "participants",
+            "participant",
+            "export-attachment",
+            "plan",
+            "apply",
+        ),
         mcp_tools=(
             "messages_search",
             "messages_get_chat",
             "messages_list_attachments",
+            "messages_list_participants",
+            "messages_get_participant",
             "messages_export_attachment",
             "messages_plan_change",
             "messages_apply_change",
@@ -82,16 +236,28 @@ SURFACE_CONTRACTS = (
         label="Safari",
         cli_group="safari",
         cli_subparser="safari_subparsers",
-        cli_commands=("search", "get"),
-        mcp_tools=("safari_search", "safari_get_item"),
+        cli_commands=("search", "get", "folders", "folder", "folder-items"),
+        mcp_tools=(
+            "safari_search",
+            "safari_get_item",
+            "safari_search_folders",
+            "safari_get_folder",
+            "safari_list_folder_items",
+        ),
     ),
     SurfaceContract(
         name="shortcuts",
         label="Shortcuts",
         cli_group="shortcuts",
         cli_subparser="shortcuts_subparsers",
-        cli_commands=("search", "get"),
-        mcp_tools=("shortcuts_search", "shortcuts_get_item"),
+        cli_commands=("search", "get", "folder-items", "plan", "apply"),
+        mcp_tools=(
+            "shortcuts_search",
+            "shortcuts_get_item",
+            "shortcuts_list_folder_items",
+            "shortcuts_plan_run",
+            "shortcuts_apply_run",
+        ),
     ),
     SurfaceContract(
         name="books",
@@ -119,12 +285,13 @@ SURFACE_CONTRACTS = (
         label="Music",
         cli_group="music",
         cli_subparser="music_subparsers",
-        cli_commands=("search", "get", "playlists", "playlist"),
+        cli_commands=("search", "get", "playlists", "playlist", "playlist-tracks"),
         mcp_tools=(
             "music_search",
             "music_get_track",
             "music_search_playlists",
             "music_get_playlist",
+            "music_list_playlist_tracks",
         ),
     ),
     SurfaceContract(
@@ -132,12 +299,13 @@ SURFACE_CONTRACTS = (
         label="TV",
         cli_group="tv",
         cli_subparser="tv_subparsers",
-        cli_commands=("search", "get", "playlists", "playlist"),
+        cli_commands=("search", "get", "playlists", "playlist", "playlist-items"),
         mcp_tools=(
             "tv_search",
             "tv_get_item",
             "tv_search_playlists",
             "tv_get_playlist",
+            "tv_list_playlist_items",
         ),
     ),
     SurfaceContract(
@@ -145,12 +313,21 @@ SURFACE_CONTRACTS = (
         label="Freeform",
         cli_group="freeform",
         cli_subparser="freeform_subparsers",
-        cli_commands=("boards", "get", "folders", "folder"),
+        cli_commands=(
+            "boards",
+            "get",
+            "folders",
+            "folder",
+            "folder-boards",
+            "child-folders",
+        ),
         mcp_tools=(
             "freeform_list_boards",
             "freeform_get_board",
             "freeform_search_folders",
             "freeform_get_folder",
+            "freeform_list_folder_boards",
+            "freeform_list_child_folders",
         ),
     ),
     SurfaceContract(
@@ -160,8 +337,13 @@ SURFACE_CONTRACTS = (
         cli_subparser="notes_subparsers",
         cli_commands=(
             "search",
+            "folders",
+            "folder",
+            "folder-items",
+            "folder-tree",
             "get",
             "content",
+            "export-content",
             "attachments",
             "export-attachment",
             "plan",
@@ -169,8 +351,13 @@ SURFACE_CONTRACTS = (
         ),
         mcp_tools=(
             "notes_search",
+            "notes_search_folders",
+            "notes_get_folder",
+            "notes_list_folder_items",
+            "notes_list_folder_tree",
             "notes_get_metadata",
             "notes_get_content",
+            "notes_export_folder_content",
             "notes_list_attachments",
             "notes_export_attachment",
             "notes_plan_change",
@@ -182,13 +369,35 @@ SURFACE_CONTRACTS = (
         label="iCloud Drive",
         cli_group="icloud-drive",
         cli_subparser="icloud_drive_subparsers",
-        cli_commands=("search", "get", "content", "plan", "apply"),
+        cli_commands=("search", "root", "get", "list", "tree", "content", "export", "plan", "apply"),
         mcp_tools=(
             "icloud_drive_search",
+            "icloud_drive_get_root",
             "icloud_drive_get_metadata",
+            "icloud_drive_list_folder",
+            "icloud_drive_list_tree",
             "icloud_drive_get_content",
+            "icloud_drive_export_file",
             "icloud_drive_plan_change",
             "icloud_drive_apply_change",
+        ),
+    ),
+    SurfaceContract(
+        name="filesystem",
+        label="Filesystem",
+        cli_group="filesystem",
+        cli_subparser="filesystem_subparsers",
+        cli_commands=("search", "root", "get", "list", "tree", "content", "export", "plan", "apply"),
+        mcp_tools=(
+            "filesystem_search",
+            "filesystem_get_root",
+            "filesystem_get_metadata",
+            "filesystem_list_folder",
+            "filesystem_list_tree",
+            "filesystem_get_content",
+            "filesystem_export_file",
+            "filesystem_plan_change",
+            "filesystem_apply_change",
         ),
     ),
     SurfaceContract(
@@ -196,12 +405,31 @@ SURFACE_CONTRACTS = (
         label="Calendar",
         cli_group="calendar",
         cli_subparser="calendar_subparsers",
-        cli_commands=("search", "get", "plan", "apply"),
+        cli_commands=(
+            "search",
+            "get",
+            "participants",
+            "participant",
+            "calendars",
+            "calendar",
+            "events",
+            "plan",
+            "apply",
+            "plan-calendar",
+            "apply-calendar",
+        ),
         mcp_tools=(
             "calendar_search",
             "calendar_get_event",
+            "calendar_list_participants",
+            "calendar_get_participant",
+            "calendar_search_calendars",
+            "calendar_get_calendar",
+            "calendar_list_calendar_events",
             "calendar_plan_change",
             "calendar_apply_change",
+            "calendar_plan_calendar_change",
+            "calendar_apply_calendar_change",
         ),
     ),
     SurfaceContract(
@@ -209,14 +437,33 @@ SURFACE_CONTRACTS = (
         label="Reminders",
         cli_group="reminders",
         cli_subparser="reminders_subparsers",
-        cli_commands=("search", "due", "eventkit-search", "content", "plan", "apply"),
+        cli_commands=(
+            "search",
+            "due",
+            "eventkit-search",
+            "request-access",
+            "lists",
+            "list",
+            "list-items",
+            "content",
+            "plan",
+            "apply",
+            "plan-list",
+            "apply-list",
+        ),
         mcp_tools=(
             "reminders_search",
             "reminders_due",
             "reminders_eventkit_search",
+            "reminders_search_lists",
+            "reminders_list_lists",
+            "reminders_get_list",
+            "reminders_list_items",
             "reminders_get_content",
             "reminders_plan_change",
             "reminders_apply_change",
+            "reminders_plan_list_change",
+            "reminders_apply_list_change",
         ),
     ),
     SurfaceContract(
@@ -224,10 +471,32 @@ SURFACE_CONTRACTS = (
         label="Contacts",
         cli_group="contacts",
         cli_subparser="contacts_subparsers",
-        cli_commands=("search", "get", "plan", "apply"),
+        cli_commands=(
+            "request-access",
+            "search",
+            "get",
+            "groups",
+            "group",
+            "group-members",
+            "containers",
+            "container",
+            "container-members",
+            "count",
+            "export",
+            "plan",
+            "apply",
+        ),
         mcp_tools=(
             "contacts_search",
             "contacts_get",
+            "contacts_search_groups",
+            "contacts_get_group",
+            "contacts_list_group_members",
+            "contacts_search_containers",
+            "contacts_get_container",
+            "contacts_list_container_members",
+            "contacts_count",
+            "contacts_export_archive",
             "contacts_plan_change",
             "contacts_apply_change",
         ),
@@ -237,10 +506,13 @@ SURFACE_CONTRACTS = (
         label="Photos",
         cli_group="photos",
         cli_subparser="photos_subparsers",
-        cli_commands=("search", "get", "export", "plan", "apply"),
+        cli_commands=("search", "request-access", "albums", "album", "album-assets", "get", "export", "plan", "apply"),
         mcp_tools=(
             "photos_search",
             "photos_get_asset",
+            "photos_search_albums",
+            "photos_get_album",
+            "photos_list_album_assets",
             "photos_export_asset",
             "photos_plan_change",
             "photos_apply_change",
@@ -291,6 +563,7 @@ def audit_surface_contract(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
     health_summary_surfaces = _health_summary_surfaces(health_path, findings)
     access_surfaces = _access_requirement_surfaces(health_path, findings)
     matrix_labels = _capability_matrix_labels(matrix_path, findings)
+    normative_docs_checked = _audit_current_normative_contract(root, findings)
 
     expected_mcp_tools = set(CORE_MCP_TOOLS)
     expected_top_level_cli = set(CORE_CLI_COMMANDS)
@@ -386,9 +659,90 @@ def audit_surface_contract(project_root: Path = PROJECT_ROOT) -> dict[str, Any]:
         "health_surfaces_checked": len(health_summary_surfaces),
         "mcp_tools_checked": len(mcp_tools),
         "mcp_tools_expected": len(expected_mcp_tools),
+        "normative_docs_checked": normative_docs_checked,
         "status": "ok" if not findings else "error",
         "surfaces_checked": len(SURFACE_CONTRACTS),
     }
+
+
+def _audit_current_normative_contract(
+    root: Path,
+    findings: list[Finding],
+) -> int:
+    existing_paths = [
+        root / relative_path
+        for relative_path in CURRENT_NORMATIVE_DOCS
+        if (root / relative_path).is_file()
+    ]
+    if not existing_paths:
+        return 0
+
+    mutation_gates_path = root / "docs/MUTATION_GATES.md"
+    if mutation_gates_path.is_file():
+        mutation_gates_text = mutation_gates_path.read_text(encoding="utf-8").lower()
+        for name, required_phrases, message in MUTATION_GATE_CONTRACT_REQUIREMENTS:
+            if all(phrase in mutation_gates_text for phrase in required_phrases):
+                continue
+            findings.append(
+                Finding(
+                    "missing_current_normative_contract",
+                    mutation_gates_path,
+                    0,
+                    name,
+                    message,
+                )
+            )
+
+    for path in existing_paths:
+        for line_number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(),
+            start=1,
+        ):
+            normalized = line.lower()
+            if any(marker in normalized for marker in EXPLICIT_HISTORICAL_MARKERS):
+                continue
+            if any(phrase in normalized for phrase in STALE_SHORTCUTS_BLANKET_PHRASES):
+                findings.append(
+                    Finding(
+                        "stale_current_shortcuts_contract",
+                        path,
+                        line_number,
+                        "shortcuts_exact_run",
+                        "Current normative docs must not block every Shortcuts run; one exact identifier-bound plan/apply run is implemented.",
+                    )
+                )
+            if _advertises_live_contacts_note_mutation(normalized):
+                findings.append(
+                    Finding(
+                        "stale_current_contacts_note_contract",
+                        path,
+                        line_number,
+                        "contacts_note_live_fail_closed",
+                        "Current normative docs must not advertise live Contacts note mutation; the designed gates fail closed with contacts_note_unavailable.",
+                    )
+                )
+
+    return len(existing_paths)
+
+
+def _advertises_live_contacts_note_mutation(normalized_line: str) -> bool:
+    if any(marker in normalized_line for marker in EXPLICIT_HISTORICAL_MARKERS):
+        return False
+    if not CONTACTS_NOTE_CONTEXT_PATTERN.search(normalized_line):
+        return False
+    if any(
+        pattern.search(normalized_line)
+        for pattern in CONTACTS_NOTE_SAFE_QUALIFIER_PATTERNS
+    ):
+        return False
+    return bool(
+        CONTACTS_NOTE_LIVE_CAPABILITY_PATTERN.search(normalized_line)
+        and (
+            CONTACTS_NOTE_MUTATION_PATTERN.search(normalized_line)
+            or "operation" in normalized_line
+            or "gate" in normalized_line
+        )
+    )
 
 
 def _require_mcp_tool(

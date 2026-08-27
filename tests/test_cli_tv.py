@@ -71,6 +71,33 @@ def _playlist_payload() -> dict:
     }
 
 
+def _playlist_items_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "tv_playlist_items",
+        "privacy": {
+            "content_inspected": False,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+            "output_tier": "metadata",
+            "video_content_returned": False,
+            "file_path_returned": False,
+            "raw_identifier_returned": False,
+            "artwork_returned": False,
+            "description_returned": False,
+            "playback_state_returned": False,
+            "watched_state_returned": False,
+            "rating_returned": False,
+            "playlist_items_returned": True,
+        },
+        "playlist": _playlist_payload()["results"][0],
+        "results": [_item_payload()["results"][0]],
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
 def test_cli_tv_search_outputs_json(monkeypatch, tmp_path, capsys) -> None:
     monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
     seen: dict[str, object] = {}
@@ -197,3 +224,34 @@ def test_cli_tv_playlist_outputs_json(monkeypatch, tmp_path, capsys) -> None:
     parsed = json.loads(capsys.readouterr().out)
     assert parsed["status"] == "ok"
     assert parsed["result"]["title"] == "Synthetic CLI TV Playlist"
+
+
+def test_cli_tv_playlist_items_outputs_json(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    seen: dict[str, object] = {}
+
+    def fake_list(handle: str, **kwargs):
+        seen["handle"] = handle
+        seen["kwargs"] = kwargs
+        return _playlist_items_payload()
+
+    monkeypatch.setattr("local_apple_data.cli.list_tv_playlist_items", fake_list)
+
+    exit_code = main(
+        [
+            "tv",
+            "playlist-items",
+            "--json",
+            "--handle",
+            "tv:playlist:v1:22222222222222222222222222222222",
+            "--limit",
+            "3",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["source"] == "tv_playlist_items"
+    assert parsed["result_count"] == 1
+    assert seen["handle"] == "tv:playlist:v1:22222222222222222222222222222222"
+    assert seen["kwargs"] == {"limit": 3, "max_scan_items": 5000}

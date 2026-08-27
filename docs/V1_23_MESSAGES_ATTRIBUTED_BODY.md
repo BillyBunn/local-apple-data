@@ -2,7 +2,9 @@
 
 Status: implemented read-only surface refinement.
 
-This release improves exact-handle Messages transcript completeness by decoding bounded plaintext from local `message.attributedBody` rows when modern Messages records have an empty `message.text` column. It does not add broad Messages text search, participant lookup, reactions, attachment scanning, or any mutating tool.
+This release improves exact-handle Messages transcript completeness by decoding bounded plaintext from local `message.attributedBody` rows when modern Messages records have an empty `message.text` column. It does not add broad Messages text search, participant detail, participant lookup for mutation, reactions, attachment scanning, or any mutating tool.
+
+Current note: v1.64 later added a separate read-only exact-chat participant metadata/detail surface with no list-time phone/email previews. This v1.23 gate still does not expose participants through transcript retrieval.
 
 ## Why This Exists
 

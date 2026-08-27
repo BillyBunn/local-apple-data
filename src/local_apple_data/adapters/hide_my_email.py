@@ -58,6 +58,13 @@ def _warning(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
 
 
+def _mail_store_unavailable_warning() -> dict[str, str]:
+    return _warning(
+        "mail_store_unavailable",
+        "Mail local store is unavailable or unreadable.",
+    )
+
+
 def _check_schema(connection) -> str:
     require_columns(connection, "addresses", {"ROWID", "address", "comment"})
     require_columns(
@@ -385,7 +392,7 @@ def _invalid_handle_result() -> dict[str, Any]:
     }
 
 
-def _store_degraded_result(exc: StoreUnavailableError, *, detail: bool) -> dict[str, Any]:
+def _store_degraded_result(_exc: StoreUnavailableError, *, detail: bool) -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "degraded",
@@ -394,5 +401,5 @@ def _store_degraded_result(exc: StoreUnavailableError, *, detail: bool) -> dict[
         "results": [] if not detail else None,
         "result": None if detail else None,
         "result_count": 0 if not detail else None,
-        "warnings": [_warning("mail_store_unavailable", str(exc))],
+        "warnings": [_mail_store_unavailable_warning()],
     }

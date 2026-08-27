@@ -16,7 +16,7 @@ Candidate operation:
 
 Out of scope:
 
-- Photos edits, delete, album targeting, album create/update/delete, hidden/favorite mutation, metadata mutation, thumbnails, inline asset bytes, network iCloud fetch, iCloud.com, browser sessions, private Photos databases, and bulk operations.
+- Photos edits, delete, album membership outside `docs/V1_151_PHOTOS_ALBUM_MEMBERSHIP_WRITE_DESIGN.md`, regular album management outside `docs/V1_154_PHOTOS_REGULAR_ALBUM_MANAGEMENT_WRITE_DESIGN.md`, metadata mutation outside the exact favorite/hidden gate, thumbnails, inline asset bytes, network iCloud fetch, iCloud.com, browser sessions, private Photos databases, and bulk operations.
 - Raw PhotoKit local identifiers as user inputs.
 - Importing from URLs, symlinks, packages, directories, or remote/cloud-only sources.
 
@@ -171,4 +171,4 @@ Before exposure, the Photos import implementation must add:
 
 ## Current Release Gate
 
-The current release allows only this Photos import apply surface. Photos edit, delete, album targeting, album create/update/delete, hidden/favorite mutation, metadata mutation, thumbnails, inline asset bytes, network iCloud fetch, iCloud.com, private Photos database access, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+This document approves only Photos import. Additional Photos mutation requires a separate write-design gate. Exact asset favorite/hidden updates are governed by `docs/V1_134_PHOTOS_UPDATE_FLAGS_WRITE_DESIGN.md`; Photos permanent delete/Recently Deleted empty, album membership outside `docs/V1_151_PHOTOS_ALBUM_MEMBERSHIP_WRITE_DESIGN.md`, regular album management outside `docs/V1_154_PHOTOS_REGULAR_ALBUM_MANAGEMENT_WRITE_DESIGN.md`, metadata mutation outside favorite/hidden, thumbnails, inline asset bytes, network iCloud fetch, iCloud.com, private Photos database access, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

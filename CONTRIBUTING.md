@@ -1,15 +1,16 @@
 # Contributing
 
-This project exposes local Apple data through a local-first MCP server. Contributions are welcome when they preserve the privacy model, read-only default, and synthetic-first test posture.
+This project exposes local Apple data through a local-first MCP server. Contributions are welcome when they preserve the privacy model, metadata-first/read-mostly default, and synthetic-first test posture.
 
 ## Ground Rules
 
 - Keep automated tests synthetic-only. Do not add fixtures copied from real Mail, Messages, Notes, Reminders, Calendar, Contacts, Photos, Voice Memos, iCloud Drive, or Hide My Email data.
 - Do not commit live handles, local account names, full email addresses, phone numbers, contact records, message text, note bodies, reminder notes, calendar locations, file contents, media bytes, local store paths, credentials, tokens, cookies, OAuth artifacts, keychain data, or browser profile data.
 - Keep search metadata-first. Exact content, detail, and export tools must require opaque handles returned by the matching metadata flow.
-- Keep broad content search, background indexing, durable personal-content caches, network mail, private iCloud web/API use, browser automation, and keychain access out of scope unless a separate public design explicitly approves them.
-- Keep mutation tools out of the read-only release. Future write tools must follow `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+- Keep broad content search, background indexing, durable personal-content caches outside the explicit opt-in Mail FTS gate, network mail, private iCloud web/API use, browser automation, and keychain access out of scope unless a separate public design explicitly approves them.
+- The current release exposes 14 approved MCP apply tools. Do not add another mutation class unless its narrow operation is approved through `docs/MUTATION_GATES.md`, `docs/WRITE_TOOL_ROADMAP.md`, a dedicated design, synthetic tests, explicit plan/apply confirmation, and independent read-back or bounded invocation proof.
 - Return stable warning codes and bounded output. Do not return raw exceptions, raw database rows, raw framework identifiers, raw file paths, stack traces, or secret values.
+- Audit the code-signing subsystem read-only. When reviewing `src/local_apple_data/adapters/_signing.py` or the EventKit/Photos helper apps — by hand or with an automated agent — do not run `security`, `codesign`, or `tccutil` mutations against your login keychain. `security delete-certificate -c <name>` defaults to the login keychain, and each helper's designated requirement pins to the signing certificate's leaf hash, so removing or duplicating that certificate silently invalidates Calendar, Reminders, and Photos permissions the user already granted; recovering needs a re-provision plus an interactive re-grant. Reproduce against a throwaway keychain created at an explicit path, or reason from the code. `provision_local_signing_identity` refuses to run under pytest for the same reason, so tests cannot reach the real keychain even if they forget to mock `subprocess`.
 
 ## Development Setup
 

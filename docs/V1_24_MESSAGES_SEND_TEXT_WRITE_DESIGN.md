@@ -8,6 +8,8 @@ No other mutating CLI or MCP tools are approved or exposed by this document. The
 
 This document defines the first Messages write lane: send one bounded plaintext message to one exact existing Messages chat selected by an opaque `messages:chat:v1:` handle, with preview as the default behavior and independent local read_back verification after apply.
 
+Current note: v1.64 later added a separate read-only exact-chat participant metadata/detail surface. Participant lookup for mutation, direct-recipient sends, new chats, contact lookup, group management, and participant-target sends remain out of scope here.
+
 ## Scope
 
 Candidate operation:
@@ -16,7 +18,7 @@ Candidate operation:
 
 Out of scope:
 
-- Direct recipient sends, new chat creation, SMS fallback selection, outgoing-account selection, file sends, rich text, effects, inline replies, reactions/tapbacks, edit, unsend, delete, mark read, group management, participant lookup, contact lookup, network/iCloud APIs, IMCore injection, private frameworks, and bulk operations.
+- Direct recipient sends, new chat creation, SMS fallback selection, outgoing-account selection, file sends, rich text, effects, inline replies, reactions/tapbacks, edit, unsend, delete, mark read, group management, participant lookup for mutation, contact lookup, network/iCloud APIs, IMCore injection, private frameworks, and bulk operations.
 - Raw chat row IDs, chat GUIDs, addresses, phone numbers, email addresses, participant identifiers, local database paths, and direct Messages attachment paths as user-facing inputs.
 
 ## Source Review
@@ -192,6 +194,8 @@ Before exposure, the Messages send-text implementation must add:
 - Redaction tests proving logs do not contain message bodies, participant handles, chat GUIDs, raw row IDs, local paths, body hashes, approval fingerprints, tokens, raw helper errors, or stack traces.
 - MCP annotation tests proving write tools are not marked read-only.
 
-## Current Release Gate
+## Release Gate
 
-The current release allows only this Messages send-text apply surface. Direct recipient sends, new chat creation, SMS fallback selection, outgoing-account selection, file sends, rich text, effects, inline replies, reactions/tapbacks, edit, unsend, delete, mark read, group management, participant lookup, contact lookup, network/iCloud APIs, IMCore injection, private frameworks, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+The v1.24 release allowed only this Messages send-text apply surface. Direct recipient sends, new chat creation, SMS fallback selection, outgoing-account selection, file sends, rich text, effects, inline replies, reactions/tapbacks, edit, unsend, delete, mark read, group management, participant lookup for mutation, contact lookup, network/iCloud APIs, IMCore injection, private frameworks, and bulk operations remained blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+
+The current broader release also allows exact-chat Messages send-file through the separate `docs/V1_38_MESSAGES_SEND_FILE_WRITE_DESIGN.md` gate and read-only exact-chat participant metadata through `docs/V1_64_MESSAGES_PARTICIPANTS_METADATA.md`.

@@ -82,7 +82,7 @@ class TVPlaylist:
     duration_seconds: float | None
 
 
-def _privacy() -> dict[str, bool | str]:
+def _privacy(*, playlist_items_returned: bool = False) -> dict[str, bool | str]:
     return {
         "content_inspected": False,
         "raw_rows_inspected": False,
@@ -96,7 +96,7 @@ def _privacy() -> dict[str, bool | str]:
         "playback_state_returned": False,
         "watched_state_returned": False,
         "rating_returned": False,
-        "playlist_items_returned": False,
+        "playlist_items_returned": playlist_items_returned,
     }
 
 
@@ -375,6 +375,81 @@ def get_tv_playlist(
     return _not_found_result(source="tv_playlists")
 
 
+def list_tv_playlist_items(
+    handle: str,
+    *,
+    limit: int = DEFAULT_LIMIT,
+    max_scan_items: int = MAX_SCAN_ITEMS,
+    runner: TVRunner | None = None,
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    if not is_opaque_handle(handle, PLAYLIST_HANDLE_PREFIX):
+        return _invalid_handle_result(
+            source="tv_playlist_items",
+            expected="tv:playlist:v1",
+        )
+
+    bounded_limit = max(1, min(limit, MAX_LIMIT))
+    bounded_scan = _bounded_scan_items(max_scan_items)
+    loaded_playlists = _load_playlists(
+        command_name="list_playlists",
+        query="",
+        limit=bounded_scan,
+        max_scan_items=bounded_scan,
+        runner=runner,
+        timeout_seconds=timeout_seconds,
+    )
+    if loaded_playlists["status"] != "ok":
+        return _automation_degraded_result(
+            source="tv_playlist_items",
+            code=loaded_playlists["warning_code"],
+        )
+
+    selected_playlist: TVPlaylist | None = None
+    for playlist in loaded_playlists["playlists"]:
+        if opaque_handle_matches(handle, PLAYLIST_HANDLE_PREFIX, playlist.persistent_id):
+            selected_playlist = playlist
+            break
+
+    if selected_playlist is None:
+        return _not_found_result(source="tv_playlist_items")
+
+    loaded_items = _load_items(
+        command_name="list_playlist_items",
+        query=selected_playlist.persistent_id,
+        limit=bounded_limit,
+        max_scan_items=bounded_scan,
+        runner=runner,
+        timeout_seconds=timeout_seconds,
+    )
+    if loaded_items["status"] != "ok":
+        return _automation_degraded_result(
+            source="tv_playlist_items",
+            code=loaded_items["warning_code"],
+        )
+
+    warnings = [
+        *_scan_warnings(loaded_playlists["playlists"], bounded_scan),
+        *_scan_warnings(loaded_items["items"], bounded_scan),
+    ]
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "tv_playlist_items",
+        "store_fingerprint": _fingerprint_items(loaded_items["items"]),
+        "privacy": _privacy(playlist_items_returned=True),
+        "query": {
+            "scope": "selected_playlist_items",
+            "limit": bounded_limit,
+            "max_scan_items": bounded_scan,
+        },
+        "playlist": _playlist_metadata(selected_playlist),
+        "results": [_item_metadata(item) for item in loaded_items["items"][:bounded_limit]],
+        "result_count": min(len(loaded_items["items"]), bounded_limit),
+        "warnings": warnings,
+    }
+
+
 def check_tv_readiness(
     *,
     tv_app_path: Path = TV_APP_PATH,
@@ -467,7 +542,7 @@ def _run_tv_command(
     active_runner = runner or _default_runner
     try:
         result = active_runner(args, timeout_seconds)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired):
         return {"status": "degraded", "warning_code": "tv_automation_unavailable"}
     if result.returncode != 0:
         return {"status": "degraded", "warning_code": "tv_automation_error"}
@@ -792,6 +867,29 @@ on run argv
                 end if
             end repeat
             return my joinRecords(outputRecords)
+        end if
+        if commandName is "list_playlist_items" then
+            set playlistScanCount to 0
+            repeat with playlistItem in playlists
+                set playlistScanCount to playlistScanCount + 1
+                if playlistScanCount > scanLimit then exit repeat
+                try
+                    set playlistPersistentIdValue to persistent ID of playlistItem as string
+                on error
+                    set playlistPersistentIdValue to ""
+                end try
+                if playlistPersistentIdValue is queryText then
+                    set scannedCount to 0
+                    repeat with videoItem in tracks of playlistItem
+                        set scannedCount to scannedCount + 1
+                        if scannedCount > scanLimit then exit repeat
+                        set end of outputRecords to my itemRecord(videoItem)
+                        if (count of outputRecords) >= resultLimit then exit repeat
+                    end repeat
+                    return my joinRecords(outputRecords)
+                end if
+            end repeat
+            return ""
         end if
     end tell
     return ""

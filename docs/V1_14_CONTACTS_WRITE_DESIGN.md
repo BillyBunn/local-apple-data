@@ -16,7 +16,7 @@ Candidate operation:
 
 Out of scope:
 
-- Contact update, delete, merge, move, group membership, postal addresses, birthdays, dates, relationships, social profiles, instant messaging addresses, notes, image data, custom labels beyond bounded local labels, and bulk operations.
+- Contact update outside the separate exact name/organization/email/phone/URL update gate, delete outside the separate exact-contact delete gate, merge, move, group membership, postal addresses, birthdays, dates, relationships, social profiles, instant messaging addresses, notes, image data, custom labels beyond bounded local labels, and bulk operations.
 - Raw Contacts identifiers or container identifiers as user inputs.
 - Mutations through iCloud.com, browser sessions, keychain credentials, private iCloud APIs, OAuth, IMAP, or external connectors.
 
@@ -158,4 +158,4 @@ Before exposure, the Contacts write implementation must add:
 
 ## Current Release Gate
 
-The current release allows only this Contacts create-contact apply surface. Contacts update, delete, merge, move, group membership, postal addresses, birthdays, dates, relationships, social profiles, instant messaging addresses, notes, image data, custom labels beyond bounded local labels, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+This document allows only the Contacts create-contact apply surface. Contacts exact scalar update is governed separately by `docs/V1_48_CONTACTS_UPDATE_WRITE_DESIGN.md`, Contacts exact email/phone/URL method-array update is governed separately by `docs/V1_69_CONTACTS_METHOD_UPDATE_WRITE_DESIGN.md`, and Contacts exact delete is governed separately by `docs/V1_49_CONTACTS_DELETE_WRITE_DESIGN.md`. Contacts update outside that exact name/organization/email/phone/URL gate, delete outside that exact-contact gate, merge, move, group membership, postal addresses, birthdays, dates, relationships, social profiles, instant messaging addresses, notes, image data, custom labels beyond bounded local labels, and bulk operations remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

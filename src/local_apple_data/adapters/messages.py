@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import mimetypes
 import re
 import shutil
 import subprocess
@@ -22,6 +23,7 @@ from .sqlite_store import (
     schema_fingerprint,
     table_columns,
 )
+from .warning_safety import safe_warning_payloads
 
 
 DEFAULT_MESSAGES_DB = Path.home() / "Library/Messages/chat.db"
@@ -39,13 +41,15 @@ MAX_CONTENT_CHARS = 12000
 MESSAGE_TEXT_CHARS = 2000
 MAX_SEND_TEXT_CHARS = 12000
 MAX_SEND_PREVIEW_CHARS = 240
+MAX_SEND_FILE_BYTES = 100 * 1024 * 1024
 MESSAGES_HELPER_TIMEOUT = 5.0
 MESSAGES_APPLESCRIPT_TIMEOUT_SECONDS = 10.0
 MESSAGES_SEND_READ_BACK_TIMEOUT_SECONDS = 8.0
 MESSAGES_SEND_READ_BACK_INTERVAL_SECONDS = 0.4
 CHAT_HANDLE_PREFIX = "messages:chat"
 MESSAGE_ATTACHMENT_HANDLE_PREFIX = "messages:attachment"
-PLAN_OPERATIONS = {"send_text"}
+MESSAGE_PARTICIPANT_HANDLE_PREFIX = "messages:participant"
+PLAN_OPERATIONS = {"send_text", "send_file"}
 APPROVAL_TOKEN_PREFIX = "messages-apply:v1:"
 ScriptRunner = Callable[[str, float], str]
 
@@ -79,11 +83,21 @@ def _attachment_privacy(*, content_inspected: bool) -> dict[str, bool | str]:
     }
 
 
-def _export_privacy() -> dict[str, bool | str]:
+def _participant_privacy(*, participant_id_returned: bool) -> dict[str, bool | str]:
+    return {
+        "content_inspected": False,
+        "participant_id_returned": participant_id_returned,
+        "raw_rows_inspected": False,
+        "credentials_inspected": False,
+        "output_tier": "detail" if participant_id_returned else "metadata",
+    }
+
+
+def _export_privacy(*, attachment_content_exported: bool = False) -> dict[str, bool | str]:
     return {
         "content_inspected": True,
         "attachment_content_returned": False,
-        "attachment_content_exported": True,
+        "attachment_content_exported": attachment_content_exported,
         "raw_rows_inspected": False,
         "credentials_inspected": False,
         "output_tier": "export",
@@ -110,6 +124,13 @@ def _mutation_privacy(*, content_inspected: bool = False) -> dict[str, bool | st
 
 def _warning(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
+
+
+def _messages_store_unavailable_warning() -> dict[str, str]:
+    return _warning(
+        "messages_store_unavailable",
+        "Messages local store is unavailable or unreadable.",
+    )
 
 
 def _check_schema(connection) -> str:
@@ -378,6 +399,119 @@ def list_message_attachments(
     }
 
 
+def list_message_participants(
+    handle: str,
+    *,
+    db_path: Path | None = None,
+    limit: int = DEFAULT_LIMIT,
+) -> dict[str, Any]:
+    if not is_opaque_handle(handle, CHAT_HANDLE_PREFIX):
+        return _invalid_participant_chat_handle_result()
+
+    bounded_limit = max(1, min(limit, 50))
+    try:
+        with connect_readonly(db_path or DEFAULT_MESSAGES_DB) as connection:
+            fingerprint = _check_schema(connection)
+            chat_id = _resolve_chat_id(connection, fingerprint, handle)
+            if chat_id is None:
+                return {
+                    "schema_version": 1,
+                    "status": "not_found",
+                    "source": "messages",
+                    "schema_fingerprint": fingerprint,
+                    "privacy": _participant_privacy(participant_id_returned=False),
+                    "results": [],
+                    "result_count": 0,
+                    "warnings": [],
+                }
+            rows = _select_participants(connection, chat_id, bounded_limit)
+    except StoreUnavailableError as exc:
+        return _messages_participant_degraded_result(exc)
+
+    results = [
+        _message_participant_metadata(
+            row,
+            fingerprint=fingerprint,
+            chat_id=chat_id,
+            include_identifier=False,
+        )
+        for row in rows
+    ]
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "messages",
+        "schema_fingerprint": fingerprint,
+        "privacy": _participant_privacy(participant_id_returned=False),
+        "query": {"scope": "chat_participants", "limit": bounded_limit},
+        "results": results,
+        "result_count": len(results),
+        "warnings": [],
+    }
+
+
+def get_message_participant(
+    chat_handle: str,
+    participant_handle: str,
+    *,
+    db_path: Path | None = None,
+) -> dict[str, Any]:
+    if not is_opaque_handle(chat_handle, CHAT_HANDLE_PREFIX):
+        return _invalid_participant_chat_handle_result(detail=True)
+    if not is_opaque_handle(participant_handle, MESSAGE_PARTICIPANT_HANDLE_PREFIX):
+        return _invalid_participant_handle_result()
+
+    try:
+        with connect_readonly(db_path or DEFAULT_MESSAGES_DB) as connection:
+            fingerprint = _check_schema(connection)
+            chat_id = _resolve_chat_id(connection, fingerprint, chat_handle)
+            if chat_id is None:
+                return {
+                    "schema_version": 1,
+                    "status": "not_found",
+                    "source": "messages",
+                    "schema_fingerprint": fingerprint,
+                    "privacy": _participant_privacy(participant_id_returned=False),
+                    "result": None,
+                    "warnings": [],
+                }
+            row = _find_participant_row(
+                _select_participants(connection, chat_id, None),
+                fingerprint=fingerprint,
+                chat_id=chat_id,
+                participant_handle=participant_handle,
+            )
+    except StoreUnavailableError as exc:
+        return _messages_participant_degraded_result(exc, detail=True)
+
+    if row is None:
+        return {
+            "schema_version": 1,
+            "status": "not_found",
+            "source": "messages",
+            "schema_fingerprint": fingerprint,
+            "privacy": _participant_privacy(participant_id_returned=False),
+            "result": None,
+            "warnings": [],
+        }
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "messages",
+        "schema_fingerprint": fingerprint,
+        "privacy": _participant_privacy(participant_id_returned=True),
+        "result": _message_participant_metadata(
+            row,
+            fingerprint=fingerprint,
+            chat_id=chat_id,
+            include_identifier=True,
+        ),
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
 def export_message_attachment(
     chat_handle: str,
     attachment_handle: str,
@@ -487,7 +621,7 @@ def export_message_attachment(
         "status": "ok",
         "source": "messages",
         "schema_fingerprint": attachment_fingerprint,
-        "privacy": _export_privacy(),
+        "privacy": _export_privacy(attachment_content_exported=True),
         "result": result,
         "result_count": 1,
         "warnings": [],
@@ -499,17 +633,25 @@ def plan_messages_change(
     *,
     handle: str = "",
     body_text: str = "",
+    file_path: str = "",
     db_path: Path | None = None,
 ) -> dict[str, Any]:
     normalized_operation = operation.strip().replace("-", "_")
     warnings: list[dict[str, str]] = []
     if normalized_operation not in PLAN_OPERATIONS:
-        warnings.append(_warning("invalid_operation", "Expected operation send_text."))
+        warnings.append(_warning("invalid_operation", "Expected operation send_text or send_file."))
     if not is_opaque_handle(handle, CHAT_HANDLE_PREFIX):
         warnings.append(_warning("invalid_handle", "Messages send planning requires a messages:chat:v1 handle."))
-    normalized_body, body_warning = _normalize_send_body(body_text)
-    if body_warning is not None:
-        warnings.append(body_warning)
+    normalized_body = ""
+    file_info: dict[str, Any] | None = None
+    if normalized_operation == "send_text":
+        normalized_body, body_warning = _normalize_send_body(body_text)
+        if body_warning is not None:
+            warnings.append(body_warning)
+    elif normalized_operation == "send_file":
+        file_info, file_warning = _resolve_send_file(file_path)
+        if file_warning is not None:
+            warnings.append(file_warning)
     if warnings:
         return _plan_error(warnings)
 
@@ -536,10 +678,6 @@ def plan_messages_change(
     if not _bounded_string(chat_state["guid"], 500):
         return _plan_error([_warning("messages_chat_not_sendable", "Selected Messages chat is missing a sendable chat id.")])
 
-    body_preview, body_preview_truncated = _bounded_text(
-        normalized_body,
-        MAX_SEND_PREVIEW_CHARS,
-    )
     target = {
         "handle": make_opaque_handle(CHAT_HANDLE_PREFIX, fingerprint, int(chat_state["chat_id"])),
         "display_name": _bounded_string(chat_state["display_name"], 500),
@@ -549,23 +687,46 @@ def plan_messages_change(
         "last_message_date": _message_date(chat_state["last_message_date"]),
         "last_message_rowid": _nonnegative_int(chat_state["last_message_rowid"]),
     }
-    proposed = {
-        "kind": "messages_send_text",
-        "format": "plaintext",
-        "body_chars": len(normalized_body),
-        "body_preview_text": body_preview,
-        "body_preview_chars": len(body_preview),
-        "body_preview_truncated": body_preview_truncated,
-        "attachments_permitted": False,
-        "direct_recipient_send_permitted": False,
-    }
+    if normalized_operation == "send_text":
+        body_preview, body_preview_truncated = _bounded_text(
+            normalized_body,
+            MAX_SEND_PREVIEW_CHARS,
+        )
+        proposed = {
+            "kind": "messages_send_text",
+            "format": "plaintext",
+            "body_chars": len(normalized_body),
+            "body_preview_text": body_preview,
+            "body_preview_chars": len(body_preview),
+            "body_preview_truncated": body_preview_truncated,
+            "attachments_permitted": False,
+            "direct_recipient_send_permitted": False,
+        }
+        proposed_fingerprint: dict[str, Any] = {
+            **proposed,
+            "body_sha256": hashlib.sha256(normalized_body.encode("utf-8")).hexdigest(),
+        }
+    else:
+        assert file_info is not None
+        proposed = {
+            "kind": "messages_send_file",
+            "filename": file_info["filename"],
+            "file_size": file_info["file_size"],
+            "mime_type": file_info["mime_type"],
+            "attachment_type": file_info["attachment_type"],
+            "file_content_returned": False,
+            "file_path_returned": False,
+            "direct_recipient_send_permitted": False,
+            "body_text_permitted": False,
+        }
+        proposed_fingerprint = {
+            **proposed,
+            "file_identity": file_info["identity"],
+        }
     fingerprint_payload = {
         "operation": normalized_operation,
         "target": target,
-        "proposed": {
-            **proposed,
-            "body_sha256": hashlib.sha256(normalized_body.encode("utf-8")).hexdigest(),
-        },
+        "proposed": proposed_fingerprint,
     }
     idempotency_key = _plan_idempotency_key(fingerprint_payload)
     approval_fingerprint = _approval_fingerprint(
@@ -605,13 +766,20 @@ def apply_messages_change(
     *,
     handle: str = "",
     body_text: str = "",
+    file_path: str = "",
     approval_token: str = "",
     confirm_apply: bool = False,
     db_path: Path | None = None,
     script_runner: ScriptRunner | None = None,
     read_back_timeout: float = MESSAGES_SEND_READ_BACK_TIMEOUT_SECONDS,
 ) -> dict[str, Any]:
-    plan = plan_messages_change(operation, handle=handle, body_text=body_text, db_path=db_path)
+    plan = plan_messages_change(
+        operation,
+        handle=handle,
+        body_text=body_text,
+        file_path=file_path,
+        db_path=db_path,
+    )
     if plan.get("status") != "ok":
         return _apply_error(_safe_warnings(plan), plan=plan)
 
@@ -630,7 +798,16 @@ def apply_messages_change(
             plan=plan,
         )
 
-    normalized_body, _ = _normalize_send_body(body_text)
+    normalized_operation = operation.strip().replace("-", "_")
+    is_text_send = normalized_operation == "send_text"
+    normalized_body = ""
+    file_info: dict[str, Any] | None = None
+    if is_text_send:
+        normalized_body, _ = _normalize_send_body(body_text)
+    else:
+        file_info, _ = _resolve_send_file(file_path)
+        if file_info is None:
+            return _apply_error([_warning("send_file_unavailable", "Messages send_file path is unavailable.")], plan=plan)
     resolved_db_path = db_path or DEFAULT_MESSAGES_DB
     try:
         with connect_readonly(resolved_db_path) as connection:
@@ -652,26 +829,41 @@ def apply_messages_change(
 
     runner = script_runner or _run_osascript
     try:
-        runner(_messages_send_text_script(chat_guid=chat_guid, body_text=normalized_body), MESSAGES_APPLESCRIPT_TIMEOUT_SECONDS)
+        if is_text_send:
+            script = _messages_send_text_script(chat_guid=chat_guid, body_text=normalized_body)
+        else:
+            assert file_info is not None
+            script = _messages_send_file_script(chat_guid=chat_guid, file_path=file_info["resolved_path"])
+        runner(script, MESSAGES_APPLESCRIPT_TIMEOUT_SECONDS)
     except subprocess.TimeoutExpired:
         return _apply_error(
             [_warning("automation_timeout", "Messages send timed out through local automation.")],
             plan=plan,
             status="degraded",
         )
-    except MessagesAutomationError:
+    except (OSError, MessagesAutomationError):
         return _apply_error(
             [_warning("write_error", "Messages send could not be completed safely.")],
             plan=plan,
         )
 
-    read_back = _wait_for_matching_sent_message(
-        chat_id,
-        normalized_body,
-        after_rowid=before_rowid,
-        db_path=resolved_db_path,
-        timeout=read_back_timeout,
-    )
+    if is_text_send:
+        read_back = _wait_for_matching_sent_message(
+            chat_id,
+            normalized_body,
+            after_rowid=before_rowid,
+            db_path=resolved_db_path,
+            timeout=read_back_timeout,
+        )
+    else:
+        assert file_info is not None
+        read_back = _wait_for_matching_sent_file(
+            chat_id,
+            file_info,
+            after_rowid=before_rowid,
+            db_path=resolved_db_path,
+            timeout=read_back_timeout,
+        )
     if read_back is None:
         ghost = _messages_ghost_row_detected(
             after_rowid=before_rowid,
@@ -772,6 +964,32 @@ def _select_messages(connection, chat_id: int, limit: int):
     return list(reversed(rows))
 
 
+def _select_participants(connection, chat_id: int, limit: int | None):
+    limit_clause = "" if limit is None else "LIMIT ?"
+    params: tuple[int, ...] = (chat_id,) if limit is None else (chat_id, limit)
+    return connection.execute(
+        f"""
+        SELECT
+            h.ROWID AS participant_id,
+            h.id AS participant_identifier,
+            h.service AS participant_service,
+            COUNT(DISTINCT cmj.message_id) AS message_count,
+            MAX(m.date) AS last_message_date
+        FROM chat_handle_join chj
+        JOIN handle h ON h.ROWID = chj.handle_id
+        LEFT JOIN message m ON m.handle_id = h.ROWID
+        LEFT JOIN chat_message_join cmj
+          ON cmj.message_id = m.ROWID
+         AND cmj.chat_id = chj.chat_id
+        WHERE chj.chat_id = ?
+        GROUP BY h.ROWID
+        ORDER BY COALESCE(MAX(m.date), 0) DESC, h.ROWID ASC
+        {limit_clause}
+        """,
+        params,
+    ).fetchall()
+
+
 def _select_new_outgoing_messages(connection, chat_id: int, after_rowid: int):
     message_columns = table_columns(connection, "message")
     attributed_body_expr = "m.attributedBody" if "attributedBody" in message_columns else "NULL"
@@ -790,6 +1008,39 @@ def _select_new_outgoing_messages(connection, chat_id: int, after_rowid: int):
           AND m.ROWID > ?
           AND COALESCE(m.is_from_me, 0) = 1
         ORDER BY m.ROWID DESC
+        LIMIT 20
+        """,
+        (chat_id, after_rowid),
+    ).fetchall()
+
+
+def _select_new_outgoing_attachments(connection, chat_id: int, after_rowid: int):
+    attachment_columns = table_columns(connection, "attachment")
+    is_sticker_expr = "a.is_sticker" if "is_sticker" in attachment_columns else "0"
+    return connection.execute(
+        f"""
+        SELECT
+            m.ROWID AS message_id,
+            m.date AS message_date,
+            m.is_from_me AS is_from_me,
+            m.service AS service,
+            a.ROWID AS attachment_id,
+            a.filename AS filename,
+            a.transfer_name AS transfer_name,
+            a.mime_type AS mime_type,
+            a.uti AS uti,
+            a.total_bytes AS total_bytes,
+            a.created_date AS created_date,
+            a.start_date AS start_date,
+            {is_sticker_expr} AS is_sticker
+        FROM message m
+        JOIN chat_message_join cmj ON cmj.message_id = m.ROWID
+        JOIN message_attachment_join maj ON maj.message_id = m.ROWID
+        JOIN attachment a ON a.ROWID = maj.attachment_id
+        WHERE cmj.chat_id = ?
+          AND m.ROWID > ?
+          AND COALESCE(m.is_from_me, 0) = 1
+        ORDER BY m.ROWID DESC, a.ROWID DESC
         LIMIT 20
         """,
         (chat_id, after_rowid),
@@ -846,6 +1097,27 @@ def _find_attachment_row(
             identity["filename"],
             identity["mime_type"],
             identity["file_size"],
+        ):
+            return row
+    return None
+
+
+def _find_participant_row(
+    rows: list[Any],
+    *,
+    fingerprint: str,
+    chat_id: int,
+    participant_handle: str,
+):
+    for row in rows:
+        if opaque_handle_matches(
+            participant_handle,
+            MESSAGE_PARTICIPANT_HANDLE_PREFIX,
+            fingerprint,
+            chat_id,
+            int(row["participant_id"]),
+            _normalize_participant_identifier(row["participant_identifier"]),
+            _bounded_string(row["participant_service"], 50),
         ):
             return row
     return None
@@ -917,6 +1189,66 @@ def _find_matching_sent_message(
     return None
 
 
+def _wait_for_matching_sent_file(
+    chat_id: int,
+    file_info: dict[str, Any],
+    *,
+    after_rowid: int,
+    db_path: Path,
+    timeout: float,
+) -> dict[str, Any] | None:
+    deadline = time.monotonic() + max(0.0, timeout)
+    while True:
+        match = _find_matching_sent_file(
+            chat_id,
+            file_info,
+            after_rowid=after_rowid,
+            db_path=db_path,
+        )
+        if match is not None or time.monotonic() >= deadline:
+            return match
+        time.sleep(MESSAGES_SEND_READ_BACK_INTERVAL_SECONDS)
+
+
+def _find_matching_sent_file(
+    chat_id: int,
+    file_info: dict[str, Any],
+    *,
+    after_rowid: int,
+    db_path: Path,
+) -> dict[str, Any] | None:
+    try:
+        with connect_readonly(db_path) as connection:
+            _check_attachment_schema(connection)
+            rows = _select_new_outgoing_attachments(connection, chat_id, after_rowid)
+    except StoreUnavailableError:
+        return None
+
+    expected_name = str(file_info["filename"])
+    expected_size = int(file_info["file_size"])
+    for row in rows:
+        identity = _message_attachment_identity(row)
+        if identity["filename"] != expected_name:
+            continue
+        row_size = identity["file_size"]
+        if row_size is not None and int(row_size) != expected_size:
+            continue
+        return {
+            "chat_handle_confirmed": True,
+            "message_date": _message_date(row["message_date"]),
+            "direction": "sent",
+            "service": _bounded_string(row["service"], 50),
+            "attachment_filename": identity["filename"],
+            "attachment_type": _message_attachment_type(identity["mime_type"], identity["filename"]),
+            "mime_type": identity["mime_type"],
+            "file_size": row_size,
+            "attachment_content_returned": False,
+            "attachment_content_exported": False,
+            "file_path_returned": False,
+        }
+    return None
+
+
 def _messages_ghost_row_detected(*, after_rowid: int, db_path: Path) -> bool:
     try:
         with connect_readonly(db_path) as connection:
@@ -948,6 +1280,39 @@ def _chat_metadata(row, fingerprint: str) -> dict[str, Any]:
         "message_count": int(row["message_count"] or 0),
         "last_message_date": _message_date(row["last_message_date"]),
     }
+
+
+def _message_participant_metadata(
+    row,
+    *,
+    fingerprint: str,
+    chat_id: int,
+    include_identifier: bool,
+) -> dict[str, Any]:
+    identifier = _normalize_participant_identifier(row["participant_identifier"])
+    service = _bounded_string(row["participant_service"], 50)
+    result: dict[str, Any] = {
+        "handle": make_opaque_handle(
+            MESSAGE_PARTICIPANT_HANDLE_PREFIX,
+            fingerprint,
+            chat_id,
+            int(row["participant_id"]),
+            identifier,
+            service,
+        ),
+        "service": service,
+        "message_count": int(row["message_count"] or 0),
+        "last_message_date": _message_date(row["last_message_date"]),
+        "participant_id_returned": False,
+    }
+    if include_identifier:
+        result["participant_id"] = _bounded_string(identifier, 500)
+        result["participant_id_returned"] = True
+    return result
+
+
+def _normalize_participant_identifier(value: Any) -> str:
+    return str(value or "").strip()
 
 
 def _message_payloads(
@@ -1263,6 +1628,45 @@ def _normalize_send_body(value: str) -> tuple[str, dict[str, str] | None]:
     return normalized, None
 
 
+def _resolve_send_file(value: str) -> tuple[dict[str, Any] | None, dict[str, str] | None]:
+    raw = str(value).strip()
+    if not raw:
+        return None, _warning("missing_file_path", "Messages send_file requires a local file path.")
+    try:
+        resolved = Path(raw).expanduser().resolve(strict=True)
+    except (OSError, RuntimeError):
+        return None, _warning("send_file_unavailable", "Messages send_file path is unavailable.")
+    try:
+        stat = resolved.stat()
+    except OSError:
+        return None, _warning("send_file_unavailable", "Messages send_file path is unavailable.")
+    if not resolved.is_file():
+        return None, _warning("send_file_not_file", "Messages send_file path must point to a regular file.")
+    if stat.st_size <= 0:
+        return None, _warning("send_file_empty", "Messages send_file path must point to a non-empty file.")
+    if stat.st_size > MAX_SEND_FILE_BYTES:
+        return None, _warning("send_file_too_large", "Messages send_file exceeded the maximum file size.")
+    filename = _bounded_string(resolved.name, 500).strip()
+    if not filename:
+        return None, _warning("send_file_unavailable", "Messages send_file path is unavailable.")
+    mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+    identity = {
+        "resolved_path": str(resolved),
+        "file_size": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+        "inode": int(getattr(stat, "st_ino", 0)),
+        "device": int(getattr(stat, "st_dev", 0)),
+    }
+    return {
+        "resolved_path": str(resolved),
+        "filename": filename,
+        "file_size": int(stat.st_size),
+        "mime_type": _bounded_string(mime_type, 300),
+        "attachment_type": _message_attachment_type(mime_type, filename),
+        "identity": identity,
+    }, None
+
+
 def _normalize_for_compare(value: str) -> str:
     return re.sub(r"\s+", " ", str(value).replace("\r\n", "\n").replace("\r", "\n")).strip()
 
@@ -1316,6 +1720,24 @@ def _invalid_attachment_chat_handle_result(*, export: bool = False) -> dict[str,
         "result": None if export else None,
         "results": [] if not export else None,
         "result_count": 0 if not export else None,
+        "warnings": [
+            _warning(
+                "invalid_handle",
+                "Expected messages:chat:v1 opaque handle from search output.",
+            )
+        ],
+    }
+
+
+def _invalid_participant_chat_handle_result(*, detail: bool = False) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "messages",
+        "privacy": _participant_privacy(participant_id_returned=False),
+        "result": None if detail else None,
+        "results": [] if not detail else None,
+        "result_count": 0 if not detail else None,
         "warnings": [
             _warning(
                 "invalid_handle",
@@ -1386,18 +1808,11 @@ def _apply_success(
 
 
 def _safe_warnings(payload: dict[str, Any]) -> list[dict[str, str]]:
-    warnings = payload.get("warnings")
-    if not isinstance(warnings, list):
-        return []
-    safe: list[dict[str, str]] = []
-    for warning in warnings:
-        if not isinstance(warning, dict):
-            continue
-        code = warning.get("code")
-        message = warning.get("message")
-        if isinstance(code, str) and isinstance(message, str):
-            safe.append({"code": code, "message": message})
-    return safe
+    return safe_warning_payloads(
+        payload,
+        _warning,
+        fallback_message="Messages warning detail was redacted.",
+    )
 
 
 def _plan_idempotency_key(payload: dict[str, Any]) -> str:
@@ -1430,6 +1845,20 @@ def _messages_send_text_script(*, chat_guid: str, body_text: str) -> str:
     ) + "\n"
 
 
+def _messages_send_file_script(*, chat_guid: str, file_path: str) -> str:
+    return "\n".join(
+        [
+            f"set attachmentPath to {_applescript_string(file_path)}",
+            "set attachmentFile to POSIX file attachmentPath",
+            f"set chatIdentifier to {_applescript_string(chat_guid)}",
+            'tell application "Messages"',
+            "    set targetChat to chat id chatIdentifier",
+            "    send attachmentFile to targetChat",
+            "end tell",
+        ]
+    ) + "\n"
+
+
 def _applescript_string(value: str) -> str:
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
@@ -1440,14 +1869,17 @@ class MessagesAutomationError(RuntimeError):
 
 
 def _run_osascript(script: str, timeout: float) -> str:
-    completed = subprocess.run(
-        ["osascript"],
-        input=script,
-        text=True,
-        capture_output=True,
-        timeout=timeout,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            ["osascript"],
+            input=script,
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+            check=False,
+        )
+    except OSError:
+        raise MessagesAutomationError() from None
     if completed.returncode != 0:
         raise MessagesAutomationError()
     return completed.stdout
@@ -1469,8 +1901,24 @@ def _invalid_attachment_export_handle_result() -> dict[str, Any]:
     }
 
 
+def _invalid_participant_handle_result() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": "messages",
+        "privacy": _participant_privacy(participant_id_returned=False),
+        "result": None,
+        "warnings": [
+            _warning(
+                "invalid_handle",
+                "Expected messages:participant:v1 opaque handle from participant list output.",
+            )
+        ],
+    }
+
+
 def _store_degraded_result(
-    exc: StoreUnavailableError,
+    _exc: StoreUnavailableError,
     *,
     content: bool,
     preview: bool = False,
@@ -1488,7 +1936,7 @@ def _store_degraded_result(
         "source": "messages",
         "privacy": privacy,
         "result": None,
-        "warnings": [_warning("messages_store_unavailable", str(exc))],
+        "warnings": [_messages_store_unavailable_warning()],
     }
     if mutation:
         result.update({"mode": "apply", "mutation_applied": False})
@@ -1507,7 +1955,7 @@ def _store_degraded_result(
 
 
 def _messages_attachment_degraded_result(
-    exc: StoreUnavailableError,
+    _exc: StoreUnavailableError,
     *,
     export: bool = False,
 ) -> dict[str, Any]:
@@ -1519,8 +1967,26 @@ def _messages_attachment_degraded_result(
         "results": [] if not export else None,
         "result": None,
         "result_count": 0 if not export else None,
-        "warnings": [_warning("messages_store_unavailable", str(exc))],
+        "warnings": [_messages_store_unavailable_warning()],
     }
+
+
+def _messages_participant_degraded_result(
+    _exc: StoreUnavailableError,
+    *,
+    detail: bool = False,
+) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "schema_version": 1,
+        "status": "degraded",
+        "source": "messages",
+        "schema_fingerprint": None,
+        "privacy": _participant_privacy(participant_id_returned=False),
+        "warnings": [_messages_store_unavailable_warning()],
+    }
+    if detail:
+        return {**base, "result": None}
+    return {**base, "results": [], "result_count": 0}
 
 
 def _message_attachment_export_unavailable_result(

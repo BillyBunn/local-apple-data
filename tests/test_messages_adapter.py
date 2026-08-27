@@ -4,11 +4,15 @@ import base64
 import sqlite3
 from pathlib import Path
 
+import local_apple_data.adapters.messages as messages_adapter
 from local_apple_data.adapters.messages import (
+    _messages_send_file_script,
     apply_messages_change,
     export_message_attachment,
     get_message_chat,
+    get_message_participant,
     list_message_attachments,
+    list_message_participants,
     plan_messages_change,
     search_message_chats,
 )
@@ -73,6 +77,41 @@ def _make_messages_db(path: Path) -> None:
               (1, 11);
             """
         )
+
+
+def _add_second_messages_chat(path: Path) -> None:
+    with sqlite3.connect(path) as connection:
+        connection.executescript(
+            """
+            INSERT INTO chat VALUES
+              (2, 'chat-guid-2', 'Synthetic Other Chat', 'iMessage');
+            INSERT INTO handle VALUES
+              (8, '+15550200', 'iMessage');
+            INSERT INTO chat_handle_join VALUES (2, 8);
+            INSERT INTO message VALUES
+              (20, 'Other synthetic message', 802310800, 0, 8, 'iMessage', NULL);
+            INSERT INTO chat_message_join VALUES (2, 20);
+            """
+        )
+
+
+def _assert_no_participant_list_identifier_leak(payload: dict) -> None:
+    text = str(payload)
+    for forbidden in (
+        "+15550100",
+        "15550100",
+        "5550100",
+        "+1555",
+        "****0100",
+        "••••0100",
+        "chat-guid-1",
+    ):
+        assert forbidden not in text
+    for item in payload.get("results", []):
+        assert all(not key.endswith("_preview") for key in item)
+        assert all("identifier" not in key for key in item)
+        assert all("phone" not in key for key in item)
+        assert all("email" not in key for key in item)
 
 
 def _add_messages_attachment_schema(path: Path) -> None:
@@ -164,6 +203,130 @@ def test_get_message_chat_returns_exact_bounded_transcript(tmp_path: Path) -> No
     assert "chat-guid-1" not in str(result)
 
 
+def test_list_message_participants_returns_opaque_handles_without_identifiers(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    chat = search_message_chats("Planning", db_path=db_path)["results"][0]
+
+    result = list_message_participants(chat["handle"], db_path=db_path)
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["participant_id_returned"] is False
+    assert result["query"]["scope"] == "chat_participants"
+    assert result["result_count"] == 1
+    participant = result["results"][0]
+    assert participant["handle"].startswith("messages:participant:v1:")
+    assert "id_preview" not in participant
+    assert "participant_id" not in participant
+    assert participant["service"] == "iMessage"
+    assert participant["participant_id_returned"] is False
+    _assert_no_participant_list_identifier_leak(result)
+
+
+def test_get_message_participant_returns_exact_detail(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    chat = search_message_chats("Planning", db_path=db_path)["results"][0]
+    participant = list_message_participants(chat["handle"], db_path=db_path)["results"][0]
+
+    result = get_message_participant(
+        chat["handle"],
+        participant["handle"],
+        db_path=db_path,
+    )
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["participant_id_returned"] is True
+    assert result["result"]["handle"] == participant["handle"]
+    assert result["result"]["participant_id"] == "+15550100"
+    assert result["result"]["participant_id_returned"] is True
+    assert result["result"]["service"] == "iMessage"
+
+
+def test_message_participants_reject_invalid_handles(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    chat = search_message_chats("Planning", db_path=db_path)["results"][0]
+
+    list_result = list_message_participants("messages:chat:v1:12345", db_path=db_path)
+    get_result = get_message_participant(
+        chat["handle"],
+        "messages:participant:v1:12345",
+        db_path=db_path,
+    )
+
+    assert list_result["status"] == "error"
+    assert list_result["warnings"][0]["code"] == "invalid_handle"
+    assert get_result["status"] == "error"
+    assert get_result["warnings"][0]["code"] == "invalid_handle"
+
+
+def test_message_participant_detail_refuses_cross_chat_handle_binding(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    _add_second_messages_chat(db_path)
+    planning_chat = search_message_chats("Planning", db_path=db_path)["results"][0]
+    other_chat = search_message_chats("Other", db_path=db_path)["results"][0]
+    participant = list_message_participants(planning_chat["handle"], db_path=db_path)[
+        "results"
+    ][0]
+
+    result = get_message_participant(
+        other_chat["handle"],
+        participant["handle"],
+        db_path=db_path,
+    )
+
+    assert result["status"] == "not_found"
+    assert result["privacy"]["participant_id_returned"] is False
+    assert result["result"] is None
+    assert "+15550100" not in str(result)
+    assert "+15550200" not in str(result)
+    assert "participant_id" not in str(result.get("result"))
+
+
+def test_messages_send_plan_and_apply_reject_participant_handles(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    chat = search_message_chats("Planning", db_path=db_path)["results"][0]
+    participant = list_message_participants(chat["handle"], db_path=db_path)["results"][0]
+
+    plan = plan_messages_change(
+        "send-text",
+        handle=participant["handle"],
+        body_text="Synthetic outbound message",
+        db_path=db_path,
+    )
+
+    def runner(_script: str, _timeout: float) -> str:
+        raise AssertionError("participant handle must not reach Messages automation")
+
+    apply_result = apply_messages_change(
+        "send-text",
+        handle=participant["handle"],
+        body_text="Synthetic outbound message",
+        approval_token="messages-apply:v1:bad",
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+    )
+
+    assert plan["status"] == "error"
+    assert plan["mutation_applied"] is False
+    assert plan["warnings"][0]["code"] == "invalid_handle"
+    assert apply_result["status"] == "error"
+    assert apply_result["mutation_applied"] is False
+    assert apply_result["warnings"][0]["code"] == "invalid_handle"
+    assert "+15550100" not in str(plan)
+    assert "+15550100" not in str(apply_result)
+
+
 def test_get_message_chat_uses_attributed_body_fallback(tmp_path: Path) -> None:
     db_path = tmp_path / "chat.db"
     _make_messages_db(db_path)
@@ -239,6 +402,28 @@ def test_search_message_chats_degrades_without_store(tmp_path: Path) -> None:
     assert str(tmp_path) not in result["warnings"][0]["message"]
 
 
+def test_messages_store_warning_uses_generic_message(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+
+    def fail_schema(_connection):
+        raise messages_adapter.StoreUnavailableError(
+            "messages failed at /private/local/chat.db"
+        )
+
+    monkeypatch.setattr(messages_adapter, "_check_schema", fail_schema)
+
+    result = search_message_chats("Planning", db_path=db_path)
+
+    assert result["status"] == "degraded"
+    assert result["warnings"] == [
+        {
+            "code": "messages_store_unavailable",
+            "message": "Messages local store is unavailable or unreadable.",
+        }
+    ]
+
+
 def test_list_message_attachments_returns_exact_attachment_handles(tmp_path: Path) -> None:
     db_path, messages_root, chat_handle = _attachment_store(tmp_path)
 
@@ -286,6 +471,7 @@ def test_export_message_attachment_writes_selected_file(tmp_path: Path) -> None:
 
     assert result["status"] == "ok"
     assert result["privacy"]["attachment_content_returned"] is False
+    assert result["privacy"]["attachment_content_exported"] is True
     assert result["result"]["attachment_content_exported"] is True
     assert result["result"]["exported_filename"] == "review-packet.pdf"
     assert result["result"]["exported_bytes"] == 11
@@ -318,6 +504,48 @@ def test_plan_messages_send_text_returns_approval_preview(tmp_path: Path) -> Non
     assert preview["approval"]["approval_token_format"].startswith("messages-apply:v1:")
     assert "chat-guid-1" not in str(result)
     assert "+15550100" not in str(result)
+
+
+def test_plan_messages_send_file_returns_approval_preview(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    source = tmp_path / "outbound-packet.pdf"
+    source.write_bytes(b"PDF OUTBOUND")
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+
+    result = plan_messages_change(
+        "send-file",
+        handle=handle,
+        file_path=str(source),
+        db_path=db_path,
+    )
+
+    assert result["status"] == "ok"
+    assert result["mode"] == "plan"
+    assert result["mutation_applied"] is False
+    preview = result["preview"]
+    assert preview["operation"] == "send_file"
+    assert preview["target"]["handle"] == handle
+    assert preview["proposed"]["kind"] == "messages_send_file"
+    assert preview["proposed"]["filename"] == "outbound-packet.pdf"
+    assert preview["proposed"]["file_size"] == len(b"PDF OUTBOUND")
+    assert preview["proposed"]["attachment_type"] == "document"
+    assert preview["proposed"]["file_content_returned"] is False
+    assert preview["proposed"]["file_path_returned"] is False
+    assert str(source) not in str(result)
+    assert "chat-guid-1" not in str(result)
+    assert "+15550100" not in str(result)
+
+
+def test_plan_messages_send_file_rejects_missing_file_path(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+
+    result = plan_messages_change("send-file", handle=handle, db_path=db_path)
+
+    assert result["status"] == "error"
+    assert result["warnings"][0]["code"] == "missing_file_path"
 
 
 def test_apply_messages_send_text_requires_confirmation(tmp_path: Path) -> None:
@@ -390,6 +618,141 @@ def test_apply_messages_send_text_writes_and_reads_back_with_mock_runner(tmp_pat
     assert "+15550100" not in str(result)
 
 
+def test_apply_messages_send_file_writes_and_reads_back_with_mock_runner(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    _add_messages_attachment_schema(db_path)
+    source = tmp_path / "outbound-packet.pdf"
+    source.write_bytes(b"PDF OUTBOUND")
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+    plan = plan_messages_change(
+        "send-file",
+        handle=handle,
+        file_path=str(source),
+        db_path=db_path,
+    )
+    token = "messages-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def runner(script: str, timeout: float) -> str:
+        assert timeout > 0
+        assert "send attachmentFile to targetChat" in script
+        assert "send messageText" not in script
+        assert "chat-guid-1" in script
+        assert str(source) in script
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "INSERT INTO message VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (12, "", 802310600, 1, 0, "iMessage", None),
+            )
+            connection.execute("INSERT INTO chat_message_join VALUES (?, ?)", (1, 12))
+            connection.execute(
+                "INSERT INTO attachment VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    21,
+                    "attachment-guid-outbound",
+                    802310600,
+                    802310600,
+                    "Attachments/cc/dd/outbound-packet.pdf",
+                    "com.adobe.pdf",
+                    "application/pdf",
+                    0,
+                    1,
+                    None,
+                    "outbound-packet.pdf",
+                    len(b"PDF OUTBOUND"),
+                    0,
+                ),
+            )
+            connection.execute("INSERT INTO message_attachment_join VALUES (?, ?)", (12, 21))
+        return ""
+
+    result = apply_messages_change(
+        "send-file",
+        handle=handle,
+        file_path=str(source),
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+        read_back_timeout=0,
+    )
+
+    assert result["status"] == "ok"
+    assert result["mutation_applied"] is True
+    assert result["approval"]["approval_token_verified"] is True
+    assert result["read_back"]["chat_handle_confirmed"] is True
+    assert result["read_back"]["attachment_filename"] == "outbound-packet.pdf"
+    assert result["read_back"]["attachment_type"] == "document"
+    assert result["read_back"]["file_size"] == len(b"PDF OUTBOUND")
+    assert result["read_back"]["attachment_content_returned"] is False
+    assert result["read_back"]["attachment_content_exported"] is False
+    assert result["read_back"]["file_path_returned"] is False
+    assert str(source) not in str(result["read_back"])
+    assert "+15550100" not in str(result)
+
+
+def test_apply_messages_send_file_rejects_stale_file_identity(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    source = tmp_path / "outbound-packet.pdf"
+    source.write_bytes(b"PDF OUTBOUND")
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+    plan = plan_messages_change(
+        "send-file",
+        handle=handle,
+        file_path=str(source),
+        db_path=db_path,
+    )
+    token = "messages-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+    source.write_bytes(b"UPDATED PDF OUTBOUND")
+
+    result = apply_messages_change(
+        "send-file",
+        handle=handle,
+        file_path=str(source),
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "invalid_approval_token"
+
+
+def test_apply_messages_send_text_runner_os_errors_are_safe(tmp_path: Path) -> None:
+    db_path = tmp_path / "chat.db"
+    _make_messages_db(db_path)
+    handle = search_message_chats("Planning", db_path=db_path)["results"][0]["handle"]
+    plan = plan_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        db_path=db_path,
+    )
+    token = "messages-apply:v1:" + plan["preview"]["approval"]["approval_fingerprint"]
+
+    def runner(_script: str, _timeout: float) -> str:
+        raise OSError("permission denied for /private/local/messages")
+
+    result = apply_messages_change(
+        "send-text",
+        handle=handle,
+        body_text="Synthetic outbound message",
+        approval_token=token,
+        confirm_apply=True,
+        db_path=db_path,
+        script_runner=runner,
+        read_back_timeout=0,
+    )
+
+    assert result["status"] == "error"
+    assert result["mutation_applied"] is False
+    assert result["warnings"][0]["code"] == "write_error"
+    assert "permission denied" not in str(result)
+    assert "/private/local/messages" not in str(result)
+
+
 def test_apply_messages_send_text_rejects_stale_chat_state(tmp_path: Path) -> None:
     db_path = tmp_path / "chat.db"
     _make_messages_db(db_path)
@@ -458,6 +821,23 @@ def test_apply_messages_send_text_detects_ghost_row(tmp_path: Path) -> None:
     assert result["warnings"][0]["code"] == "messages_send_ghost_row"
 
 
+def test_send_file_script_uses_exact_chat_and_never_direct_recipient(tmp_path: Path) -> None:
+    source = tmp_path / "packet.pdf"
+    source.write_bytes(b"PDF")
+
+    script = _messages_send_file_script(chat_guid="chat-guid-1", file_path=str(source))
+    lowered = script.lower()
+
+    assert "chat id chatIdentifier" in script
+    assert "send attachmentFile to targetChat" in script
+    assert "buddy" not in lowered
+    assert "participant" not in lowered
+    assert "phone" not in lowered
+    assert "email" not in lowered
+    assert "delete" not in lowered
+    assert "remove" not in lowered
+
+
 def test_message_attachment_export_rejects_bad_handles(tmp_path: Path) -> None:
     db_path, messages_root, chat_handle = _attachment_store(tmp_path)
     attachment_handle = list_message_attachments(
@@ -474,6 +854,7 @@ def test_message_attachment_export_rejects_bad_handles(tmp_path: Path) -> None:
         messages_root=messages_root,
     )
     assert result["status"] == "error"
+    assert result["privacy"]["attachment_content_exported"] is False
     assert result["warnings"][0]["code"] == "invalid_handle"
 
     result = export_message_attachment(
@@ -484,6 +865,7 @@ def test_message_attachment_export_rejects_bad_handles(tmp_path: Path) -> None:
         messages_root=messages_root,
     )
     assert result["status"] == "error"
+    assert result["privacy"]["attachment_content_exported"] is False
     assert result["warnings"][0]["code"] == "invalid_handle"
 
 
@@ -508,5 +890,7 @@ def test_message_attachment_export_reports_unavailable_for_missing_file(
 
     assert attachment["media_status"] == "unavailable"
     assert result["status"] == "attachment_unavailable"
+    assert result["privacy"]["attachment_content_exported"] is False
+    assert result["result"]["attachment_content_exported"] is False
     assert result["warnings"][0]["code"] == "messages_attachment_unavailable"
     assert not (tmp_path / "exports" / "packet.pdf").exists()

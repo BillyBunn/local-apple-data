@@ -6,13 +6,13 @@ The initial public candidate is `0.1.x`. Security fixes should target the latest
 
 ## Security Model
 
-`local-apple-data` is a local-only MCP server and CLI. It reads locally synced Apple data from macOS stores and public macOS frameworks where available. The current release is read-only.
+`local-apple-data` is a local-only MCP server and CLI. It reads locally synced Apple data from macOS stores and public macOS frameworks where available. The current release is metadata-first and read-mostly; it exposes 14 narrowly scoped MCP apply tools whose mutations require the matching plan approval token, explicit confirmation, and operation-specific read-back or invocation proof.
 
 The runtime does not use:
 
 - Gmail connector paths, Gmail API, IMAP, OAuth, app passwords, or network mail services.
 - iCloud.com scraping, private iCloud web APIs, browser sessions, cookies, or keychain credentials.
-- Telemetry, remote analytics, background indexing, or durable personal-content caches.
+- Telemetry, remote analytics, or background indexing. The only durable personal-content cache is the explicit opt-in, date-bounded, locally private Mail FTS index governed by its separate design gate.
 
 Search tools are metadata-first. Content and detail tools require exact opaque handles returned by prior metadata searches.
 

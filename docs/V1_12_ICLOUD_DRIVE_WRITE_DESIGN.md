@@ -16,7 +16,7 @@ Candidate operation:
 
 Out of scope:
 
-- Append, overwrite, rename, move, copy, or delete.
+- Append (governed by v1.18), replace-text (governed by v1.51), trash-text (governed by v1.53), rename/copy/move (governed by v1.54), or delete outside the approved trash-text gate.
 - Binary or document generation.
 - Hidden files, symlinks, package traversal, broad folder writes, or recursive operations.
 - Raw path targeting.
@@ -68,8 +68,8 @@ These tools:
 - Require explicit apply confirmation.
 - Recompute the plan before applying.
 - Resolve the parent directory only from the exact opaque `icloud:file:v1:` parent folder handle.
-- Refuse missing or non-directory parent targets.
-- Use exclusive create so an existing file is never overwritten.
+- Refuse missing, symlinked, package-traversing, or non-directory parent targets.
+- Use fd-based no-follow exclusive create so an existing file or symlink is never overwritten or followed.
 - Treat an existing file with matching normalized content as idempotent `already_applied`.
 - Return `mutation_applied:true` only after the file is created and read_back data is available.
 - Use non-read-only, non-destructive, idempotent, closed-world MCP annotations.
@@ -80,8 +80,8 @@ Use the existing Python adapter and local filesystem APIs for this tranche:
 
 - Python already owns CLI/MCP validation, opaque handles, approval-token verification, redacted logging, release gates, and JSON response shape.
 - Local iCloud Drive files are exposed through the regular filesystem under CloudDocs, so a native Apple framework bridge is not required for a simple exclusive text-file create.
-- `Path.open("x")` gives the required exclusive create behavior without overwrite risk.
-- The adapter resolves opaque handles by scanning within the configured iCloud Drive root, then verifies the target remains under that root before writing.
+- `os.open` with `O_CREAT | O_EXCL | O_NOFOLLOW` gives the required exclusive create behavior without overwrite or symlink-following risk.
+- The adapter resolves opaque handles by scanning within the configured iCloud Drive root, verifies the target remains under that root, rejects package or symlink traversal, and writes through a parent directory file descriptor before read-back verification.
 
 Swift remains the right boundary for EventKit, Contacts, and PhotoKit operations. For this iCloud Drive create-text path, adding Swift would add process overhead and another failure mode without improving privacy or durability.
 
@@ -111,7 +111,7 @@ Before any additional apply-capable iCloud Drive tool is exposed:
 
 The apply path must be retry-safe:
 
-- Create uses a deterministic idempotency key derived from parent handle, normalized filename, content hash, and approval token.
+- Create uses a deterministic idempotency key derived from parent handle, stable parent identity, normalized filename, content hash, and approval token.
 - Apply uses exclusive create to prevent overwrites.
 - Retry after success returns `already_applied` only when the existing file content exactly matches the approved normalized content.
 - Existing files with different content return `target_exists` and do not mutate the file.
@@ -149,11 +149,11 @@ Before exposure, the iCloud Drive write implementation must add:
 - Preview validation tests for invalid parent handles, invalid filenames, unsupported suffixes, oversized content, and binary-like content.
 - Apply/read_back success tests using temporary synthetic roots.
 - Missing-confirmation and invalid-token tests.
-- Target-not-found and target-exists tests.
+- Target-not-found, target-exists, parent-symlink, and target-symlink tests.
 - Idempotency tests for retry after success.
 - Redaction tests proving logs do not contain filenames, content, handles, hashes, approval fingerprints, tokens, raw paths, or raw exceptions.
 - MCP annotation tests proving write tools are not marked read-only.
 
 ## Current Release Gate
 
-The v1.12 release allowed only this iCloud Drive create-text apply surface. iCloud Drive append-text is governed separately by `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`. iCloud Drive overwrite, rename, move, copy, delete, binary/document generation, broad folder writes, raw path writes, and every other mutation class remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.
+The v1.12 release allowed only this iCloud Drive create-text apply surface. iCloud Drive append-text is governed separately by `docs/V1_18_ICLOUD_DRIVE_APPEND_WRITE_DESIGN.md`; replace-text is governed separately by `docs/V1_51_ICLOUD_DRIVE_REPLACE_WRITE_DESIGN.md`; create-folder is governed separately by `docs/V1_52_ICLOUD_DRIVE_FOLDER_CREATE_WRITE_DESIGN.md`; create-folder-path is governed separately by `docs/V1_157_ICLOUD_DRIVE_FOLDER_PATH_CREATE_WRITE_DESIGN.md`; trash-text is governed separately by `docs/V1_53_ICLOUD_DRIVE_TRASH_WRITE_DESIGN.md`; file rename/copy/move is governed separately by `docs/V1_54_ICLOUD_DRIVE_RENAME_COPY_MOVE_WRITE_DESIGN.md`; folder rename by `docs/V1_60_ICLOUD_DRIVE_FOLDER_RENAME_WRITE_DESIGN.md`; exact folder Trash by `docs/V1_61_ICLOUD_DRIVE_FOLDER_TRASH_WRITE_DESIGN.md`; folder move by `docs/V1_62_ICLOUD_DRIVE_FOLDER_MOVE_WRITE_DESIGN.md`; exact selected-folder copy by `docs/V1_63_ICLOUD_DRIVE_FOLDER_COPY_WRITE_DESIGN.md`; exact selected-folder delete by `docs/V1_67_ICLOUD_DRIVE_FOLDER_DELETE_WRITE_DESIGN.md`; and non-empty folder rename/move by `docs/V1_145_ICLOUD_DRIVE_NON_EMPTY_FOLDER_RENAME_MOVE_WRITE_DESIGN.md`. File permanent delete outside the exact delete-text/delete-file gates, empty Trash, unbounded recursive folder copy/delete, binary/document generation, recursive folder writes, raw path writes, content replacement outside the exact replace-text gate, and every other mutation class remain blocked by `docs/MUTATION_GATES.md` and `docs/WRITE_TOOL_ROADMAP.md`.

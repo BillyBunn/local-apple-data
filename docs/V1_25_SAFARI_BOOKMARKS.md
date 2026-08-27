@@ -13,12 +13,18 @@ Implemented:
 
 - CLI: `local-apple-data safari search`
 - CLI: `local-apple-data safari get`
+- CLI: `local-apple-data safari folders`
+- CLI: `local-apple-data safari folder`
+- CLI: `local-apple-data safari folder-items`
 - MCP: `safari_search`
 - MCP: `safari_get_item`
+- MCP: `safari_search_folders`
+- MCP: `safari_get_folder`
+- MCP: `safari_list_folder_items`
 - Health: redacted Safari bookmarks store presence/readability
-- Runtime verifier: synthetic Safari plist search/get smoke
+- Runtime verifier: synthetic Safari plist item/folder search/get/list smoke
 
-Search reads local `~/Library/Safari/Bookmarks.plist` with Python `plistlib`, requires a specific query, and returns bounded title plus URL metadata only: domain, scheme, query-presence, path depth, kind, and dates when present. Exact get requires an opaque `safari:item:v1:` handle from search output and returns the selected full URL.
+Search reads local `~/Library/Safari/Bookmarks.plist` with Python `plistlib`, requires a specific query, and returns bounded title plus URL metadata only: domain, scheme, query-presence, path depth, kind, and dates when present. Exact item get requires an opaque `safari:item:v1:` handle from search output and returns the selected full URL. Folder search returns folder title, path depth, and direct child counts only. Exact folder detail and direct-child listing require an opaque `safari:folder:v1:` handle from folder metadata output. Folder item listing returns direct child bookmark/Reading List metadata and child folder metadata only; it does not return full URLs.
 
 ## Boundaries
 
@@ -30,6 +36,7 @@ Out of scope:
 - Passwords, passkeys, cookies, sessions, autofill, keychain, or browser caches
 - Favicons, thumbnails, page content, or network fetches
 - Broad bookmark dumps
+- Recursive folder dumps
 - Bookmark, Reading List, folder, or Safari profile mutation
 - Safari.app UI automation
 
@@ -38,6 +45,8 @@ Out of scope:
 - Empty and broad/generic queries fail before reading the plist.
 - Search results do not include full URLs.
 - Exact detail requires a signed opaque handle.
+- Exact folder listing requires a signed opaque `safari:folder:v1:` handle.
+- Folder listings return direct children only and omit full URLs.
 - Handles bind to a fingerprint of the current plist contents and a per-item key.
 - Raw local paths are not returned.
 - Event logs contain command/status/count/warning metadata only.
@@ -58,4 +67,4 @@ uv run python scripts/public_release_scan.py
 
 ## Next Work
 
-Safari history, open tabs/iCloud tabs, and bookmark mutation require separate design gates because they have broader privacy and mutation risk than selected bookmark/Reading List URL retrieval.
+Safari history, open tabs/iCloud tabs, recursive folder dumps, and bookmark/folder mutation require separate design gates because they have broader privacy and mutation risk than selected bookmark/Reading List URL retrieval and selected-folder metadata listing.

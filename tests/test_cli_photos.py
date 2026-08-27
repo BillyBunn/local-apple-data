@@ -97,6 +97,59 @@ def test_cli_photos_get(monkeypatch, capsys) -> None:
     assert parsed["result"]["asset_content_returned"] is False
 
 
+def test_cli_photos_album_assets(monkeypatch, capsys) -> None:
+    def fake_list(
+        handle: str,
+        *,
+        limit: int,
+        max_scan_albums: int,
+        max_scan_assets: int,
+    ) -> dict:
+        assert handle == "photos:album:v1:0123456789abcdef0123456789abcdef"
+        assert limit == 7
+        assert max_scan_albums == 456
+        assert max_scan_assets == 789
+        return {
+            "schema_version": 1,
+            "status": "ok",
+            "source": "photos",
+            "privacy": {"content_inspected": False, "output_tier": "metadata"},
+            "parent": {"handle": handle, "title": "Synthetic Album"},
+            "results": [
+                {
+                    "handle": "photos:asset:v1:fedcba9876543210fedcba9876543210",
+                    "primary_filename": "IMG_SYNTHETIC.JPG",
+                    "asset_content_returned": False,
+                }
+            ],
+            "result_count": 1,
+            "warnings": [],
+        }
+
+    monkeypatch.setattr("local_apple_data.cli.list_photo_album_assets", fake_list)
+
+    exit_code = main(
+        [
+            "photos",
+            "album-assets",
+            "--json",
+            "--handle",
+            "photos:album:v1:0123456789abcdef0123456789abcdef",
+            "--limit",
+            "7",
+            "--max-scan-albums",
+            "456",
+            "--max-scan-assets",
+            "789",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["status"] == "ok"
+    assert parsed["results"][0]["asset_content_returned"] is False
+
+
 def test_cli_photos_export(monkeypatch, tmp_path: Path, capsys) -> None:
     output_dir = tmp_path / "exports"
 
@@ -155,10 +208,37 @@ def test_cli_photos_export(monkeypatch, tmp_path: Path, capsys) -> None:
 def test_cli_photos_plan(monkeypatch, tmp_path: Path, capsys) -> None:
     source = tmp_path / "IMG_IMPORT.JPG"
 
-    def fake_plan(operation: str, *, source_file: str, media_type: str) -> dict:
+    def fake_plan(
+        operation: str,
+        *,
+        source_file: str,
+        media_type: str,
+        handle: str | None,
+        album_handle: str | None,
+        album_title: str,
+        new_album_title: str,
+        favorite: bool | None,
+        hidden: bool | None,
+        expected_favorite: bool | None,
+        expected_hidden: bool | None,
+        expected_in_album: bool | None,
+        max_scan_assets: int,
+        max_scan_albums: int,
+    ) -> dict:
         assert operation == "import"
         assert source_file == str(source)
         assert media_type == "image"
+        assert handle == ""
+        assert album_handle == ""
+        assert album_title == ""
+        assert new_album_title == ""
+        assert favorite is None
+        assert hidden is None
+        assert expected_favorite is None
+        assert expected_hidden is None
+        assert expected_in_album is None
+        assert max_scan_assets == 5000
+        assert max_scan_albums == 5000
         return {
             "schema_version": 1,
             "status": "ok",
@@ -206,12 +286,34 @@ def test_cli_photos_apply(monkeypatch, tmp_path: Path, capsys) -> None:
         *,
         source_file: str,
         media_type: str,
+        handle: str | None,
+        album_handle: str | None,
+        album_title: str,
+        new_album_title: str,
+        favorite: bool | None,
+        hidden: bool | None,
+        expected_favorite: bool | None,
+        expected_hidden: bool | None,
+        expected_in_album: bool | None,
+        max_scan_assets: int,
+        max_scan_albums: int,
         approval_token: str,
         confirm_apply: bool,
     ) -> dict:
         assert operation == "import"
         assert source_file == str(source)
         assert media_type == "image"
+        assert handle == ""
+        assert album_handle == ""
+        assert album_title == ""
+        assert new_album_title == ""
+        assert favorite is None
+        assert hidden is None
+        assert expected_favorite is None
+        assert expected_hidden is None
+        assert expected_in_album is None
+        assert max_scan_assets == 5000
+        assert max_scan_albums == 5000
         assert approval_token == "photos-apply:v1:synthetic-fingerprint"
         assert confirm_apply is True
         return {

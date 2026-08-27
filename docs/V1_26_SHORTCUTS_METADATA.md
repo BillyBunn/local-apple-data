@@ -2,18 +2,20 @@
 
 ## Objective
 
-Add a read-only Apple Shortcuts metadata surface through Apple's local `shortcuts` command-line interface without running, opening, signing, exporting, or inspecting shortcut bodies.
+Add a read-only Apple Shortcuts metadata and exact selected-folder shortcut metadata surface through Apple's local `shortcuts` command-line interface without running, opening, signing, exporting, or inspecting shortcut bodies.
 
 ## Supported Surface
 
 - CLI: `local-apple-data shortcuts search`
 - CLI: `local-apple-data shortcuts get`
+- CLI: `local-apple-data shortcuts folder-items`
 - MCP: `shortcuts_search`
 - MCP: `shortcuts_get_item`
+- MCP: `shortcuts_list_folder_items`
 
 Search calls `shortcuts list --show-identifiers` and `shortcuts list --folders --show-identifiers`, requires a specific query, and returns bounded shortcut/folder name metadata only. Raw Shortcuts identifiers are used only for stable opaque handle generation and are not returned in output.
 
-Exact get requires an opaque `shortcuts:item:v1:` handle from search output and returns the selected shortcut or folder metadata. It does not return a shortcut body, action graph, URL scheme, source path, icon, color, or identifier.
+Exact get requires an opaque `shortcuts:item:v1:` handle from search output and returns the selected shortcut or folder metadata. Exact selected-folder listing requires an opaque folder handle from search output, uses `shortcuts list --folder-name <identifier> --show-identifiers` internally with a privately resolved folder identifier from the selected opaque handle, and returns contained shortcut names plus globally resolvable opaque shortcut handles. Callers never pass or receive the raw folder identifier. These paths do not return shortcut bodies, action graphs, URL schemes, source paths, icons, colors, or identifiers.
 
 ## Boundaries
 
@@ -23,7 +25,7 @@ This phase does not add:
 - Shortcut body/action graph reads
 - Raw shortcut identifiers in output
 - Dynamic per-shortcut run tools
-- Folder-scoped handles
+- Arbitrary folder-name filters or raw folder identifiers
 - Shortcuts SQLite scraping
 - Shortcut creation, update, delete, duplication, import, signing, or mutation
 - Network validation, iCloud.com, private iCloud APIs, browser sessions, or keychain access
@@ -33,7 +35,11 @@ This phase does not add:
 - Health checks only CLI availability and never lists real shortcuts.
 - Search rejects empty and broad queries.
 - Search output contains only names, kind, opaque handles, and identifier-presence booleans.
-- Exact get is handle-bound to the same global metadata flow as search.
+- Exact get accepts handles from global, shortcut-only, or folder-only metadata
+  search flows.
+- Exact selected-folder listing is handle-bound to one selected folder and
+  returns only contained shortcut metadata; child shortcut handles resolve
+  through the global shortcut metadata flow.
 - All tests use synthetic runner output; runtime smoke uses a synthetic runner and does not list real user shortcuts.
 
 ## Verification

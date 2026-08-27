@@ -63,6 +63,54 @@ def _folders_payload() -> dict:
     }
 
 
+def _folder_boards_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "freeform_folder_boards",
+        "privacy": {
+            "content_inspected": False,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+            "output_tier": "metadata",
+            "board_content_returned": False,
+            "asset_content_returned": False,
+        },
+        "folder": _folders_payload()["results"][0],
+        "results": _boards_payload()["results"],
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
+def _child_folders_payload() -> dict:
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "freeform_child_folders",
+        "privacy": {
+            "content_inspected": False,
+            "raw_rows_inspected": False,
+            "credentials_inspected": False,
+            "output_tier": "metadata",
+            "board_content_returned": False,
+            "asset_content_returned": False,
+        },
+        "folder": _folders_payload()["results"][0],
+        "results": [
+            {
+                "handle": "freeform:folder:v1:55555555555555555555555555555555",
+                "title": "Synthetic CLI Child Folder",
+                "board_count": 0,
+                "folder_blob_returned": False,
+                "raw_identifier_returned": False,
+            }
+        ],
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
 def test_cli_freeform_boards_outputs_json(monkeypatch, tmp_path, capsys) -> None:
     monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
     seen: dict[str, object] = {}
@@ -173,3 +221,71 @@ def test_cli_freeform_folder_outputs_json(monkeypatch, tmp_path, capsys) -> None
     assert exit_code == 0
     parsed = json.loads(capsys.readouterr().out)
     assert parsed["result"]["title"] == "Synthetic CLI Folder"
+
+
+def test_cli_freeform_folder_boards_outputs_json(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    seen: dict[str, object] = {}
+
+    def fake_folder_boards(handle: str, **kwargs):
+        seen["handle"] = handle
+        seen["kwargs"] = kwargs
+        return _folder_boards_payload()
+
+    monkeypatch.setattr(
+        "local_apple_data.cli.list_freeform_folder_boards",
+        fake_folder_boards,
+    )
+
+    exit_code = main(
+        [
+            "freeform",
+            "folder-boards",
+            "--json",
+            "--handle",
+            "freeform:folder:v1:22222222222222222222222222222222",
+            "--limit",
+            "3",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["source"] == "freeform_folder_boards"
+    assert parsed["result_count"] == 1
+    assert seen["handle"] == "freeform:folder:v1:22222222222222222222222222222222"
+    assert seen["kwargs"] == {"limit": 3}
+
+
+def test_cli_freeform_child_folders_outputs_json(monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.setenv("LOCAL_APPLE_DATA_LOG_DIR", str(tmp_path / "logs"))
+    seen: dict[str, object] = {}
+
+    def fake_child_folders(handle: str, **kwargs):
+        seen["handle"] = handle
+        seen["kwargs"] = kwargs
+        return _child_folders_payload()
+
+    monkeypatch.setattr(
+        "local_apple_data.cli.list_freeform_child_folders",
+        fake_child_folders,
+    )
+
+    exit_code = main(
+        [
+            "freeform",
+            "child-folders",
+            "--json",
+            "--handle",
+            "freeform:folder:v1:22222222222222222222222222222222",
+            "--limit",
+            "4",
+        ]
+    )
+
+    assert exit_code == 0
+    parsed = json.loads(capsys.readouterr().out)
+    assert parsed["source"] == "freeform_child_folders"
+    assert parsed["result_count"] == 1
+    assert seen["handle"] == "freeform:folder:v1:22222222222222222222222222222222"
+    assert seen["kwargs"] == {"limit": 4}

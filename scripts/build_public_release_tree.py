@@ -26,8 +26,9 @@ EXCLUDED_DIRS = public_release_scan.EXCLUDED_DIRS | {
 EXCLUDED_SUFFIXES = public_release_scan.EXCLUDED_SUFFIXES
 EXCLUDED_FILES = public_release_scan.LOCAL_OPERATOR_DOCS | {
     ".git",
+    public_release_scan.PUBLIC_RELEASE_TREE_MARKER,
 }
-EXCLUDED_FILE_NAMES = {".DS_Store"}
+EXCLUDED_FILE_NAMES = public_release_scan.EXCLUDED_FILE_NAMES
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,10 @@ def build_release_tree(root: Path, destination: Path, *, force: bool = False) ->
         shutil.copy2(source, target)
         file_count += 1
 
+    # Counted, because it ships: prepare_public_git_checkout compares this count
+    # against what git actually stages, and the marker is staged like any other file.
+    file_count += _write_tree_marker(destination)
+
     findings = public_release_scan.scan_public_files(destination)
     if findings:
         details = ", ".join(
@@ -70,6 +75,32 @@ def build_release_tree(root: Path, destination: Path, *, force: bool = False) ->
         raise RuntimeError(f"staged public release tree failed scan: {details}")
 
     return BuildResult(destination=destination, file_count=file_count)
+
+
+def _write_tree_marker(destination: Path) -> int:
+    """Stamp the generated tree so downstream checks can identify it positively.
+
+    ``public_release_scan.is_sanitized_public_tree`` requires this file. Nothing else
+    writes it, which is the point: a real checkout can never be mistaken for a public
+    tree just by having lost files. Deliberately records no operator or session
+    detail -- only the source plugin version, so a stale tree is identifiable.
+
+    Returns the number of files written, so the caller can keep its file count equal
+    to what git will stage.
+    """
+
+    manifest = destination / ".codex-plugin" / "plugin.json"
+    try:
+        source_version = json.loads(manifest.read_text(encoding="utf-8")).get("version", "")
+    except (OSError, ValueError):
+        source_version = ""
+    payload = {
+        "generated_by": "scripts/build_public_release_tree.py",
+        "source_version": source_version,
+    }
+    marker = destination / public_release_scan.PUBLIC_RELEASE_TREE_MARKER
+    marker.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return 1
 
 
 def _should_stage(path: Path, root: Path) -> bool:
@@ -116,8 +147,11 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.dest),
             force=args.force,
         )
-    except (RuntimeError, ValueError) as exc:
-        print(f"public release tree build failed: {exc}", file=sys.stderr)
+    except (RuntimeError, ValueError, OSError) as exc:
+        print(
+            f"public release tree build failed: {type(exc).__name__}",
+            file=sys.stderr,
+        )
         return 1
 
     payload = {

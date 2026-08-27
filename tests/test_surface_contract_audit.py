@@ -4,6 +4,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "audit_surface_contract.py"
 SPEC = importlib.util.spec_from_file_location("audit_surface_contract", SCRIPT_PATH)
@@ -20,9 +22,9 @@ def test_current_project_surface_contract_passes() -> None:
     )
 
     assert payload["status"] == "ok"
-    assert payload["surfaces_checked"] == 17
+    assert payload["surfaces_checked"] == 18
     assert payload["mcp_tools_checked"] >= payload["mcp_tools_expected"]
-    assert payload["capability_matrix_rows_checked"] == 17
+    assert payload["capability_matrix_rows_checked"] == 18
     assert payload["findings"] == []
 
 
@@ -60,6 +62,156 @@ def test_surface_contract_flags_missing_health_surface(tmp_path: Path) -> None:
 
     assert payload["status"] == "error"
     assert _finding(payload, "missing_health_surface", "calendar")
+
+
+def test_surface_contract_requires_current_shortcuts_run_contract(tmp_path: Path) -> None:
+    root = _minimal_project(tmp_path)
+    _write_normative_contract(root, omit="shortcuts_apply_run")
+
+    payload = audit_surface_contract.audit_surface_contract(root)
+
+    assert _finding(
+        payload,
+        "missing_current_normative_contract",
+        "shortcuts_exact_run",
+    )
+
+
+def test_surface_contract_requires_current_filesystem_apply_contract(tmp_path: Path) -> None:
+    root = _minimal_project(tmp_path)
+    _write_normative_contract(root, omit="filesystem_apply_change")
+
+    payload = audit_surface_contract.audit_surface_contract(root)
+
+    assert _finding(
+        payload,
+        "missing_current_normative_contract",
+        "filesystem_apply",
+    )
+
+
+def test_surface_contract_requires_current_apply_tool_count(tmp_path: Path) -> None:
+    root = _minimal_project(tmp_path)
+    _write_normative_contract(root, omit="14 apply-capable tools")
+
+    payload = audit_surface_contract.audit_surface_contract(root)
+
+    assert _finding(
+        payload,
+        "missing_current_normative_contract",
+        "public_mcp_apply_tool_count",
+    )
+
+
+def test_surface_contract_requires_contacts_note_live_fail_closed_contract(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_project(tmp_path)
+    _write_normative_contract(root, omit="contacts_note_unavailable")
+
+    payload = audit_surface_contract.audit_surface_contract(root)
+
+    assert _finding(
+        payload,
+        "missing_current_normative_contract",
+        "contacts_note_live_fail_closed",
+    )
+
+
+def test_surface_contract_flags_current_shortcuts_blanket_block(tmp_path: Path) -> None:
+    root = _minimal_project(tmp_path)
+    _write_normative_contract(root)
+    root.joinpath("README.md").write_text(
+        "Shortcuts run/open/view/sign/export remains blocked.\n",
+        encoding="utf-8",
+    )
+
+    payload = audit_surface_contract.audit_surface_contract(root)
+
+    assert _finding(
+        payload,
+        "stale_current_shortcuts_contract",
+        "shortcuts_exact_run",
+    )
+
+
+def test_surface_contract_ignores_explicitly_historical_shortcuts_block(
+    tmp_path: Path,
+) -> None:
+    root = _minimal_project(tmp_path)
+    _write_normative_contract(root)
+    root.joinpath("README.md").write_text(
+        "Historical v1.26 evidence: Shortcuts run/open/view/sign/export remained blocked.\n",
+        encoding="utf-8",
+    )
+
+    payload = audit_surface_contract.audit_surface_contract(root)
+
+    assert not _finding(
+        payload,
+        "stale_current_shortcuts_contract",
+        "shortcuts_exact_run",
+    )
+
+
+@pytest.mark.parametrize(
+    "claim",
+    (
+        "Approved Contacts exact note append/set/clear/merge mutation surface.",
+        "Contacts notes can be appended, overwritten, or cleared through the apply tool.",
+        "The plugin supports updates to Contact notes.",
+        "Contact-note mutation is implemented and available.",
+        "Approved write support includes setting and merging Contacts notes.",
+        "Contact notes may be edited through contacts_apply_change.",
+        "Contact note operations are live and working.",
+    ),
+)
+def test_surface_contract_flags_live_contacts_note_advertising(
+    tmp_path: Path,
+    claim: str,
+) -> None:
+    root = _minimal_project(tmp_path)
+    _write_normative_contract(root)
+    root.joinpath("README.md").write_text(
+        claim + "\n",
+        encoding="utf-8",
+    )
+
+    payload = audit_surface_contract.audit_surface_contract(root)
+
+    assert _finding(
+        payload,
+        "stale_current_contacts_note_contract",
+        "contacts_note_live_fail_closed",
+    )
+
+
+@pytest.mark.parametrize(
+    "claim",
+    (
+        "Historical receipt: approved Contacts note updates passed at that checkpoint.",
+        "Contacts note mutation fails closed with contacts_note_unavailable.",
+        "Contacts note updates are synthetic-only and are not live.",
+        "Contacts note gates are designed and synthetic-tested.",
+        "Contacts note operations are implemented as synthetic gates only.",
+        "Contact note writes are unsupported on the live helper.",
+    ),
+)
+def test_surface_contract_allows_contacts_note_caveats(
+    tmp_path: Path,
+    claim: str,
+) -> None:
+    root = _minimal_project(tmp_path)
+    _write_normative_contract(root)
+    root.joinpath("README.md").write_text(claim + "\n", encoding="utf-8")
+
+    payload = audit_surface_contract.audit_surface_contract(root)
+
+    assert not _finding(
+        payload,
+        "stale_current_contacts_note_contract",
+        "contacts_note_live_fail_closed",
+    )
 
 
 def _finding(payload: dict, kind: str, name: str) -> bool:
@@ -184,5 +336,20 @@ def _write_capability_matrix(root: Path, *, omit_matrix_label: str = "") -> None
         )
     root.joinpath("docs/CAPABILITY_MATRIX.md").write_text(
         "\n".join(lines) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_normative_contract(root: Path, *, omit: str = "") -> None:
+    text = """\
+# Mutation Gates
+
+The public MCP inventory contains 14 apply-capable tools.
+Filesystem apply is implemented through filesystem_apply_change.
+One exact identifier-bound Shortcuts run is implemented through shortcuts_apply_run.
+Contacts note mutations are designed and synthetic-testable but live fail closed with contacts_note_unavailable before mutation.
+"""
+    root.joinpath("docs/MUTATION_GATES.md").write_text(
+        text.replace(omit, "") if omit else text,
         encoding="utf-8",
     )

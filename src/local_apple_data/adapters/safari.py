@@ -17,6 +17,7 @@ DEFAULT_LIMIT = 20
 MAX_LIMIT = 50
 MAX_SCAN_ITEMS = 20000
 HANDLE_PREFIX = "safari:item"
+FOLDER_HANDLE_PREFIX = "safari:folder"
 READING_LIST_TITLE = "com.apple.ReadingList"
 BLOCKED_BROAD_QUERIES = {
     "bookmark",
@@ -42,11 +43,21 @@ BLOCKED_BROAD_QUERIES = {
 @dataclass(frozen=True)
 class SafariItem:
     item_key: str
+    path_indexes: tuple[int, ...]
     title: str
     url: str
     kind: str
     date_added: int | None
     date_last_viewed: int | None
+
+
+@dataclass(frozen=True)
+class SafariFolder:
+    folder_key: str
+    title: str
+    path_indexes: tuple[int, ...]
+    child_item_count: int
+    child_folder_count: int
 
 
 def _privacy() -> dict[str, bool | str]:
@@ -72,11 +83,11 @@ def _warning(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
 
 
-def _empty_query_result() -> dict[str, Any]:
+def _empty_query_result(*, source: str = "safari") -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "error",
-        "source": "safari",
+        "source": source,
         "privacy": _privacy(),
         "results": [],
         "result_count": 0,
@@ -89,11 +100,11 @@ def _empty_query_result() -> dict[str, Any]:
     }
 
 
-def _broad_query_result() -> dict[str, Any]:
+def _broad_query_result(*, source: str = "safari") -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "error",
-        "source": "safari",
+        "source": source,
         "privacy": _privacy(),
         "results": [],
         "result_count": 0,
@@ -117,6 +128,22 @@ def _invalid_handle_result() -> dict[str, Any]:
             _warning(
                 "invalid_handle",
                 "Expected safari:item:v1 opaque handle from search output.",
+            )
+        ],
+    }
+
+
+def _invalid_folder_handle_result(*, source: str = "safari_folder") -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "error",
+        "source": source,
+        "privacy": _privacy(),
+        "result": None,
+        "warnings": [
+            _warning(
+                "invalid_handle",
+                "Expected safari:folder:v1 opaque handle from folder metadata output.",
             )
         ],
     }
@@ -220,6 +247,61 @@ def search_safari_items(
     }
 
 
+def search_safari_folders(
+    query: str,
+    *,
+    bookmarks_path: Path = DEFAULT_SAFARI_BOOKMARKS_PLIST,
+    limit: int = DEFAULT_LIMIT,
+    max_scan_items: int = MAX_SCAN_ITEMS,
+) -> dict[str, Any]:
+    query = query.strip()
+    if not query:
+        return _empty_query_result(source="safari_folders")
+    if not _is_specific_query(query):
+        return _broad_query_result(source="safari_folders")
+
+    loaded = _load_items(bookmarks_path, max_scan_items=max_scan_items)
+    if loaded["status"] != "ok":
+        result = _unavailable_result(code=loaded["warning_code"])
+        result["source"] = "safari_folders"
+        return result
+
+    lowered_query = query.casefold()
+    bounded_limit = max(1, min(limit, MAX_LIMIT))
+    results: list[dict[str, Any]] = []
+    for folder in loaded["folders"]:
+        if lowered_query not in folder.title.casefold():
+            continue
+        results.append(_folder_metadata(folder, loaded["fingerprint"]))
+        if len(results) >= bounded_limit:
+            break
+
+    warnings = []
+    if loaded["truncated"]:
+        warnings.append(
+            _warning(
+                "scan_truncated",
+                "Safari folder search stopped at the scan limit.",
+            )
+        )
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "safari_folders",
+        "store_fingerprint": loaded["fingerprint"],
+        "privacy": _privacy(),
+        "query": {
+            "scope": "folder_title",
+            "limit": bounded_limit,
+            "max_scan_items": max_scan_items,
+        },
+        "results": results,
+        "result_count": len(results),
+        "warnings": warnings,
+    }
+
+
 def get_safari_item(
     handle: str,
     *,
@@ -259,6 +341,100 @@ def get_safari_item(
     }
 
 
+def get_safari_folder(
+    handle: str,
+    *,
+    bookmarks_path: Path = DEFAULT_SAFARI_BOOKMARKS_PLIST,
+    max_scan_items: int = MAX_SCAN_ITEMS,
+) -> dict[str, Any]:
+    if not is_opaque_handle(handle, FOLDER_HANDLE_PREFIX):
+        return _invalid_folder_handle_result()
+
+    loaded = _load_items(bookmarks_path, max_scan_items=max_scan_items)
+    if loaded["status"] != "ok":
+        result = _unavailable_result(code=loaded["warning_code"])
+        result["source"] = "safari_folder"
+        return result
+
+    folder = _find_folder(handle, loaded)
+    if folder is None:
+        return _folder_not_found_result(loaded["fingerprint"], source="safari_folder")
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "safari_folder",
+        "store_fingerprint": loaded["fingerprint"],
+        "privacy": _privacy(),
+        "result": _folder_metadata(folder, loaded["fingerprint"]),
+        "result_count": 1,
+        "warnings": [],
+    }
+
+
+def list_safari_folder_items(
+    handle: str,
+    *,
+    bookmarks_path: Path = DEFAULT_SAFARI_BOOKMARKS_PLIST,
+    limit: int = DEFAULT_LIMIT,
+    max_scan_items: int = MAX_SCAN_ITEMS,
+) -> dict[str, Any]:
+    if not is_opaque_handle(handle, FOLDER_HANDLE_PREFIX):
+        return _invalid_folder_handle_result(source="safari_folder_items")
+
+    loaded = _load_items(bookmarks_path, max_scan_items=max_scan_items)
+    if loaded["status"] != "ok":
+        result = _unavailable_result(code=loaded["warning_code"])
+        result["source"] = "safari_folder_items"
+        return result
+
+    folder = _find_folder(handle, loaded)
+    if folder is None:
+        return _folder_not_found_result(loaded["fingerprint"], source="safari_folder_items")
+
+    bounded_limit = max(1, min(limit, MAX_LIMIT))
+    child_depth = len(folder.path_indexes) + 1
+    direct_items = [
+        item
+        for item in loaded["items"]
+        if len(item.path_indexes) == child_depth and item.path_indexes[:-1] == folder.path_indexes
+    ]
+    direct_folders = [
+        child
+        for child in loaded["folders"]
+        if len(child.path_indexes) == child_depth and child.path_indexes[:-1] == folder.path_indexes
+    ]
+    direct_children = sorted([*direct_items, *direct_folders], key=lambda child: child.path_indexes)[
+        :bounded_limit
+    ]
+    child_items = [child for child in direct_children if isinstance(child, SafariItem)]
+    child_folders = [child for child in direct_children if isinstance(child, SafariFolder)]
+
+    warnings = []
+    if loaded["truncated"]:
+        warnings.append(
+            _warning(
+                "scan_truncated",
+                "Safari folder item listing stopped at the scan limit.",
+            )
+        )
+
+    return {
+        "schema_version": 1,
+        "status": "ok",
+        "source": "safari_folder_items",
+        "store_fingerprint": loaded["fingerprint"],
+        "privacy": _privacy(),
+        "query": {"scope": "selected_folder_items", "limit": bounded_limit},
+        "folder": _folder_metadata(folder, loaded["fingerprint"]),
+        "results": [_item_metadata(item, loaded["fingerprint"]) for item in child_items],
+        "child_folders": [_folder_metadata(child, loaded["fingerprint"]) for child in child_folders],
+        "result_count": len(child_items),
+        "child_folder_count": len(child_folders),
+        "warnings": warnings,
+    }
+
+
 def _load_items(bookmarks_path: Path, *, max_scan_items: int) -> dict[str, Any]:
     path = bookmarks_path.expanduser()
     try:
@@ -273,21 +449,26 @@ def _load_items(bookmarks_path: Path, *, max_scan_items: int) -> dict[str, Any]:
 
     fingerprint = hashlib.sha256(raw).hexdigest()[:16]
     items: list[SafariItem] = []
+    folders: list[SafariFolder] = []
     truncated = False
-    for item in _iter_items(plist, max_scan_items=max_scan_items):
-        items.append(item)
-        if len(items) >= max_scan_items:
+    for entry in _iter_entries(plist, max_scan_items=max_scan_items):
+        if isinstance(entry, SafariItem):
+            items.append(entry)
+        else:
+            folders.append(entry)
+        if len(items) + len(folders) >= max_scan_items:
             truncated = True
             break
     return {
         "status": "ok",
         "fingerprint": fingerprint,
         "items": items,
+        "folders": folders,
         "truncated": truncated,
     }
 
 
-def _iter_items(root: Any, *, max_scan_items: int):
+def _iter_entries(root: Any, *, max_scan_items: int):
     stack: list[tuple[Any, tuple[int, ...], bool]] = [(root, (), False)]
     visited = 0
     while stack:
@@ -299,6 +480,11 @@ def _iter_items(root: Any, *, max_scan_items: int):
         node_is_reading_list = in_reading_list or node_title == READING_LIST_TITLE
         children = node.get("Children")
         if isinstance(children, list):
+            if path_indexes and not node_is_reading_list:
+                visited += 1
+                if visited > max_scan_items:
+                    return
+                yield _make_folder(node, path_indexes)
             for index, child in reversed(list(enumerate(children))):
                 stack.append((child, (*path_indexes, index), node_is_reading_list))
 
@@ -332,11 +518,39 @@ def _make_item(
     ).hexdigest()[:32]
     return SafariItem(
         item_key=item_key,
+        path_indexes=path_indexes,
         title=title,
         url=url,
         kind="reading_list" if is_reading_list else "bookmark",
         date_added=date_added,
         date_last_viewed=date_last_viewed,
+    )
+
+
+def _make_folder(node: dict[str, Any], path_indexes: tuple[int, ...]) -> SafariFolder:
+    title = _bounded_text(str(node.get("Title") or "Untitled Folder").strip() or "Untitled Folder", 200)
+    children = node.get("Children") if isinstance(node.get("Children"), list) else []
+    child_item_count = 0
+    child_folder_count = 0
+    for child in children:
+        if not isinstance(child, dict):
+            continue
+        if isinstance(child.get("URLString"), str) and child["URLString"].strip():
+            child_item_count += 1
+        child_title = str(child.get("Title") or "")
+        if isinstance(child.get("Children"), list) and child_title != READING_LIST_TITLE:
+            child_folder_count += 1
+    folder_key = hashlib.sha256(
+        "\0".join((str(path_indexes), title, str(child_item_count), str(child_folder_count))).encode(
+            "utf-8"
+        )
+    ).hexdigest()[:32]
+    return SafariFolder(
+        folder_key=folder_key,
+        title=title,
+        path_indexes=path_indexes,
+        child_item_count=child_item_count,
+        child_folder_count=child_folder_count,
     )
 
 
@@ -369,6 +583,36 @@ def _item_metadata(item: SafariItem, fingerprint: str) -> dict[str, Any]:
         "url_path_depth": path_depth,
         "date_added": item.date_added,
         "date_last_viewed": item.date_last_viewed,
+    }
+
+
+def _folder_metadata(folder: SafariFolder, fingerprint: str) -> dict[str, Any]:
+    return {
+        "handle": make_opaque_handle(FOLDER_HANDLE_PREFIX, fingerprint, folder.folder_key),
+        "title": folder.title,
+        "kind": "folder",
+        "path_depth": len(folder.path_indexes),
+        "child_item_count": folder.child_item_count,
+        "child_folder_count": folder.child_folder_count,
+    }
+
+
+def _find_folder(handle: str, loaded: dict[str, Any]) -> SafariFolder | None:
+    for folder in loaded["folders"]:
+        if opaque_handle_matches(handle, FOLDER_HANDLE_PREFIX, loaded["fingerprint"], folder.folder_key):
+            return folder
+    return None
+
+
+def _folder_not_found_result(fingerprint: str, *, source: str) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "not_found",
+        "source": source,
+        "store_fingerprint": fingerprint,
+        "privacy": _privacy(),
+        "result": None,
+        "warnings": [],
     }
 
 

@@ -3,12 +3,15 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import local_apple_data.adapters.mail as mail_adapter
 from local_apple_data.handles import make_int_handle
 from local_apple_data.adapters.mail import (
     check_mail_schema,
     discover_mail_db_path,
     get_mail_metadata,
+    list_mail_mailbox_messages,
     mail_db_relative_path,
+    search_mail_mailboxes,
     search_mail_metadata,
 )
 
@@ -101,6 +104,50 @@ def test_search_mail_metadata_reports_content_status_without_reading_body(
     assert result["status"] == "ok"
     assert result["privacy"]["content_inspected"] is False
     assert result["results"][0]["content_status"] == "available"
+
+
+def test_list_mail_mailbox_messages_requires_date_bound_and_exact_handle(tmp_path: Path) -> None:
+    db_path = tmp_path / "mail.sqlite"
+    _make_mail_db(db_path)
+    handle = search_mail_mailboxes("INBOX", db_path=db_path)["results"][0]["handle"]
+
+    missing_bound = list_mail_mailbox_messages(handle, db_path=db_path)
+    bad_handle = list_mail_mailbox_messages("mailbox:raw", after=0, db_path=db_path)
+
+    assert missing_bound["status"] == "error"
+    assert missing_bound["warnings"][0]["code"] == "date_range_required"
+    assert missing_bound["privacy"]["output_tier"] == "metadata"
+    assert bad_handle["status"] == "error"
+    assert bad_handle["warnings"][0]["code"] == "invalid_mailbox_handle"
+
+
+def test_list_mail_mailbox_messages_returns_bounded_metadata_only(tmp_path: Path) -> None:
+    db_path = tmp_path / "mail.sqlite"
+    _make_mail_db(db_path)
+    handle = search_mail_mailboxes("INBOX", db_path=db_path)["results"][0]["handle"]
+
+    result = list_mail_mailbox_messages(
+        handle,
+        after=999,
+        before=1000,
+        db_path=db_path,
+        limit=100,
+    )
+
+    assert result["status"] == "ok"
+    assert result["privacy"]["content_inspected"] is False
+    assert result["query"]["scope"] == "selected_mailbox_messages"
+    assert result["query"]["limit"] == 50
+    assert result["query"]["mailbox_filter"] == "exact_handle"
+    assert result["mailbox"]["handle"] == handle
+    assert result["content_returned"] is False
+    assert result["raw_identifier_returned"] is False
+    assert result["raw_path_returned"] is False
+    assert result["result_count"] == 1
+    assert result["results"][0]["subject"] == "Project Alpha update"
+    assert result["results"][0]["handle"].startswith("mail:message:v2:")
+    assert result["results"][0]["content_status"] == "unavailable"
+    assert "mailbox_url" not in result["results"][0]
 
 
 def test_search_mail_metadata_marks_duplicate_content_files_unavailable(
@@ -205,3 +252,43 @@ def test_mail_schema_warning_does_not_expose_path(tmp_path: Path) -> None:
     assert result["status"] == "degraded"
     assert result["warnings"][0]["code"] == "mail_schema_unavailable"
     assert str(tmp_path) not in result["warnings"][0]["message"]
+
+
+def test_mail_schema_warning_uses_generic_message(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "mail.sqlite"
+    _make_mail_db(db_path)
+
+    def fail_schema(_connection):
+        raise mail_adapter.StoreUnavailableError("schema failed at /private/local/mail.sqlite")
+
+    monkeypatch.setattr(mail_adapter, "_check_schema", fail_schema)
+
+    result = check_mail_schema(db_path=db_path)
+
+    assert result["status"] == "degraded"
+    assert result["warnings"] == [
+        {
+            "code": "mail_schema_unavailable",
+            "message": "Mail schema is unavailable or unsupported.",
+        }
+    ]
+
+
+def test_mail_store_warning_uses_generic_message(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "mail.sqlite"
+    _make_mail_db(db_path)
+
+    def fail_schema(_connection):
+        raise mail_adapter.StoreUnavailableError("store failed at /private/local/mail.sqlite")
+
+    monkeypatch.setattr(mail_adapter, "_check_schema", fail_schema)
+
+    result = search_mail_metadata("Alpha", db_path=db_path)
+
+    assert result["status"] == "degraded"
+    assert result["warnings"] == [
+        {
+            "code": "mail_store_unavailable",
+            "message": "Mail local store is unavailable or unreadable.",
+        }
+    ]

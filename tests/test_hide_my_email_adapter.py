@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+import local_apple_data.adapters.hide_my_email as hide_my_email_adapter
 from local_apple_data.adapters.hide_my_email import (
     get_hide_my_email_alias,
     search_hide_my_email_aliases,
@@ -145,3 +146,25 @@ def test_search_hide_my_email_aliases_degrades_without_store(tmp_path: Path) -> 
     assert result["status"] == "degraded"
     assert result["warnings"][0]["code"] == "mail_store_unavailable"
     assert str(tmp_path) not in result["warnings"][0]["message"]
+
+
+def test_hide_my_email_store_warning_uses_generic_message(tmp_path: Path, monkeypatch) -> None:
+    db_path = tmp_path / "Envelope Index"
+    _make_mail_db(db_path)
+
+    def fail_schema(_connection):
+        raise hide_my_email_adapter.StoreUnavailableError(
+            "mail failed at /private/local/Envelope Index"
+        )
+
+    monkeypatch.setattr(hide_my_email_adapter, "_check_schema", fail_schema)
+
+    result = search_hide_my_email_aliases("alpha_mask", db_path=db_path)
+
+    assert result["status"] == "degraded"
+    assert result["warnings"] == [
+        {
+            "code": "mail_store_unavailable",
+            "message": "Mail local store is unavailable or unreadable.",
+        }
+    ]
